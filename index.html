@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bible Sketch Platform</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Nunito:wght@600;700;800&family=Quicksand:wght@500;600;700&display=swap" rel="stylesheet">
+    <style>
+      body {
+        font-family: 'Inter', sans-serif;
+        background-color: #FFF7ED; /* Off-White */
+        color: #1f2937;
+      }
+      h1, h2, h3, h4, h5, h6, .font-display {
+        font-family: 'Quicksand', sans-serif;
+      }
+      .font-friendly {
+        font-family: 'Nunito', sans-serif;
+      }
+      /* Custom scrollbar for aesthetics */
+      ::-webkit-scrollbar {
+        width: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #FFF7ED; 
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #E5E7EB; 
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #D1D5DB; 
+      }
+
+      /* Global Font Size Overrides - Increased readability as requested */
+      .text-xs { font-size: 0.875rem !important; line-height: 1.25rem !important; } /* 14px (was 12px) */
+      .text-sm { font-size: 1rem !important; line-height: 1.5rem !important; }      /* 16px (was 14px) */
+      .text-base { font-size: 1.125rem !important; line-height: 1.75rem !important; } /* 18px (was 16px) */
+      .text-lg { font-size: 1.25rem !important; line-height: 1.75rem !important; }  /* 20px (was 18px) */
+      .text-xl { font-size: 1.5rem !important; line-height: 2rem !important; }      /* 24px (was 20px) */
+
+      /* Security Gate: Watermark Pattern */
+      /* Updated to match screenshot: Larger text, larger repeat interval, slightly more visible */
+      .watermark-pattern {
+        background-image: url("data:image/svg+xml,%3Csvg width='400' height='400' viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Ctext x='50%25' y='50%25' font-family='Arial' font-weight='bold' font-size='48' fill='%23000' fill-opacity='0.15' transform='rotate(-45 200 200)' text-anchor='middle' dominant-baseline='middle'%3EBible Sketch%3C/text%3E%3C/svg%3E");
+        background-repeat: repeat;
+        pointer-events: none;
+        z-index: 50;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/client": "https://aistudiocdn.com/react-dom@^19.2.0/client",
+    "react-dom": "https://aistudiocdn.com/react-dom@^19.2.0",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.554.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "firebase/app": "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js",
+    "firebase/auth": "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js",
+    "firebase/firestore": "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js",
+    "firebase/storage": "https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js",
+    "firebase/": "https://aistudiocdn.com/firebase@^12.6.0/",
+    "@google/generative-ai": "https://aistudiocdn.com/@google/generative-ai@^0.24.1",
+    "react-router-dom": "https://aistudiocdn.com/react-router-dom@^6.22.3",
+    "react-router": "https://aistudiocdn.com/react-router@^6.22.3",
+    "@remix-run/router": "https://aistudiocdn.com/@remix-run/router@^1.15.3",
+    "react-helmet-async": "https://aistudiocdn.com/react-helmet-async@^2.0.4"
+  }
+}
+</script>
+</head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
