@@ -1,21 +1,23 @@
 
-import { GoogleGenAI, Modality, HarmCategory, HarmBlockThreshold, GenerateContentResponse } from "@google/genai";
-import { 
-  MODELS, 
-  REFERENCE_MAP, 
-  GOLDEN_NEGATIVES, 
+import { Modality, HarmCategory, HarmBlockThreshold, GenerateContentResponse } from "@google/genai";
+import { httpsCallable } from "firebase/functions";
+import { functions } from "./firebase";
+import {
+  MODELS,
+  REFERENCE_MAP,
+  GOLDEN_NEGATIVES,
   CHRISTIAN_GUIDELINES,
   AGE_LOGIC,
   STYLE_LOGIC
 } from "../constants";
 import { AgeGroup, ArtStyle, BibleReference } from "../types";
 import { postProcessImage } from "../utils/imageProcessing";
-import { downloadImageAsBase64 } from "../utils/storage"; 
+import { downloadImageAsBase64 } from "../utils/storage";
 
 // --- TYPES ---
 export interface ArchitectBrief {
   positive_prompt: string;
-  negative_prompt: string; 
+  negative_prompt: string;
   validation_criteria: string[];
   reasoning: string;
 }
@@ -31,17 +33,16 @@ interface ValidationResult {
   failure_reason?: string;
 }
 
-// --- INITIALIZATION ---
-const getAI = () => {
-  // Using process.env.API_KEY as per system instructions, while maintaining fallback for existing env setup
-  const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-  if (!apiKey) throw new Error("Missing Gemini API Key");
-  return new GoogleGenAI({ apiKey });
+// --- PROXY CALLER ---
+const callGeminiProxy = async (params: { model: string, contents: any, config?: any }): Promise<GenerateContentResponse> => {
+  const generateContent = httpsCallable(functions, 'generateContent');
+  const result = await generateContent(params);
+  return result.data as GenerateContentResponse;
 };
 
 // --- UTILS ---
 const callWithRetry = async <T>(
-  fn: () => Promise<T>, 
+  fn: () => Promise<T>,
   retries = 5, // Increased retries for better stability
   initialDelay = 2000
 ): Promise<T> => {
@@ -53,12 +54,12 @@ const callWithRetry = async <T>(
       // Check for 429 (Quota) or 503 (Service Unavailable)
       const errorCode = error.status || error.code;
       const errorMessage = error.message || "";
-      const isRetryable = 
-        errorCode === 429 || 
-        errorCode === 503 || 
+      const isRetryable =
+        errorCode === 429 ||
+        errorCode === 503 ||
         errorMessage.includes("Resource has been exhausted") ||
         errorMessage.includes("quota");
-      
+
       if (isRetryable && i < retries - 1) {
         console.warn(`Gemini API limit hit (${errorCode}). Retrying in ${delay}ms...`);
         await new Promise(resolve => setTimeout(resolve, delay));
@@ -79,9 +80,8 @@ const generateCreativeBrief = async (
   ageGroup: AgeGroup,
   artStyle: ArtStyle
 ): Promise<ArchitectBrief> => {
-  const ai = getAI();
   const refString = `${reference.book} ${reference.chapter}:${reference.startVerse}`;
-  
+
   const ageRules = AGE_LOGIC[ageGroup];
   const styleRules = STYLE_LOGIC[artStyle];
 
@@ -113,7 +113,7 @@ const generateCreativeBrief = async (
 
   try {
     // Fix: Explicitly type the retry call to GenerateContentResponse
-    const response = await callWithRetry<GenerateContentResponse>(() => ai.models.generateContent({
+    const response = await callWithRetry<GenerateContentResponse>(() => callGeminiProxy({
       model: MODELS.ARCHITECT,
       contents: { parts: [{ text: systemPrompt }] },
       config: { responseMimeType: 'application/json' }
@@ -135,7 +135,6 @@ const renderImage = async (
   ageGroup: AgeGroup,
   artStyle: ArtStyle
 ): Promise<string> => {
-  const ai = getAI();
   const refKey = `${ageGroup}_${artStyle}`;
   const refUri = REFERENCE_MAP[refKey];
 
@@ -143,16 +142,72 @@ const renderImage = async (
   const styleKeywords = STYLE_LOGIC[artStyle];
 
   let refImagePart = null;
+
+  // Download reference image on CLIENT-SIDE (not in Cloud Function)
   if (refUri) {
     try {
       console.log(`[Artist] Fetching Style Reference: ${refUri}`);
-      const base64Data = await downloadImageAsBase64(refUri);
-      refImagePart = {
-          inlineData: {
-              mimeType: "image/png",
-              data: base64Data
+
+      // Fetch from public folder (client-side only)
+      const response = await fetch(refUri);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch reference image: ${response.status}`);
+      }
+
+      const blob = await response.blob();
+
+      // Validate that we actually got an image, not an HTML error page
+      if (!blob.type.startsWith('image/')) {
+        throw new Error(`Invalid content type: ${blob.type}`);
+      }
+
+      // Convert to base64
+      const base64Data = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const result = reader.result as string;
+          // Strip the data URL prefix to get raw base64
+          let base64 = result.split(',')[1];
+
+          // FIX: Check for and strip UTF-8 BOM or garbage bytes (Common issue with some file uploads)
+          // "77+9" is base64 for EF BB BF (UTF-8 BOM)
+          if (base64.startsWith("77+9")) {
+            console.warn("[Artist] Detected UTF-8 BOM in image data. Stripping...");
+            base64 = base64.substring(4);
           }
+          // Check for "EF BF BD" (Replacement Char) which often appears as "77+9" or similar garbage
+          // If the file starts with "77+9" followed by "77+9" (multiple BOMs/garbage), strip them all
+          while (base64.startsWith("77+9")) {
+            base64 = base64.substring(4);
+          }
+
+          // Additional check for JPEG/JFIF/Exif headers
+          // A valid JPEG often starts with /9j/ (FF D8 FF)
+          // If it doesn't start with /9j/ but claims to be image/jpeg, we might have an issue
+          if (blob.type === 'image/jpeg' && !base64.startsWith('/9j/') && base64.length > 100) {
+             console.warn("[Artist] Suspicious JPEG base64 start:", base64.substring(0, 20));
+             // Sometimes the BOM stripping above isn't enough if there are other headers or garbage
+             // Try to find the actual start of the JPEG
+             const jpegStart = base64.indexOf('/9j/');
+             if (jpegStart > 0 && jpegStart < 100) {
+                console.warn(`[Artist] Found JPEG start at index ${jpegStart}, trimming prefix...`);
+                base64 = base64.substring(jpegStart);
+             }
+          }
+
+          resolve(base64);
+        };
+        reader.onerror = () => reject(new Error("FileReader error"));
+        reader.readAsDataURL(blob);
+      });
+
+      refImagePart = {
+        inlineData: {
+          mimeType: blob.type || "image/jpeg",
+          data: base64Data
+        }
       };
+      console.log(`[Artist] Reference image loaded successfully (${blob.type}, ${Math.round(base64Data.length / 1024)}KB)`);
     } catch (err) {
       console.warn(`[Artist] Failed to load reference ${refUri}. Proceeding with text-only style emulation.`, err);
     }
@@ -167,7 +222,7 @@ const renderImage = async (
   `;
 
   if (!refImagePart) {
-     styleInstruction = `
+    styleInstruction = `
         --- STYLE EMULATION MODE (IMPORTANT) ---
         You must strictly adhere to the LINE STYLE and ART TECHNIQUE described below.
         Simulate the visual characteristics of this style perfectly based on the text description alone.
@@ -186,38 +241,41 @@ const renderImage = async (
     NEGATIVE PROMPT: ${brief.negative_prompt}, ${GOLDEN_NEGATIVES}
   `;
 
-  const parts = [
-      { text: promptText },
-      ...(refImagePart ? [refImagePart] : []) 
-  ];
-
   try {
     // Fix: Explicitly type the retry call to GenerateContentResponse
-    const response = await callWithRetry<GenerateContentResponse>(() => ai.models.generateContent({
+    const response = await callWithRetry<GenerateContentResponse>(() => callGeminiProxy({
       model: MODELS.ARTIST, // gemini-3-pro-image-preview
-      contents: { parts },
+      contents: { 
+        role: 'user', 
+        parts: [
+          // Ensure image comes before text for optimal understanding
+          ...(refImagePart ? [refImagePart] : []),
+          { text: promptText }
+        ]
+      },
       config: {
-          responseModalities: [Modality.IMAGE],
-          imageConfig: {
-            imageSize: "4K",
-            aspectRatio: "3:4"
-          },
-          safetySettings: [{ category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE }]
+        responseModalities: [Modality.IMAGE],
+        imageConfig: {
+          imageSize: "4K",
+          aspectRatio: "3:4"
+        },
+        safetySettings: [{ category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE }]
       }
     }));
 
     // Handle cases where the image is in a different part index
     for (const p of response.candidates?.[0]?.content?.parts || []) {
-        if (p.inlineData) {
-            return `data:${p.inlineData.mimeType};base64,${p.inlineData.data}`;
-        }
+      if (p.inlineData) {
+        return `data:${p.inlineData.mimeType};base64,${p.inlineData.data}`;
+      }
     }
     throw new Error("Artist returned no image data.");
-    
+
   } catch (e: any) {
     throw new Error(`Artist Failed (Gemini 3): ${e.message}`);
   }
 };
+
 
 // ========================================================
 // STAGE 3: THE CRITIC (Vision Validation)
@@ -226,7 +284,6 @@ const validateImage = async (
   imageBase64: string,
   criteria: string[]
 ): Promise<ValidationResult> => {
-  const ai = getAI();
   const cleanBase64 = imageBase64.replace(/^data:image\/(png|jpeg|webp);base64,/, "");
 
   const prompt = `
@@ -250,7 +307,7 @@ const validateImage = async (
 
   try {
     // Fix: Explicitly type the retry call to GenerateContentResponse
-    const response = await callWithRetry<GenerateContentResponse>(() => ai.models.generateContent({
+    const response = await callWithRetry<GenerateContentResponse>(() => callGeminiProxy({
       model: MODELS.CRITIC,
       contents: {
         parts: [
@@ -265,7 +322,7 @@ const validateImage = async (
     return JSON.parse(text);
   } catch (e) {
     console.warn("[Critic] Validation error, assuming Pass:", e);
-    return { passed: true }; 
+    return { passed: true };
   }
 };
 
@@ -278,7 +335,7 @@ export const generateWithGoldenPipeline = async (
   artStyle: ArtStyle
 ): Promise<PipelineResult> => {
   const logs: string[] = [];
-  
+
   try {
     // 1. THE ARCHITECT
     logs.push("Step 1: Architect drafting brief...");
@@ -292,13 +349,13 @@ export const generateWithGoldenPipeline = async (
     while (attempts < MAX_ATTEMPTS) {
       attempts++;
       logs.push(`Step 2: Artist generating (Attempt ${attempts})...`);
-      
+
       // 2. THE ARTIST
       let rawImageUrl = await renderImage(brief, ageGroup, artStyle);
-      
+
       // 3. THE EDITOR
       logs.push("Step 3: Editor processing (Desaturation/Thresholding)...");
-      const processedImageUrl = await postProcessImage(rawImageUrl); 
+      const processedImageUrl = await postProcessImage(rawImageUrl);
 
       // 4. THE CRITIC
       logs.push("Step 4: Critic validating...");
@@ -309,10 +366,10 @@ export const generateWithGoldenPipeline = async (
         return { imageUrl: processedImageUrl, passed: true, logs };
       } else {
         logs.push(`Validation FAILED: ${validation.failure_reason}`);
-        
+
         if (attempts < MAX_ATTEMPTS) {
-            logs.push("Retrying with refined prompt...");
-            brief.positive_prompt += ` (IMPORTANT: Fix previous error: ${validation.failure_reason})`; 
+          logs.push("Retrying with refined prompt...");
+          brief.positive_prompt += ` (IMPORTANT: Fix previous error: ${validation.failure_reason})`;
         }
       }
     }
@@ -347,7 +404,6 @@ export const editColoringPage = async (
   base64Image: string,
   editPrompt: string
 ): Promise<string> => {
-  const ai = getAI();
   const cleanBase64 = base64Image.replace(/^data:image\/(png|jpeg|webp);base64,/, "");
   const mimeType = base64Image.match(/data:([^;]+);base64/)?.[1] || "image/png";
 
@@ -360,7 +416,7 @@ export const editColoringPage = async (
 
   try {
     // Fix: Explicitly type the retry call to GenerateContentResponse
-    const response = await callWithRetry<GenerateContentResponse>(() => ai.models.generateContent({
+    const response = await callWithRetry<GenerateContentResponse>(() => callGeminiProxy({
       model: MODELS.ARTIST, // Updated to use 3-pro-image-preview for better quality/editing
       contents: {
         parts: [
@@ -369,26 +425,26 @@ export const editColoringPage = async (
         ]
       },
       config: {
-          responseModalities: [Modality.IMAGE],
-          imageConfig: {
-            imageSize: "4K",
-            aspectRatio: "3:4"
-          },
-          safetySettings: [{ category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE }]
+        responseModalities: [Modality.IMAGE],
+        imageConfig: {
+          imageSize: "4K",
+          aspectRatio: "3:4"
+        },
+        safetySettings: [{ category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE }]
       }
     }));
 
     // Extract Image
     const candidates = response.candidates;
     if (candidates && candidates.length > 0) {
-        // Check parts for image
-        for (const part of candidates[0].content.parts) {
-            if (part.inlineData) {
-                const resultBase64 = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-                // Post-process to ensure B&W
-                return await postProcessImage(resultBase64);
-            }
+      // Check parts for image
+      for (const part of candidates[0].content.parts) {
+        if (part.inlineData) {
+          const resultBase64 = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+          // Post-process to ensure B&W
+          return await postProcessImage(resultBase64);
         }
+      }
     }
     throw new Error("No image generated.");
   } catch (e: any) {

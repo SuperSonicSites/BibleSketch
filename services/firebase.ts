@@ -1,8 +1,8 @@
 
 import { initializeApp } from "firebase/app";
-import { 
-  getAuth, 
-  createUserWithEmailAndPassword as firebaseCreateUser, 
+import {
+  getAuth,
+  createUserWithEmailAndPassword as firebaseCreateUser,
   signInWithEmailAndPassword as firebaseSignIn,
   signOut as firebaseSignOut,
   updateProfile as firebaseUpdateProfile,
@@ -17,12 +17,12 @@ import {
 } from "firebase/auth";
 import type { User } from "firebase/auth";
 
-import { 
-  getFirestore, 
-  doc, 
-  setDoc, 
-  getDoc, 
-  updateDoc, 
+import {
+  getFirestore,
+  doc,
+  setDoc,
+  getDoc,
+  updateDoc,
   deleteDoc,
   collection,
   addDoc,
@@ -38,10 +38,10 @@ import {
   getDocs
 } from "firebase/firestore";
 
-import { 
-  getStorage, 
-  ref, 
-  uploadString, 
+import {
+  getStorage,
+  ref,
+  uploadString,
   uploadBytes,
   getDownloadURL,
   deleteObject,
@@ -61,11 +61,14 @@ const firebaseConfig = {
   appId: "1:31072353772:web:2f992ceb14538c051f94c9"
 };
 
+import { getFunctions } from "firebase/functions";
+
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
+export const functions = getFunctions(app);
 export type { User };
 
 // --- Helper: Upload Profile Image ---
@@ -74,10 +77,10 @@ const uploadProfileImage = async (uid: string, file: File): Promise<{ url: strin
     // Match Security Rules: match /user_uploads/{uid}/{allPaths=**}
     const storagePath = `user_uploads/${uid}/profile_${Date.now()}_${file.name}`;
     const storageRef = ref(storage, storagePath);
-    
+
     // Ensure content type is set correctly
     const metadata = { contentType: file.type || 'image/jpeg' };
-    
+
     await uploadBytes(storageRef, file, metadata);
     const url = await getDownloadURL(storageRef);
     return { url, storagePath };
@@ -94,15 +97,6 @@ const syncUserToFirestore = async (user: User, additionalData?: any, isNewUser: 
 
     // Helper to create the initial document structure
     const createData = () => {
-      const initialTransaction: CreditTransaction = {
-        id: 'init',
-        userId: user.uid,
-        amount: 5,
-        description: "Welcome Bonus",
-        timestamp: Date.now(),
-        type: 'bonus'
-      };
-
       // Prioritize additionalData.photoURL if present (from fresh upload)
       const photoURL = additionalData?.photoURL || user.photoURL || "";
 
@@ -113,10 +107,11 @@ const syncUserToFirestore = async (user: User, additionalData?: any, isNewUser: 
         photoFileName: additionalData?.photoFileName || "",
         photoURL: photoURL,
         storagePath: additionalData?.storagePath || "",
-        credits: 5, 
+        credits: 5,
+        downloadsRemaining: 5, // Free users get 5 prints/downloads
         isPremium: false,
-        blessedSketchIds: [], 
-        transactionHistory: [initialTransaction],
+        blessedSketchIds: [],
+        // REMOVED: transactionHistory array (now using subcollection)
         createdAt: serverTimestamp(),
         ...additionalData
       };
@@ -127,12 +122,25 @@ const syncUserToFirestore = async (user: User, additionalData?: any, isNewUser: 
       // skip the getDoc check. This prevents "Permission Denied" errors if
       // security rules forbid reading non-existent documents.
       await setDoc(userRef, createData());
+
+      // Add Welcome Bonus transaction to subcollection
+      try {
+        const { addTransaction } = await import('./transactions');
+        await addTransaction(user.uid, {
+          amount: 5,
+          description: "Welcome Bonus",
+          type: 'bonus'
+        });
+      } catch (err) {
+        console.error("Failed to add Welcome Bonus transaction:", err);
+        // Don't throw - user creation succeeded, transaction is just missing from history
+      }
     } else {
       // For returning users, check existence first
       try {
         const userSnap = await getDoc(userRef);
         if (!userSnap.exists()) {
-           await setDoc(userRef, createData());
+          await setDoc(userRef, createData());
         }
       } catch (readErr) {
         console.warn("Could not read user doc (likely permission restricted), attempting safe creation/merge skipped to prevent overwrite.");
@@ -175,7 +183,7 @@ export const registerUser = async (email: string, pass: string, name: string, ph
 
     let photoURL = "";
     let storagePath = "";
-    
+
     // Safeguard: If image upload fails (e.g. permissions/bucket issues), continue registration without photo
     if (photoFile) {
       try {
@@ -201,7 +209,7 @@ export const registerUser = async (email: string, pass: string, name: string, ph
     await syncUserToFirestore(user, {
       displayName: name,
       photoFileName: photoFile ? photoFile.name : "",
-      photoURL: photoURL, 
+      photoURL: photoURL,
       storagePath: storagePath
     }, true);
 
@@ -212,7 +220,7 @@ export const registerUser = async (email: string, pass: string, name: string, ph
   } catch (error: any) {
     console.error("Error registering user:", error);
     if (auth.currentUser) {
-       try { await firebaseDeleteUser(auth.currentUser); } catch(e) { console.error("Rollback failed", e); }
+      try { await firebaseDeleteUser(auth.currentUser); } catch (e) { console.error("Rollback failed", e); }
     }
     throw error;
   }
@@ -232,7 +240,7 @@ export const loginUser = async (email: string, pass: string) => {
 
     await syncUserToFirestore(user, {}, false);
     // Clear disabled flag on successful login
-    localStorage.removeItem('anon_auth_disabled'); 
+    localStorage.removeItem('anon_auth_disabled');
     return user;
   } catch (error: any) {
     console.error("Error logging in:", error);
@@ -249,7 +257,7 @@ export const loginWithGoogle = async () => {
 
     // Use isNewUser flag to bypass permissions check on creation
     await syncUserToFirestore(user, {}, additionalInfo?.isNewUser || false);
-    
+
     localStorage.removeItem('anon_auth_disabled');
     return user;
   } catch (error: any) {
@@ -310,7 +318,7 @@ export const updateUserProfile = async (uid: string, data: { displayName?: strin
     }
 
     // 2. Update Auth Profile
-    await firebaseUpdateProfile(user, { 
+    await firebaseUpdateProfile(user, {
       displayName: data.displayName || user.displayName,
       photoURL: photoURL
     });
@@ -320,7 +328,7 @@ export const updateUserProfile = async (uid: string, data: { displayName?: strin
     const updateData: any = {
       updatedAt: serverTimestamp()
     };
-    
+
     if (data.displayName) updateData.displayName = data.displayName;
     if (photoURL) updateData.photoURL = photoURL;
     if (photoFileName) updateData.photoFileName = photoFileName;
@@ -328,7 +336,7 @@ export const updateUserProfile = async (uid: string, data: { displayName?: strin
 
     await updateDoc(userRef, updateData);
     await user.reload();
-    
+
   } catch (error) {
     console.error("Error updating profile:", error);
     throw error;
@@ -340,13 +348,13 @@ const deleteStorageFolder = async (path: string) => {
   const listRef = ref(storage, path);
   try {
     const res = await listAll(listRef);
-    
+
     // Delete all files in this folder
     const filePromises = res.items.map((itemRef) => deleteObject(itemRef));
-    
+
     // Recursively delete subfolders
     const folderPromises = res.prefixes.map((folderRef) => deleteStorageFolder(folderRef.fullPath));
-    
+
     await Promise.all([...filePromises, ...folderPromises]);
   } catch (error) {
     console.warn(`Error deleting folder ${path}, it might be empty or non-existent:`, error);
@@ -370,7 +378,7 @@ export const deleteUserAccount = async () => {
     console.log("Deleting user authentication...");
     // 3. Delete Authentication Record
     await firebaseDeleteUser(user);
-    
+
   } catch (error) {
     console.error("Error deleting account:", error);
     throw error;
@@ -412,23 +420,25 @@ export const deductCredits = async (userId: string, amount: number, description:
       }
 
       const newCredits = currentCredits - amount;
-      const currentHistory = data.transactionHistory || [];
 
-      const newTransaction: CreditTransaction = {
-        id: Date.now().toString(), // Simple unique ID
-        userId: userId,
-        amount: -amount,
-        description: description,
-        timestamp: Date.now(),
-        type: 'usage'
-      };
-
-      // Update credits and prepend to history array in one write
-      transaction.update(userRef, { 
-        credits: newCredits,
-        transactionHistory: [newTransaction, ...currentHistory]
+      // Update credits only (no more array manipulation)
+      transaction.update(userRef, {
+        credits: newCredits
       });
     });
+
+    // Add transaction to subcollection after successful deduction
+    try {
+      const { addTransaction } = await import('./transactions');
+      await addTransaction(userId, {
+        amount: -amount,
+        description: description,
+        type: 'usage'
+      });
+    } catch (err) {
+      console.error("Failed to record transaction:", err);
+      // Don't throw - credits were deducted successfully
+    }
   } catch (e) {
     console.error("Transaction failed: ", e);
     throw e;
@@ -436,13 +446,15 @@ export const deductCredits = async (userId: string, amount: number, description:
 };
 
 // Get Credit History
+// DEPRECATED: Old array-based transaction history (kept for backward compatibility)
+// This will return empty array for new users
 export const getTransactionHistory = async (userId: string): Promise<CreditTransaction[]> => {
   try {
     const userRef = doc(db, "users", userId);
     const snap = await getDoc(userRef);
     if (snap.exists()) {
       const data = snap.data() as any;
-      // Return history from the array field
+      // Return legacy array if it exists, otherwise empty
       return (data.transactionHistory || []) as CreditTransaction[];
     }
     return [];
@@ -451,6 +463,9 @@ export const getTransactionHistory = async (userId: string): Promise<CreditTrans
     return [];
   }
 };
+
+// NEW: Re-export subcollection-based functions
+export { getPurchaseHistory, getAllTransactions } from './transactions';
 
 // --- Sketches / Storage & Firestore Operations ---
 
@@ -463,29 +478,29 @@ interface AppSketchContext {
 // --- Helper: Convert to PNG (Lossless) ---
 const convertToPng = (base64: string): Promise<string> => {
   if (typeof window === 'undefined') return Promise.resolve(base64);
-  
+
   return new Promise((resolve) => {
     const img = new Image();
     img.src = base64;
-    img.crossOrigin = 'anonymous'; 
+    img.crossOrigin = 'anonymous';
     img.onload = () => {
-       const canvas = document.createElement('canvas');
-       canvas.width = img.width;
-       canvas.height = img.height;
-       const ctx = canvas.getContext('2d');
-       if (!ctx) { resolve(base64); return; }
-       
-       // White background to handle transparency
-       ctx.fillStyle = '#FFFFFF';
-       ctx.fillRect(0, 0, canvas.width, canvas.height);
-       ctx.drawImage(img, 0, 0);
-       
-       // Export as PNG
-       resolve(canvas.toDataURL('image/png'));
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { resolve(base64); return; }
+
+      // White background to handle transparency
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0);
+
+      // Export as PNG
+      resolve(canvas.toDataURL('image/png'));
     };
     img.onerror = (e) => {
-        console.warn("Image conversion failed, using original", e);
-        resolve(base64);
+      console.warn("Image conversion failed, using original", e);
+      resolve(base64);
     };
   });
 };
@@ -493,7 +508,7 @@ const convertToPng = (base64: string): Promise<string> => {
 // 1. Upload image to Firebase Storage
 const uploadSketchImage = async (uid: string, imageData: string | Blob): Promise<{ url: string, path: string }> => {
   const imageId = Date.now().toString();
-  
+
   let dataToUpload = imageData;
   let mimeType = 'image/png';
   let fileExtension = 'png';
@@ -509,29 +524,29 @@ const uploadSketchImage = async (uid: string, imageData: string | Blob): Promise
       console.warn("PNG conversion skipped:", error);
       // If conversion fails, fallback to current mime type or default to png
       if (imageData.startsWith('data:image/jpeg')) {
-         mimeType = 'image/jpeg';
-         fileExtension = 'jpg';
-      }
-    }
-  } 
-  // 2. Handle Blobs
-  else if (imageData instanceof Blob) {
-     if (imageData.type === 'image/jpeg') {
-        // Strictly, we should probably convert blobs too, but usually blobs come from demo saves
-        // which are acceptable. For generated images (strings), we enforce PNG.
         mimeType = 'image/jpeg';
         fileExtension = 'jpg';
-     }
+      }
+    }
+  }
+  // 2. Handle Blobs
+  else if (imageData instanceof Blob) {
+    if (imageData.type === 'image/jpeg') {
+      // Strictly, we should probably convert blobs too, but usually blobs come from demo saves
+      // which are acceptable. For generated images (strings), we enforce PNG.
+      mimeType = 'image/jpeg';
+      fileExtension = 'jpg';
+    }
   }
 
   // IMPORTANT: This path MUST match "match /user_uploads/{uid}/{allPaths=**}" in security rules
   const storagePath = `user_uploads/${uid}/sketches/${imageId}.${fileExtension}`;
-  
+
   console.log(`Attempting upload to: ${storagePath} (${mimeType})`);
   const storageRef = ref(storage, storagePath);
 
   // Add metadata to ensure content type is set correctly and downloads trigger automatically
-  const metadata = { 
+  const metadata = {
     contentType: mimeType,
     contentDisposition: `attachment; filename="bible-sketch.${fileExtension}"`
   };
@@ -559,9 +574,9 @@ export const updateSketchImage = async (sketchId: string, userId: string, oldSto
     const lastSlash = path.lastIndexOf('/');
     const dir = path.substring(0, lastSlash);
     const filename = path.substring(lastSlash + 1, path.lastIndexOf('.'));
-    
-    // Requested format: .../sketches/user_uploads/IMGID_400x533.png
-    const thumbnailPath = `${dir}/user_uploads/${filename}_400x533.${fileExt}`;
+
+    // Thumbnail should be in the same directory as the main image
+    const thumbnailPath = `${dir}/${filename}_400x533.${fileExt}`;
 
     // 2. Update Firestore
     const sketchRef = doc(db, "sketches", sketchId);
@@ -581,7 +596,7 @@ export const updateSketchImage = async (sketchId: string, userId: string, oldSto
 
 // 2. Save Metadata
 export const saveSketch = async (
-  userId: string, 
+  userId: string,
   imageData: string | Blob,
   promptContext: AppSketchContext,
   isPublic: boolean = true,
@@ -589,21 +604,22 @@ export const saveSketch = async (
 ): Promise<Sketch> => {
   try {
     if (!auth.currentUser) throw new Error("Must be logged in to save");
-    
+
     console.log("Starting save process for user:", userId);
-    
+
     // Upload to Storage first
     const { url, path } = await uploadSketchImage(userId, imageData);
     console.log("Image uploaded successfully to:", path);
 
     // Predict thumbnail path
-    // Constructing path based on user request: /USERID/sketches/user_uploads/IMGID_400x533.png
+    // Thumbnail should be in the same directory as the main image
+    // Path structure: user_uploads/USERID/sketches/FILENAME_400x533.ext
     const fileExt = path.split('.').pop();
     const lastSlash = path.lastIndexOf('/');
     const dir = path.substring(0, lastSlash);
     const filename = path.substring(lastSlash + 1, path.lastIndexOf('.'));
 
-    const thumbnailPath = `${dir}/user_uploads/${filename}_400x533.${fileExt}`;
+    const thumbnailPath = `${dir}/${filename}_400x533.${fileExt}`;
 
     // Construct prompt data, conditionally adding undefined optional fields
     // Firestore 'addDoc' throws if any field is 'undefined'.
@@ -618,17 +634,17 @@ export const saveSketch = async (
 
     // Only add end_verse if it exists (is not undefined and not null)
     if (promptContext.reference.endVerse !== undefined && promptContext.reference.endVerse !== null) {
-       promptDataMap.end_verse = promptContext.reference.endVerse;
+      promptDataMap.end_verse = promptContext.reference.endVerse;
     }
 
     const sketchesRef = collection(db, "sketches");
-    
+
     const newSketchData = {
       userId: userId,
       imageUrl: url,
       storagePath: path,
       thumbnailPath: thumbnailPath, // Saved
-      isPublic: isPublic, 
+      isPublic: isPublic,
       blessCount: 0,
       createdAt: serverTimestamp(),
       isBookmark: isBookmark,
@@ -636,9 +652,9 @@ export const saveSketch = async (
     };
 
     const docRef = await addDoc(sketchesRef, newSketchData);
-    
+
     console.log("Firestore document created successfully");
-    
+
     // Return fully constructed Sketch object
     return {
       id: docRef.id,
@@ -717,12 +733,12 @@ export const getUserBlessedSketchIds = async (userId: string): Promise<string[]>
 export const getUserGallery = async (userId: string) => {
   try {
     const q = query(
-      collection(db, "sketches"), 
+      collection(db, "sketches"),
       where("userId", "==", userId)
     );
-    
+
     const snapshot = await getDocs(q);
-    
+
     const sketches = snapshot.docs.map(doc => {
       const data = doc.data() as any;
       return {
@@ -744,13 +760,13 @@ export const getUserGallery = async (userId: string) => {
 export const getPublicGallery = async (currentUserId?: string) => {
   try {
     const q = query(
-      collection(db, 'sketches'), 
+      collection(db, 'sketches'),
       where('isPublic', '==', true),
-      limit(100) 
+      limit(100)
     );
-    
+
     const snapshot = await getDocs(q);
-    
+
     const sketches = snapshot.docs.map(doc => {
       const data = doc.data() as any;
       return {
@@ -759,13 +775,13 @@ export const getPublicGallery = async (currentUserId?: string) => {
         timestamp: data.createdAt?.toMillis?.() || Date.now()
       };
     }) as any[];
-    
+
     let publicSketches = sketches.filter((s: any) => !s.isBookmark);
-    
+
     if (currentUserId) {
       publicSketches = publicSketches.filter((s: any) => s.userId !== currentUserId);
     }
-    
+
     return publicSketches.sort((a, b) => {
       const blessDiff = (b.blessCount || 0) - (a.blessCount || 0);
       if (blessDiff !== 0) return blessDiff;
@@ -790,9 +806,9 @@ export const getUserPublicGallery = async (targetUserId: string) => {
       where('userId', '==', targetUserId),
       where('isPublic', '==', true)
     );
-    
+
     const snapshot = await getDocs(q);
-    
+
     const sketches = snapshot.docs.map(doc => {
       const data = doc.data() as any;
       return {
@@ -803,7 +819,7 @@ export const getUserPublicGallery = async (targetUserId: string) => {
     }) as any[];
 
     const originals = sketches.filter((s: any) => !s.isBookmark);
-    
+
     return originals.sort((a, b) => b.timestamp - a.timestamp);
   } catch (error) {
     console.error("Error fetching user public gallery:", error);
@@ -821,13 +837,13 @@ export const deleteSketch = async (sketchId: string, storagePath: string, isBook
     // Retrieve data first to get accurate thumbnail path if possible before deleting the doc
     let thumbnailPath = "";
     try {
-       const snap = await getDoc(sketchRef);
-       if (snap.exists()) {
-           const data = snap.data() as any;
-           thumbnailPath = data.thumbnailPath || "";
-       }
-    } catch(e) {
-        // Ignored (might be perm restricted if already deleted or edge case)
+      const snap = await getDoc(sketchRef);
+      if (snap.exists()) {
+        const data = snap.data() as any;
+        thumbnailPath = data.thumbnailPath || "";
+      }
+    } catch (e) {
+      // Ignored (might be perm restricted if already deleted or edge case)
     }
 
     await deleteDoc(sketchRef); // DELETE DATA
@@ -836,51 +852,51 @@ export const deleteSketch = async (sketchId: string, storagePath: string, isBook
 
     // --- Storage Deletion (Main Image + Thumbnails) ---
     if (storagePath) {
-        const pathsToDelete = new Set<string>();
+      const pathsToDelete = new Set<string>();
 
-        // A. MAIN IMAGE
-        pathsToDelete.add(storagePath);
+      // A. MAIN IMAGE
+      pathsToDelete.add(storagePath);
 
-        // B. THUMBNAIL (From Firestore Record if available)
-        if (thumbnailPath) pathsToDelete.add(thumbnailPath);
+      // B. THUMBNAIL (From Firestore Record if available)
+      if (thumbnailPath) pathsToDelete.add(thumbnailPath);
 
-        // C. HARDCODED THUMBNAIL (Structure: .../sketches/user_uploads/ID_400x533.png)
-        // This ensures the nested folder structure requested is targeted
-        const lastSlash = storagePath.lastIndexOf('/');
-        const lastDot = storagePath.lastIndexOf('.');
-        if (lastSlash !== -1 && lastDot !== -1) {
-             const dir = storagePath.substring(0, lastSlash);
-             const filename = storagePath.substring(lastSlash + 1, lastDot);
-             const ext = storagePath.substring(lastDot + 1);
+      // C. HARDCODED THUMBNAIL (Structure: .../sketches/user_uploads/ID_400x533.png)
+      // This ensures the nested folder structure requested is targeted
+      const lastSlash = storagePath.lastIndexOf('/');
+      const lastDot = storagePath.lastIndexOf('.');
+      if (lastSlash !== -1 && lastDot !== -1) {
+        const dir = storagePath.substring(0, lastSlash);
+        const filename = storagePath.substring(lastSlash + 1, lastDot);
+        const ext = storagePath.substring(lastDot + 1);
 
-             // Hardcoded nested structure
-             pathsToDelete.add(`${dir}/user_uploads/${filename}_400x533.${ext}`);
-             pathsToDelete.add(`${dir}/user_uploads/${filename}_400x533.webp`); // WebP variant
-        }
+        // Hardcoded nested structure
+        pathsToDelete.add(`${dir}/user_uploads/${filename}_400x533.${ext}`);
+        pathsToDelete.add(`${dir}/user_uploads/${filename}_400x533.webp`); // WebP variant
+      }
 
-        // D. Legacy Fallbacks (Standard resize location)
-        const predictedWebP = storagePath.replace(/\.[^/.]+$/, "") + "_400x533.webp";
-        pathsToDelete.add(predictedWebP);
+      // D. Legacy Fallbacks (Standard resize location)
+      const predictedWebP = storagePath.replace(/\.[^/.]+$/, "") + "_400x533.webp";
+      pathsToDelete.add(predictedWebP);
 
-        const ext = storagePath.split('.').pop();
-        if (ext) {
-            const predictedOrig = storagePath.replace(/\.[^/.]+$/, "") + `_400x533.${ext}`;
-            pathsToDelete.add(predictedOrig);
-        }
+      const ext = storagePath.split('.').pop();
+      if (ext) {
+        const predictedOrig = storagePath.replace(/\.[^/.]+$/, "") + `_400x533.${ext}`;
+        pathsToDelete.add(predictedOrig);
+      }
 
-        // Execute Deletions
-        // We use Promise.allSettled behavior via catch to ensure one failure doesn't stop others
-        const deletePromises = Array.from(pathsToDelete).map(path => {
-             const fileRef = ref(storage, path);
-             return deleteObject(fileRef).catch(e => {
-                 // Ignore "object-not-found" errors, warn on others
-                 if (e.code !== 'storage/object-not-found') {
-                     console.warn(`Failed to delete storage object: ${path}`, e);
-                 }
-             });
+      // Execute Deletions
+      // We use Promise.allSettled behavior via catch to ensure one failure doesn't stop others
+      const deletePromises = Array.from(pathsToDelete).map(path => {
+        const fileRef = ref(storage, path);
+        return deleteObject(fileRef).catch(e => {
+          // Ignore "object-not-found" errors, warn on others
+          if (e.code !== 'storage/object-not-found') {
+            console.warn(`Failed to delete storage object: ${path}`, e);
+          }
         });
+      });
 
-        await Promise.all(deletePromises);
+      await Promise.all(deletePromises);
     }
 
     // 3. CASCADE DELETE: Remove all bookmarks associated with this sketch from OTHER users' saved collections
@@ -889,7 +905,7 @@ export const deleteSketch = async (sketchId: string, storagePath: string, isBook
         collection(db, "sketches"),
         where("originalSketchId", "==", sketchId)
       );
-      
+
       const bookmarkSnaps = await getDocs(bookmarksQuery);
       const deletePromises = bookmarkSnaps.docs.map(d => deleteDoc(d.ref));
       await Promise.all(deletePromises);
@@ -923,7 +939,7 @@ export const toggleBookmark = async (userId: string, sketch: Sketch) => {
     const bookmarkId = `bookmark_${userId}_${actualTargetId}`;
     const bookmarkRef = doc(db, "sketches", bookmarkId);
     const docSnap = await getDoc(bookmarkRef);
-    
+
     if (docSnap.exists()) {
       await deleteDoc(bookmarkRef);
       return false;
@@ -940,11 +956,11 @@ export const toggleBookmark = async (userId: string, sketch: Sketch) => {
         isPublic: false,
         isBookmark: true,
         originalSketchId: actualTargetId,
-        originalOwnerId: sketch.userId, 
+        originalOwnerId: sketch.userId,
         createdAt: serverTimestamp(),
         blessCount: 0
       });
-      return true; 
+      return true;
     }
   } catch (error) {
     console.error("Error toggling bookmark:", error);
@@ -959,7 +975,7 @@ export const getSavedSketches = async (userId: string) => {
       collection(db, "sketches"),
       where("userId", "==", userId)
     );
-    
+
     const snapshot = await getDocs(q);
     const sketches = snapshot.docs.map(doc => {
       const data = doc.data() as any;
@@ -1013,7 +1029,7 @@ export const getSketchById = async (sketchId: string): Promise<Sketch | null> =>
   try {
     const sketchRef = doc(db, "sketches", sketchId);
     const snap = await getDoc(sketchRef);
-    
+
     if (snap.exists()) {
       const data = snap.data() as any;
       return {
@@ -1028,3 +1044,7 @@ export const getSketchById = async (sketchId: string): Promise<Sketch | null> =>
     throw error;
   }
 };
+
+// --- Download/Print Quota System ---
+export { canDownload, deductDownload } from './downloads';
+

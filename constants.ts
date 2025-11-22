@@ -8,7 +8,7 @@ import { AgeGroup, ArtStyle } from './types';
 // because it supports multimodal input (Reference Images).
 export const MODELS = {
   ARCHITECT: "gemini-2.5-flash",
-  ARTIST: "gemini-3-pro-image-preview", 
+  ARTIST: "gemini-3-pro-image-preview",
   CRITIC: "gemini-2.5-flash"
 };
 
@@ -29,24 +29,24 @@ const BASE_PATH = "/references/";
 
 export const REFERENCE_MAP: Record<string, string> = {
   // TODDLER
-  [`${AgeGroup.TODDLER}_${ArtStyle.SUNDAY_SCHOOL}`]: `${BASE_PATH}Toddler-SundaySchool.jpg`,
+  [`${AgeGroup.TODDLER}_${ArtStyle.SUNDAY_SCHOOL}`]: `${BASE_PATH}toddler-sundayschool.jpg`,
 
   // YOUNG CHILD
-  [`${AgeGroup.YOUNG_CHILD}_${ArtStyle.SUNDAY_SCHOOL}`]: `${BASE_PATH}Child-SundaySchool.jpg`,
-  [`${AgeGroup.YOUNG_CHILD}_${ArtStyle.STAINED_GLASS}`]: `${BASE_PATH}Child-Stainedglass.jpg`,
-  [`${AgeGroup.YOUNG_CHILD}_${ArtStyle.ICONOGRAPHY}`]:   `${BASE_PATH}Child-Iconography.jpg`,
-  [`${AgeGroup.YOUNG_CHILD}_${ArtStyle.COMIC}`]:         `${BASE_PATH}Child-ComicBook.jpg`,
+  [`${AgeGroup.YOUNG_CHILD}_${ArtStyle.SUNDAY_SCHOOL}`]: `${BASE_PATH}child-sundayschool.jpg`,
+  [`${AgeGroup.YOUNG_CHILD}_${ArtStyle.STAINED_GLASS}`]: `${BASE_PATH}child-stainglass.jpg`,
+  [`${AgeGroup.YOUNG_CHILD}_${ArtStyle.ICONOGRAPHY}`]:   `${BASE_PATH}child-iconography.jpg`,
+  [`${AgeGroup.YOUNG_CHILD}_${ArtStyle.COMIC}`]:         `${BASE_PATH}child-comicbook.jpg`,
 
   // PRE_TEEN
-  [`${AgeGroup.PRE_TEEN}_${ArtStyle.CLASSIC}`]:          `${BASE_PATH}Teen-Classic.jpg`,
-  [`${AgeGroup.PRE_TEEN}_${ArtStyle.STAINED_GLASS}`]:    `${BASE_PATH}Teen-Stainedglass.jpg`,
-  [`${AgeGroup.PRE_TEEN}_${ArtStyle.ICONOGRAPHY}`]:      `${BASE_PATH}Teen-Iconography.jpg`,
-  [`${AgeGroup.PRE_TEEN}_${ArtStyle.COMIC}`]:            `${BASE_PATH}Teen-ComicBook.jpg`,
+  [`${AgeGroup.PRE_TEEN}_${ArtStyle.CLASSIC}`]:          `${BASE_PATH}teen-classic.jpg`,
+  [`${AgeGroup.PRE_TEEN}_${ArtStyle.STAINED_GLASS}`]:    `${BASE_PATH}teen-stainedglass.jpg`,
+  [`${AgeGroup.PRE_TEEN}_${ArtStyle.ICONOGRAPHY}`]:      `${BASE_PATH}teen-iconography.jpg`,
+  [`${AgeGroup.PRE_TEEN}_${ArtStyle.COMIC}`]:            `${BASE_PATH}teen-comicbook.jpg`,
 
   // ADULT
-  [`${AgeGroup.ADULT}_${ArtStyle.CLASSIC}`]:             `${BASE_PATH}adult-Classic.jpg`,
-  [`${AgeGroup.ADULT}_${ArtStyle.STAINED_GLASS}`]:       `${BASE_PATH}Adult-Stainedglass.jpg`,
-  [`${AgeGroup.ADULT}_${ArtStyle.ICONOGRAPHY}`]:         `${BASE_PATH}adult-Iconography.jpg`
+  [`${AgeGroup.ADULT}_${ArtStyle.CLASSIC}`]:             `${BASE_PATH}adult-classic.jpg`,
+  [`${AgeGroup.ADULT}_${ArtStyle.STAINED_GLASS}`]:       `${BASE_PATH}adult-stainglass.jpg`,
+  [`${AgeGroup.ADULT}_${ArtStyle.ICONOGRAPHY}`]:         `${BASE_PATH}adult-iconography.jpg`
 };
 
 // ==========================================
@@ -62,7 +62,7 @@ export const AGE_LOGIC = {
     subjectFocus: "Interaction between maximum two characters. Clear action. Visual storytelling that reflects specific narrative emotion."
   },
   [AgeGroup.PRE_TEEN]: {
-keywords: "GRAPHIC NOVEL / ENGRAVING STYLE. **High Detail is Mandatory.** Variable line weight (thick outer contours, ultra-fine inner lines). **Texture must be rendered using SPARSE, controlled hatching.** Complex, full-page environment with intricate detail. Avoid large, solid black areas.",    subjectFocus: "Heroic poses, dramatic angles, cinematic composition. **Ensure natural human height and scale. No giant figures.**"
+    keywords: "GRAPHIC NOVEL / ENGRAVING STYLE. **High Detail is Mandatory.** Variable line weight (thick outer contours, ultra-fine inner lines). **Texture must be rendered using SPARSE, controlled hatching.** Complex, full-page environment with intricate detail. Avoid large, solid black areas.", subjectFocus: "Heroic poses, dramatic angles, cinematic composition. **Ensure natural human height and scale. No giant figures.**"
   },
   [AgeGroup.ADULT]: {
     keywords: "STRESS-RELIEF COLORING BOOK STYLE. **MAXIMUM LINE DENSITY.** Utilize ultra-fine line weights (0.1mm - 0.5mm) for all detail. Intricate texture rendering (e.g., wood grain, knotwork) is mandatory. The resulting line work must be highly detailed and visually overwhelming, suitable for meditative coloring.",
@@ -114,7 +114,7 @@ export const CHRISTIAN_GUIDELINES = `
 export const GOLDEN_NEGATIVES = [
   // THEOLOGY NEGATIVES
   "face of god, old man in sky, bearded god, zeus, human god figure, anthropomorphic father",
- 
+
   // STYLE NEGATIVES
   "color, colored, colorful, polychrome, chromatic, red, blue, green, yellow, pink, purple, orange, brown, gold, silver, rainbow",
   "shading, grayscale, gradient, 3d render, photo, realistic texture, filled colors, grey, shadows, sketchiness, charcoal, smudge, blurry, dithering, noise",
@@ -124,7 +124,7 @@ export const GOLDEN_NEGATIVES = [
   "modern clothing, suits, zippers, cars, buildings, glasses, wristwatches, tattoos",
   "smiling angels (in judgment scenes), happy expressions on sad characters, laughing, celebrating, party, wedding",
   "wings on serpents, dragons, surrealism, people merging with objects",
- 
+
   // Ratio & Scale
   "hierarchical scaling, symbolic perspective, giant leader, giant moses, giant jesus, figure larger than mountains, scale mismatch, tiny crowd, forced perspective",
 
