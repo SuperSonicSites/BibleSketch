@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+import { Helmet } from 'react-helmet-async';
 import { MadLibsInput } from './MadLibsInput';
 import { ConfigPanel } from './ConfigPanel';
 import { Button } from './ui/Button';
@@ -159,7 +160,7 @@ export const CreateTool: React.FC<CreateToolProps> = ({
         onBack={() => setGeneratedImage(null)}
         onRequireAuth={(action) => onRequireAuth(action, 'signup')}
         currentUser={user}
-        onSave={async (isPublic: boolean, finalImage: string) => {
+        onSave={async (isPublic: boolean, finalImage: string, tags: string[]) => {
           if (!user) {
             onRequireAuth(async () => {
               // Handle post-login save if needed
@@ -170,7 +171,7 @@ export const CreateTool: React.FC<CreateToolProps> = ({
               reference: reference,
               ageGroup: age,
               artStyle: style
-            }, isPublic);
+            }, isPublic, false, tags);
             // Alert removed
           }
         }}
@@ -180,6 +181,18 @@ export const CreateTool: React.FC<CreateToolProps> = ({
 
   return (
     <>
+      <Helmet>
+        <title>Bible Sketch - Create Custom Bible Coloring Pages | Free Printable Christian Coloring Sheets</title>
+        <meta name="description" content="Create personalized Bible coloring pages for any verse, age group, and art style. Perfect for Sunday School, VBS, homeschool, and family devotionals. Generate free printable Christian coloring sheets in seconds." />
+        <meta property="og:title" content="Bible Sketch - Create Custom Bible Coloring Pages" />
+        <meta property="og:description" content="Create personalized Bible coloring pages for any verse, age group, and art style. Perfect for Sunday School, VBS, homeschool, and family devotionals." />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Bible Sketch - Create Custom Bible Coloring Pages" />
+        <meta name="twitter:description" content="Create personalized Bible coloring pages for any verse, age group, and art style. Perfect for Sunday School, VBS, homeschool, and family devotionals." />
+        <meta name="keywords" content="bible coloring pages, christian coloring sheets, sunday school coloring pages, vbs coloring pages, printable bible coloring pages, scripture coloring pages, bible verse coloring pages" />
+      </Helmet>
+
       <main className="max-w-7xl mx-auto px-4 mt-8">
         <div className="text-center mb-8 md:mb-12 max-w-6xl mx-auto w-full animate-in fade-in slide-in-from-top-4 duration-500">
           <div className="inline-block relative">

@@ -4,7 +4,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Sketch } from '../types';
 import { getPublicGallery, blessSketch, getUserBlessedSketchIds, getSavedSketches } from '../services/firebase';
 import { Heart, Facebook, ChevronLeft, ChevronRight, AlertCircle, User } from 'lucide-react';
-import { BIBLE_BOOKS } from '../constants';
+import { BIBLE_BOOKS, LITURGICAL_TAGS } from '../constants';
+import { FilterBar, SortOption } from './FilterBar';
 import { GalleryModal } from './GalleryModal';
 import { getSketchUrl } from '../utils/urlHelpers';
 import { Button } from './ui/Button';
@@ -38,9 +39,13 @@ export const FeaturedSection: React.FC<FeaturedSectionProps> = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeBookFilter, setActiveBookFilter] = useState<string>('All');
+  const [activeTagFilter, setActiveTagFilter] = useState<string>('All');
+  const [activeAgeFilter, setActiveAgeFilter] = useState<string>('All');
+  const [activeStyleFilter, setActiveStyleFilter] = useState<string>('All');
+  const [activeSort, setActiveSort] = useState<SortOption>('popular');
   const [blessedIds, setBlessedIds] = useState<Set<string>>(new Set());
   const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(new Set());
-  
+
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedSketch, setSelectedSketch] = useState<Sketch | null>(null);
   
@@ -94,7 +99,7 @@ export const FeaturedSection: React.FC<FeaturedSectionProps> = ({
   // Reset pagination when filter changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [activeBookFilter]);
+  }, [activeBookFilter, activeTagFilter, activeAgeFilter, activeStyleFilter, activeSort]);
 
   // Derived: Available Books
   const availableBooks = useMemo(() => {
@@ -114,11 +119,82 @@ export const FeaturedSection: React.FC<FeaturedSectionProps> = ({
     });
   }, [sketches]);
 
+  // Derived: Available Tags (only show tags that have sketches)
+  const availableTags = useMemo(() => {
+    const tagCount = new Map<string, number>();
+    sketches.forEach(s => {
+      if (s.tags && s.tags.length > 0) {
+        s.tags.forEach(tagId => {
+          tagCount.set(tagId, (tagCount.get(tagId) || 0) + 1);
+        });
+      }
+    });
+
+    // Sort by count (most popular first) and return tag info
+    return Array.from(tagCount.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([tagId]) => {
+        const tagInfo = LITURGICAL_TAGS.find(t => t.id === tagId);
+        return tagInfo ? { id: tagId, label: tagInfo.label } : { id: tagId, label: tagId };
+      });
+  }, [sketches]);
+
+  // Derived: Available Age Groups
+  const availableAges = useMemo(() => {
+    const ageSet = new Set<string>();
+    sketches.forEach(s => {
+      if (s.promptData?.age_group) {
+        ageSet.add(s.promptData.age_group);
+      }
+    });
+    return Array.from(ageSet).sort();
+  }, [sketches]);
+
+  // Derived: Available Art Styles
+  const availableStyles = useMemo(() => {
+    const styleSet = new Set<string>();
+    sketches.forEach(s => {
+      if (s.promptData?.art_style) {
+        styleSet.add(s.promptData.art_style);
+      }
+    });
+    return Array.from(styleSet).sort();
+  }, [sketches]);
+
   // Derived: Filtered List
   const filteredSketches = useMemo(() => {
-    if (activeBookFilter === 'All') return sketches;
-    return sketches.filter(s => s.promptData?.book === activeBookFilter);
-  }, [sketches, activeBookFilter]);
+    let result = sketches;
+
+    // Filter by book
+    if (activeBookFilter !== 'All') {
+      result = result.filter(s => s.promptData?.book === activeBookFilter);
+    }
+
+    // Filter by tag
+    if (activeTagFilter !== 'All') {
+      result = result.filter(s => s.tags && s.tags.includes(activeTagFilter));
+    }
+
+    // Filter by age
+    if (activeAgeFilter !== 'All') {
+      result = result.filter(s => s.promptData?.age_group === activeAgeFilter);
+    }
+
+    // Filter by style
+    if (activeStyleFilter !== 'All') {
+      result = result.filter(s => s.promptData?.art_style === activeStyleFilter);
+    }
+
+    // Sort
+    if (activeSort === 'newest') {
+      result = [...result].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    } else {
+      // popular - sort by blessCount
+      result = [...result].sort((a, b) => (b.blessCount || 0) - (a.blessCount || 0));
+    }
+
+    return result;
+  }, [sketches, activeBookFilter, activeTagFilter, activeAgeFilter, activeStyleFilter, activeSort]);
 
   // Derived: Paginated List
   const totalPages = Math.ceil(filteredSketches.length / ITEMS_PER_PAGE);
@@ -226,41 +302,22 @@ export const FeaturedSection: React.FC<FeaturedSectionProps> = ({
 
       {/* Filters */}
       {sketches.length > 0 && (
-        <div className="mb-10 flex justify-center">
-          <div className="flex flex-wrap justify-center gap-2 max-w-4xl">
-              <button 
-                  onClick={() => setActiveBookFilter('All')}
-                  className={`px-4 py-1.5 rounded-full text-sm font-bold transition-all ${
-                    activeBookFilter === 'All' 
-                    ? 'bg-[#7C3AED] text-white shadow-md' 
-                    : 'bg-white border border-gray-200 text-gray-500 hover:bg-gray-50'
-                  }`}
-              >
-                  All Books
-              </button>
-              {availableBooks.slice(0, 12).map(book => (
-                  <button 
-                    key={book}
-                    onClick={() => setActiveBookFilter(book)}
-                    className={`px-4 py-1.5 rounded-full text-sm font-bold transition-all border ${
-                        activeBookFilter === book 
-                        ? 'bg-purple-50 border-[#7C3AED] text-[#7C3AED]' 
-                        : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
-                    }`}
-                  >
-                    {book}
-                  </button>
-              ))}
-              {availableBooks.length > 12 && (
-                  <button 
-                    onClick={onNavigateToGallery}
-                    className="px-4 py-1.5 rounded-full text-sm font-bold bg-gray-100 text-gray-500 hover:bg-gray-200 transition-all"
-                  >
-                    + {availableBooks.length - 12} More
-                  </button>
-              )}
-          </div>
-        </div>
+        <FilterBar
+          availableBooks={availableBooks}
+          availableAges={availableAges}
+          availableStyles={availableStyles}
+          availableTags={availableTags}
+          activeBook={activeBookFilter}
+          activeAge={activeAgeFilter}
+          activeStyle={activeStyleFilter}
+          activeTag={activeTagFilter}
+          activeSort={activeSort}
+          onBookChange={setActiveBookFilter}
+          onAgeChange={setActiveAgeFilter}
+          onStyleChange={setActiveStyleFilter}
+          onTagChange={setActiveTagFilter}
+          onSortChange={setActiveSort}
+        />
       )}
 
       {/* Grid or Fallback */}

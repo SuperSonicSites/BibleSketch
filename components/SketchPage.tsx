@@ -1,13 +1,17 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { Printer, Download, Heart, Facebook, AlertTriangle, ArrowRight, Lock, Bookmark, Check, Loader2, Trash2, Globe } from 'lucide-react';
-import { getSketchById, blessSketch, getUserBlessedSketchIds, getUserDocument, toggleBookmark, checkIsBookmarked, auth, deleteSketch, updateSketchVisibility, canDownload, deductDownload } from '../services/firebase';
+import { Helmet } from 'react-helmet-async';
+import { Printer, Download, Heart, Facebook, AlertTriangle, ArrowRight, Lock, Bookmark, Check, Loader2, Trash2, Globe, Tag } from 'lucide-react';
+import { getSketchById, blessSketch, getUserBlessedSketchIds, getUserDocument, toggleBookmark, checkIsBookmarked, auth, deleteSketch, updateSketchVisibility, canDownload, deductDownload, updateSketchTags } from '../services/firebase';
 import { Sketch } from '../types';
 import { Button } from './ui/Button';
 import { WatermarkOverlay } from './WatermarkOverlay';
 import { PremiumModal } from './PremiumModal';
 import { LazyImage } from './ui/LazyImage';
+import { TagDisplay, TagSelector } from './TagSelector';
+
+import { SketchSEO } from './SketchSEO';
 
 // Pinterest Icon
 const PinterestIcon = ({ className }: { className?: string }) => (
@@ -43,6 +47,22 @@ export const SketchPage: React.FC<SketchPageProps> = ({ user, onRequireAuth }) =
   // Premium Modal State
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [downloadsRemaining, setDownloadsRemaining] = useState(0);
+  const [isPremiumUser, setIsPremiumUser] = useState(false);
+
+  // Tag Editing State
+  const [isEditingTags, setIsEditingTags] = useState(false);
+  const [localTags, setLocalTags] = useState<string[]>([]);
+  const [isSavingTags, setIsSavingTags] = useState(false);
+
+  // Fetch download quota on mount
+  useEffect(() => {
+    if (user?.uid) {
+      canDownload(user.uid).then(quota => {
+        setDownloadsRemaining(quota.remaining);
+        setIsPremiumUser(quota.isPremium);
+      });
+    }
+  }, [user?.uid]);
 
   // 1. Fetch Sketch Data
   useEffect(() => {
@@ -59,6 +79,7 @@ export const SketchPage: React.FC<SketchPageProps> = ({ user, onRequireAuth }) =
           if (data) {
             setSketch(data);
             setBlessCount(data.blessCount || 0);
+            setLocalTags(data.tags || []);
 
             // Fetch Author Name
             if (data.userId) {
@@ -129,51 +150,6 @@ export const SketchPage: React.FC<SketchPageProps> = ({ user, onRequireAuth }) =
 
     return () => { active = false; };
   }, [user?.uid, sketch?.id]);
-
-  // SEO Meta Tags Effect
-  useEffect(() => {
-    if (!sketch || !sketch.isPublic) return;
-
-    const book = sketch.promptData?.book || "Bible";
-    const chapter = sketch.promptData?.chapter || "";
-    const startVerse = sketch.promptData?.start_verse || "";
-
-    const title = `${book} ${chapter} Coloring Page | Bible Sketch`;
-    const description = `Free printable coloring page for ${book} ${chapter}:${startVerse}. Created by ${authorName} on Bible Sketch.`;
-    const url = window.location.href;
-    const image = sketch.imageUrl;
-
-    // Update Title
-    document.title = title;
-
-    // Helper to update/create meta tags
-    const updateMeta = (attrName: 'name' | 'property', attrValue: string, content: string) => {
-      let element = document.querySelector(`meta[${attrName}="${attrValue}"]`);
-      if (!element) {
-        element = document.createElement('meta');
-        element.setAttribute(attrName, attrValue);
-        document.head.appendChild(element);
-      }
-      element.setAttribute('content', content);
-    };
-
-    updateMeta('name', 'description', description);
-
-    // Open Graph
-    updateMeta('property', 'og:type', 'website');
-    updateMeta('property', 'og:url', url);
-    updateMeta('property', 'og:title', title);
-    updateMeta('property', 'og:description', description);
-    updateMeta('property', 'og:image', image);
-
-    // Twitter
-    updateMeta('name', 'twitter:card', 'summary_large_image');
-    updateMeta('name', 'twitter:url', url);
-    updateMeta('name', 'twitter:title', title);
-    updateMeta('name', 'twitter:description', description);
-    updateMeta('name', 'twitter:image', image);
-
-  }, [sketch, authorName]);
 
   const handleBless = async () => {
     if (isBlessed || !sketch) return;
@@ -248,6 +224,10 @@ export const SketchPage: React.FC<SketchPageProps> = ({ user, onRequireAuth }) =
 
       // Deduct from quota (skipped for premium users)
       await deductDownload(user.uid);
+      // Update displayed count
+      if (!isPremiumUser) {
+        setDownloadsRemaining(prev => Math.max(0, prev - 1));
+      }
     }
   };
 
@@ -275,6 +255,10 @@ export const SketchPage: React.FC<SketchPageProps> = ({ user, onRequireAuth }) =
 
     // Deduct from quota (skipped for premium users)
     await deductDownload(user.uid);
+    // Update displayed count
+    if (!isPremiumUser) {
+      setDownloadsRemaining(prev => Math.max(0, prev - 1));
+    }
   };
 
   const handleShare = (platform: 'facebook' | 'pinterest') => {
@@ -321,6 +305,26 @@ export const SketchPage: React.FC<SketchPageProps> = ({ user, onRequireAuth }) =
     }
   };
 
+  const handleSaveTags = async () => {
+    if (!sketch) return;
+    setIsSavingTags(true);
+    try {
+      await updateSketchTags(sketch.id, localTags);
+      setSketch(prev => prev ? { ...prev, tags: localTags } : null);
+      setIsEditingTags(false);
+    } catch (error) {
+      console.error("Failed to save tags:", error);
+      alert("Failed to save tags. Please try again.");
+    } finally {
+      setIsSavingTags(false);
+    }
+  };
+
+  const handleCancelTagEdit = () => {
+    setLocalTags(sketch?.tags || []);
+    setIsEditingTags(false);
+  };
+
   if (loading) {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center text-gray-400 gap-4">
@@ -347,8 +351,30 @@ export const SketchPage: React.FC<SketchPageProps> = ({ user, onRequireAuth }) =
 
   const isOwner = user?.uid === sketch.userId;
 
+  // Calculate SEO content (Primitive values passed to Memoized Component)
+  let title = 'Bible Coloring Page | Bible Sketch';
+  let description = 'Free printable Bible coloring page. Perfect for Sunday School, VBS, homeschool, and family devotionals.';
+  let imageUrl = sketch?.imageUrl;
+
+  if (sketch?.promptData) {
+    const { book, chapter, start_verse, end_verse, age_group, art_style } = sketch.promptData;
+    const verseRange = end_verse && end_verse > start_verse
+      ? `${start_verse}-${end_verse}`
+      : `${start_verse}`;
+
+    title = `${book} ${chapter}:${verseRange} Coloring Page - ${art_style} Style | Bible Sketch`;
+    description = `Free printable ${book} ${chapter}:${verseRange} coloring page in ${art_style} style. Perfect for ${age_group} in Sunday School, VBS, or family devotionals. High-quality Bible coloring sheet created with Bible Sketch.`;
+  }
+
   return (
     <>
+      <SketchSEO 
+        title={title} 
+        description={description} 
+        imageUrl={imageUrl} 
+        url={window.location.href}
+      />
+
       <div className="max-w-7xl mx-auto px-4 py-12 animate-in fade-in duration-500">
         <div className="mb-8">
           <Link
@@ -395,7 +421,7 @@ export const SketchPage: React.FC<SketchPageProps> = ({ user, onRequireAuth }) =
                 {sketch.promptData?.end_verse && sketch.promptData.end_verse > sketch.promptData.start_verse && `-${sketch.promptData.end_verse}`}
               </h1>
 
-              <div className="flex flex-wrap gap-3 text-sm text-gray-500 mb-6">
+              <div className="flex flex-wrap gap-3 text-sm text-gray-500 mb-4">
                 <span className="bg-purple-50 text-[#7C3AED] px-3 py-1 rounded-full font-bold text-xs uppercase tracking-wide">
                   {sketch.promptData?.age_group}
                 </span>
@@ -405,6 +431,21 @@ export const SketchPage: React.FC<SketchPageProps> = ({ user, onRequireAuth }) =
                 <span className="text-gray-300">•</span>
                 <span>{new Date(sketch.timestamp).toLocaleDateString()}</span>
               </div>
+
+              {/* Tags Display */}
+              {sketch.tags && sketch.tags.length > 0 && (
+                <div className="mb-6">
+                  <div className="flex items-center gap-2 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
+                    <Tag className="w-3 h-3" />
+                    <span>Tags</span>
+                  </div>
+                  <TagDisplay
+                    tags={sketch.tags}
+                    size="md"
+                    onTagClick={(tagId) => navigate(`/tags/${tagId}`)}
+                  />
+                </div>
+              )}
 
               <div className="space-y-4 mb-10">
                 <Button
@@ -425,6 +466,9 @@ export const SketchPage: React.FC<SketchPageProps> = ({ user, onRequireAuth }) =
                 >
                   <Printer className="w-5 h-5" />
                   Print PDF
+                  {!isOwner && !isPremiumUser && user && (
+                    <span className="ml-1 text-xs opacity-80">({downloadsRemaining} left)</span>
+                  )}
                 </Button>
 
                 <Button
@@ -434,6 +478,9 @@ export const SketchPage: React.FC<SketchPageProps> = ({ user, onRequireAuth }) =
                 >
                   <Download className="w-5 h-5" />
                   Download Image
+                  {!isOwner && !isPremiumUser && user && (
+                    <span className="ml-1 text-xs opacity-80">({downloadsRemaining} left)</span>
+                  )}
                 </Button>
 
                 {!isOwner && (
@@ -472,6 +519,61 @@ export const SketchPage: React.FC<SketchPageProps> = ({ user, onRequireAuth }) =
               {isOwner && (
                 <div className="bg-gray-50 rounded-2xl p-6 border border-gray-100">
                   <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Owner Controls</p>
+
+                  {/* Tag Editing Section */}
+                  <div className="bg-purple-50 rounded-xl p-4 border border-purple-100 mb-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2 text-[#7C3AED] font-bold text-sm">
+                        <Tag className="w-4 h-4" />
+                        <span>Tags</span>
+                      </div>
+                      {!isEditingTags && (
+                        <button
+                          onClick={() => setIsEditingTags(true)}
+                          className="text-xs font-bold text-gray-500 hover:text-[#7C3AED] underline underline-offset-2"
+                        >
+                          {localTags.length > 0 ? 'Edit' : 'Add Tags'}
+                        </button>
+                      )}
+                    </div>
+
+                    {isEditingTags ? (
+                      <div className="space-y-3 animate-in slide-in-from-bottom-2 duration-200">
+                        <TagSelector
+                          selectedTags={localTags}
+                          onChange={setLocalTags}
+                          compact
+                        />
+                        <div className="flex gap-2 pt-2">
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={handleSaveTags}
+                            isLoading={isSavingTags}
+                            className="flex-1 text-xs py-1 h-8"
+                          >
+                            Save Tags
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleCancelTagEdit}
+                            className="text-xs py-1 h-8"
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        {localTags.length > 0 ? (
+                          <TagDisplay tags={localTags} size="sm" />
+                        ) : (
+                          <p className="text-xs text-gray-400 italic">No tags yet. Add tags to help others discover this sketch.</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
 
                   <div className="space-y-3">
                     <button

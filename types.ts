@@ -61,6 +61,9 @@ export interface Sketch {
   isBookmark?: boolean;
   originalSketchId?: string;
   originalOwnerId?: string;
+
+  // Liturgical tags for categorization
+  tags?: string[];
 }
 
 export interface CreditTransaction {

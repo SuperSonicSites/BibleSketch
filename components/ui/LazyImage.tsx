@@ -57,13 +57,17 @@ export const LazyImage: React.FC<LazyImageProps> = ({
       // Attempt to load candidates sequentially
       for (const path of candidates) {
           try {
+              console.time(`LazyImage:resolve:${path}`);
               const refPtr = ref(storage, path);
               const url = await getDownloadURL(refPtr);
+              console.timeEnd(`LazyImage:resolve:${path}`);
               if (isMounted) {
                   setCurrentSrc(url);
                   return;
               }
           } catch (e) {
+              console.timeEnd(`LazyImage:resolve:${path}`);
+              console.warn(`[LazyImage] Failed to load candidate: ${path}`, e);
               // Continue to next candidate if this one fails
           }
       }

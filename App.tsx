@@ -1,6 +1,7 @@
 
-import React, { useState, useEffect, useRef } from 'react';
-import { HashRouter, Routes, Route, useNavigate, useLocation, useParams } from 'react-router-dom';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { BrowserRouter, Routes, Route, useNavigate, useLocation, useParams } from 'react-router-dom';
+import { HelmetProvider } from 'react-helmet-async';
 import { Header } from './components/Header';
 import { CreateTool } from './components/CreateTool';
 import { Gallery } from './components/Gallery';
@@ -10,6 +11,7 @@ import { ErrorModal } from './components/ErrorModal';
 import { TermsPage } from './components/TermsPage';
 import { PricingPage } from './components/PricingPage';
 import { SketchPage } from './components/SketchPage';
+import { TagPage } from './components/TagPage';
 import { auth, onAuthStateChanged, logoutUser, onUserProfileChanged, ensureAnonymousSession } from './services/firebase';
 
 // Wrapper to extract ID from params for the Gallery component
@@ -96,7 +98,7 @@ function AppContent() {
     }
   }, [user, isProfileLoaded, pendingAction]);
 
-  const requireAuth = (action: () => void, view: 'login' | 'signup' = 'login') => {
+  const requireAuth = useCallback((action: () => void, view: 'login' | 'signup' = 'login') => {
     if (user && isProfileLoaded) {
       action();
     } else {
@@ -104,7 +106,10 @@ function AppContent() {
       setAuthInitialView(view);
       setShowAuthModal(true);
     }
-  };
+  }, [user, isProfileLoaded]);
+
+  // Memoized requireAuth callback for SketchPage
+  const handleSketchPageAuth = useCallback((action: () => void) => requireAuth(action, 'login'), [requireAuth]);
 
   const handlePlanSelection = (planId: string, price: number, credits: number) => {
     requireAuth(() => {
@@ -182,7 +187,15 @@ function AppContent() {
           } />
 
           <Route path="/coloring-page/:id" element={
-             <SketchPage user={user} onRequireAuth={(action) => requireAuth(action, 'login')} />
+             <SketchPage user={user} onRequireAuth={handleSketchPageAuth} />
+          } />
+
+          <Route path="/tags/:tagId" element={
+             <TagPage
+               userId={user?.uid}
+               onRequireAuth={(action) => requireAuth(action, 'login')}
+               onAuthorClick={(uid) => navigate(`/profile/${uid}`)}
+             />
           } />
         </Routes>
       </div>
@@ -230,8 +243,10 @@ function AppContent() {
 
 export default function App() {
   return (
-    <HashRouter>
-      <AppContent />
-    </HashRouter>
+    <HelmetProvider>
+      <BrowserRouter>
+        <AppContent />
+      </BrowserRouter>
+    </HelmetProvider>
   );
 }

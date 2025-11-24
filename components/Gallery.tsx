@@ -1,10 +1,12 @@
-import React, { useEffect, useState, useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import { getUserGallery, getPublicGallery, blessSketch, getSavedSketches, getUserPublicGallery, getUserDocument, getUserBlessedSketchIds } from '../services/firebase';
 import { Sketch } from '../types';
 import { Heart, AlertTriangle, Globe, User, ExternalLink, Bookmark, ArrowLeft, Facebook, ChevronLeft, ChevronRight } from 'lucide-react';
 import { GalleryModal } from './GalleryModal';
-import { BIBLE_BOOKS } from '../constants';
+import { BIBLE_BOOKS, LITURGICAL_TAGS } from '../constants';
+import { FilterBar, SortOption } from './FilterBar';
 import { getSketchUrl } from '../utils/urlHelpers';
 import { LazyImage } from './ui/LazyImage';
 import { ArtistBadge } from './ArtistBadge';
@@ -27,7 +29,8 @@ const ITEMS_PER_PAGE = 12;
 
 export const Gallery: React.FC<GalleryProps> = ({ userId, publicProfileId, onBack, onAuthorClick }) => {
   const navigate = useNavigate();
-  
+  const [searchParams, setSearchParams] = useSearchParams();
+
   // Fix: Default to 'community' if no userId is provided (Guest Mode)
   const [activeTab, setActiveTab] = useState<'my' | 'community' | 'saved'>(() => {
     if (publicProfileId) return 'my'; // Actually viewing someone else's profile
@@ -35,6 +38,12 @@ export const Gallery: React.FC<GalleryProps> = ({ userId, publicProfileId, onBac
   });
 
   const [activeBookFilter, setActiveBookFilter] = useState<string>('All');
+  const [activeTagFilter, setActiveTagFilter] = useState<string>(() => {
+    return searchParams.get('tag') || 'All';
+  });
+  const [activeAgeFilter, setActiveAgeFilter] = useState<string>('All');
+  const [activeStyleFilter, setActiveStyleFilter] = useState<string>('All');
+  const [activeSort, setActiveSort] = useState<SortOption>('newest');
   
   const [images, setImages] = useState<Sketch[]>([]);
   const [loading, setLoading] = useState(false);
@@ -47,16 +56,45 @@ export const Gallery: React.FC<GalleryProps> = ({ userId, publicProfileId, onBac
   const [selectedSketch, setSelectedSketch] = useState<Sketch | null>(null);
   const [profileData, setProfileData] = useState<{ name: string, photo: string } | null>(null);
 
+  // Generate SEO content
+  const seoContent = useMemo(() => {
+    if (publicProfileId && profileData) {
+      return {
+        title: `${profileData.name}'s Bible Coloring Pages | Bible Sketch Gallery`,
+        description: `Browse ${profileData.name}'s collection of Bible coloring pages. Free printable Christian coloring sheets created with Bible Sketch.`
+      };
+    }
+    return {
+      title: 'Bible Coloring Pages Gallery - Free Printable Christian Coloring Sheets | Bible Sketch',
+      description: 'Browse thousands of free printable Bible coloring pages. Discover coloring sheets for every Bible book, age group, and art style. Perfect for Sunday School, VBS, homeschool, and family devotionals.'
+    };
+  }, [publicProfileId, profileData?.name]);
+
   // Reset book filter and pagination when main tab changes
   useEffect(() => {
     setActiveBookFilter('All');
+    setActiveTagFilter('All');
+    setActiveAgeFilter('All');
+    setActiveStyleFilter('All');
+    setActiveSort('newest');
     setCurrentPage(1);
   }, [activeTab, publicProfileId]);
 
   // Reset pagination when filter changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [activeBookFilter]);
+  }, [activeBookFilter, activeTagFilter, activeAgeFilter, activeStyleFilter, activeSort]);
+
+  // Sync URL params with tag filter
+  useEffect(() => {
+    const tagParam = searchParams.get('tag');
+    if (tagParam && tagParam !== activeTagFilter) {
+      setActiveTagFilter(tagParam);
+    } else if (!tagParam && activeTagFilter !== 'All') {
+      // If tag param is removed from URL, reset filter
+      setActiveTagFilter('All');
+    }
+  }, [searchParams, activeTagFilter]);
 
   // Watch userId changes to switch tabs if user logs in/out
   useEffect(() => {
@@ -180,11 +218,77 @@ export const Gallery: React.FC<GalleryProps> = ({ userId, publicProfileId, onBac
     });
   }, [images]);
 
+  // --- Derived State: Available Tags ---
+  const availableTags = useMemo(() => {
+    const tagCount = new Map<string, number>();
+    images.forEach(img => {
+      if (img.tags && img.tags.length > 0) {
+        img.tags.forEach(tagId => {
+          tagCount.set(tagId, (tagCount.get(tagId) || 0) + 1);
+        });
+      }
+    });
+
+    return Array.from(tagCount.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([tagId]) => {
+        const tagInfo = LITURGICAL_TAGS.find(t => t.id === tagId);
+        return tagInfo ? { id: tagId, label: tagInfo.label } : { id: tagId, label: tagId };
+      });
+  }, [images]);
+
+  // --- Derived State: Available Age Groups ---
+  const availableAges = useMemo(() => {
+    const ageSet = new Set<string>();
+    images.forEach(img => {
+      if (img.promptData?.age_group) {
+        ageSet.add(img.promptData.age_group);
+      }
+    });
+    return Array.from(ageSet).sort();
+  }, [images]);
+
+  // --- Derived State: Available Art Styles ---
+  const availableStyles = useMemo(() => {
+    const styleSet = new Set<string>();
+    images.forEach(img => {
+      if (img.promptData?.art_style) {
+        styleSet.add(img.promptData.art_style);
+      }
+    });
+    return Array.from(styleSet).sort();
+  }, [images]);
+
   // --- Derived State: Filtered Images ---
   const filteredImages = useMemo(() => {
-    if (activeBookFilter === 'All') return images;
-    return images.filter(img => img.promptData?.book === activeBookFilter);
-  }, [images, activeBookFilter]);
+    let result = images;
+
+    if (activeBookFilter !== 'All') {
+      result = result.filter(img => img.promptData?.book === activeBookFilter);
+    }
+
+    if (activeTagFilter !== 'All') {
+      result = result.filter(img => img.tags && img.tags.includes(activeTagFilter));
+    }
+
+    if (activeAgeFilter !== 'All') {
+      result = result.filter(img => img.promptData?.age_group === activeAgeFilter);
+    }
+
+    if (activeStyleFilter !== 'All') {
+      result = result.filter(img => img.promptData?.art_style === activeStyleFilter);
+    }
+
+    // Sort
+    if (activeSort === 'newest') {
+      result = [...result].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    } else {
+      // popular - sort by blessCount
+      result = [...result].sort((a, b) => (b.blessCount || 0) - (a.blessCount || 0));
+    }
+
+    return result;
+  }, [images, activeBookFilter, activeTagFilter, activeAgeFilter, activeStyleFilter, activeSort]);
 
   // --- Derived State: Paginated Images ---
   const totalPages = Math.ceil(filteredImages.length / ITEMS_PER_PAGE);
@@ -193,6 +297,15 @@ export const Gallery: React.FC<GalleryProps> = ({ userId, publicProfileId, onBac
     return filteredImages.slice(start, start + ITEMS_PER_PAGE);
   }, [filteredImages, currentPage]);
 
+  // Memoize the onTagChange handler to prevent infinite re-renders
+  const handleTagChange = useCallback((value: string) => {
+    setActiveTagFilter(value);
+    if (value === 'All') {
+      setSearchParams({});
+    } else {
+      setSearchParams({ tag: value });
+    }
+  }, [setSearchParams]);
 
   const handleBless = async (sketchId: string, e?: React.MouseEvent) => {
     if (e) {
@@ -300,9 +413,21 @@ export const Gallery: React.FC<GalleryProps> = ({ userId, publicProfileId, onBac
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8">
-      
-      {/* Public Profile Header */}
+    <>
+      <Helmet>
+        <title>{seoContent.title}</title>
+        <meta name="description" content={seoContent.description} />
+        <meta property="og:title" content={seoContent.title} />
+        <meta property="og:description" content={seoContent.description} />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={seoContent.title} />
+        <meta name="twitter:description" content={seoContent.description} />
+      </Helmet>
+
+      <div className="max-w-7xl mx-auto px-4 py-8">
+
+        {/* Public Profile Header */}
       {publicProfileId ? (
          <div className="mb-8 animate-in slide-in-from-top-4 fade-in duration-500">
              <button 
@@ -358,26 +483,24 @@ export const Gallery: React.FC<GalleryProps> = ({ userId, publicProfileId, onBac
         </div>
       )}
 
-      {/* Dynamic Book Filters */}
+      {/* Dynamic Filters */}
       {images.length > 0 && !loading && !error && (
-        <div className="mb-8">
-           <div className="grid grid-cols-4 gap-2 pb-4 w-full justify-start md:flex md:flex-wrap md:justify-center no-scrollbar px-2">
-              {['All', ...availableBooks].map((book) => (
-                <button 
-                  key={book} 
-                  onClick={() => setActiveBookFilter(book)}
-                  className={`
-                    px-6 py-3 rounded-full text-base font-bold whitespace-nowrap border transition-all duration-200
-                    ${activeBookFilter === book 
-                      ? 'bg-purple-50 border-[#7C3AED] text-[#7C3AED] shadow-sm scale-105' 
-                      : 'bg-white border-gray-100 text-gray-500 hover:border-gray-300 hover:bg-gray-50'}
-                  `}
-                >
-                  {book}
-                </button>
-              ))}
-           </div>
-        </div>
+        <FilterBar
+          availableBooks={availableBooks}
+          availableAges={availableAges}
+          availableStyles={availableStyles}
+          availableTags={availableTags}
+          activeBook={activeBookFilter}
+          activeAge={activeAgeFilter}
+          activeStyle={activeStyleFilter}
+          activeTag={activeTagFilter}
+          activeSort={activeSort}
+          onBookChange={setActiveBookFilter}
+          onAgeChange={setActiveAgeFilter}
+          onStyleChange={setActiveStyleFilter}
+          onTagChange={handleTagChange}
+          onSortChange={setActiveSort}
+        />
       )}
 
       {/* Content Area */}
@@ -552,6 +675,7 @@ export const Gallery: React.FC<GalleryProps> = ({ userId, publicProfileId, onBac
           onAuthorClick={onAuthorClick}
         />
       )}
-    </div>
+      </div>
+    </>
   );
 };

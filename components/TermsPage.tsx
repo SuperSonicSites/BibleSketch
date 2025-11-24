@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { Helmet } from 'react-helmet-async';
 import { ArrowLeft } from 'lucide-react';
 
 interface TermsPageProps {
@@ -8,7 +9,17 @@ interface TermsPageProps {
 
 export const TermsPage: React.FC<TermsPageProps> = ({ onBack }) => {
   return (
-    <div className="max-w-4xl mx-auto px-4 py-12 animate-in fade-in duration-500">
+    <>
+      <Helmet>
+        <title>Terms of Service - Bible Sketch</title>
+        <meta name="description" content="Read the Terms of Service for Bible Sketch. Learn about our policies for creating and using Bible coloring pages, credits, subscriptions, and AI-generated content." />
+        <meta property="og:title" content="Terms of Service - Bible Sketch" />
+        <meta property="og:description" content="Read the Terms of Service for Bible Sketch." />
+        <meta property="og:type" content="website" />
+        <meta name="robots" content="noindex, follow" />
+      </Helmet>
+
+      <div className="max-w-4xl mx-auto px-4 py-12 animate-in fade-in duration-500">
       <button 
         onClick={onBack}
         className="flex items-center gap-2 text-gray-500 hover:text-[#7C3AED] font-bold mb-8 transition-colors group"
@@ -170,6 +181,7 @@ export const TermsPage: React.FC<TermsPageProps> = ({ onBack }) => {
           </section>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 };

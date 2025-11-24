@@ -35,7 +35,8 @@ interface ValidationResult {
 
 // --- PROXY CALLER ---
 const callGeminiProxy = async (params: { model: string, contents: any, config?: any }): Promise<GenerateContentResponse> => {
-  const generateContent = httpsCallable(functions, 'generateContent');
+  // Set client-side timeout to 540s (9 mins) to prevent "deadline-exceeded" on long generations
+  const generateContent = httpsCallable(functions, 'generateContent', { timeout: 540000 });
   const result = await generateContent(params);
   return result.data as GenerateContentResponse;
 };
@@ -136,92 +137,122 @@ const renderImage = async (
   artStyle: ArtStyle
 ): Promise<string> => {
   const refKey = `${ageGroup}_${artStyle}`;
-  const refUri = REFERENCE_MAP[refKey];
+  const refUriRaw = REFERENCE_MAP[refKey];
+
+  // Use all available references
+  const refUris = Array.isArray(refUriRaw) ? refUriRaw : (refUriRaw ? [refUriRaw] : []);
 
   const ageKeywords = AGE_LOGIC[ageGroup].keywords;
   const styleKeywords = STYLE_LOGIC[artStyle];
 
-  let refImagePart = null;
+  const refImageParts: any[] = [];
 
-  // Download reference image on CLIENT-SIDE (not in Cloud Function)
-  if (refUri) {
+  // Download reference images on CLIENT-SIDE (not in Cloud Function)
+  if (refUris.length > 0) {
     try {
-      console.log(`[Artist] Fetching Style Reference: ${refUri}`);
+      console.log(`[Artist] Fetching Style References: ${refUris.join(', ')}`);
 
-      // Fetch from public folder (client-side only)
-      const response = await fetch(refUri);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch reference image: ${response.status}`);
-      }
+      // Fetch all references in parallel
+      const fetchPromises = refUris.map(async (uri) => {
+        const response = await fetch(uri);
+        if (!response.ok) {
+          console.warn(`Failed to fetch reference image ${uri}: ${response.status}`);
+          return null;
+        }
+        
+        const blob = await response.blob();
+        if (!blob.type.startsWith('image/')) {
+          console.warn(`Invalid content type for ${uri}: ${blob.type}`);
+          return null;
+        }
 
-      const blob = await response.blob();
+        // Convert to base64
+        const base64Data = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const result = reader.result as string;
+            let base64 = result.split(',')[1];
 
-      // Validate that we actually got an image, not an HTML error page
-      if (!blob.type.startsWith('image/')) {
-        throw new Error(`Invalid content type: ${blob.type}`);
-      }
+            // --- IMAGE RESIZING ---
+            // Resize image if it's too large (limit payload size)
+            const img = new Image();
+            img.onload = () => {
+              const MAX_DIM = 1024;
+              if (img.width > MAX_DIM || img.height > MAX_DIM) {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+                if (width > height) {
+                  if (width > MAX_DIM) {
+                    height *= MAX_DIM / width;
+                    width = MAX_DIM;
+                  }
+                } else {
+                  if (height > MAX_DIM) {
+                    width *= MAX_DIM / height;
+                    height = MAX_DIM;
+                  }
+                }
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx?.drawImage(img, 0, 0, width, height);
+                // Convert back to base64 (JPEG 80% quality)
+                const resizedData = canvas.toDataURL('image/jpeg', 0.8);
+                base64 = resizedData.split(',')[1];
+                console.log(`[Artist] Resized reference image from ${img.width}x${img.height} to ${width}x${height}`);
+              }
+              
+              // Clean up base64 (BOM/Garbage removal)
+              if (base64.startsWith("77+9")) {
+                base64 = base64.substring(4);
+              }
+              while (base64.startsWith("77+9")) {
+                base64 = base64.substring(4);
+              }
+              if (blob.type === 'image/jpeg' && !base64.startsWith('/9j/') && base64.length > 100) {
+                 const jpegStart = base64.indexOf('/9j/');
+                 if (jpegStart > 0 && jpegStart < 100) {
+                    base64 = base64.substring(jpegStart);
+                 }
+              }
+              resolve(base64);
+            };
+            img.onerror = () => reject(new Error("Failed to load image for resizing"));
+            img.src = result; 
+          };
+          reader.onerror = () => reject(new Error("FileReader error"));
+          reader.readAsDataURL(blob);
+        });
 
-      // Convert to base64
-      const base64Data = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          const result = reader.result as string;
-          // Strip the data URL prefix to get raw base64
-          let base64 = result.split(',')[1];
-
-          // FIX: Check for and strip UTF-8 BOM or garbage bytes (Common issue with some file uploads)
-          // "77+9" is base64 for EF BB BF (UTF-8 BOM)
-          if (base64.startsWith("77+9")) {
-            console.warn("[Artist] Detected UTF-8 BOM in image data. Stripping...");
-            base64 = base64.substring(4);
+        return {
+          inlineData: {
+            mimeType: blob.type || "image/jpeg",
+            data: base64Data
           }
-          // Check for "EF BF BD" (Replacement Char) which often appears as "77+9" or similar garbage
-          // If the file starts with "77+9" followed by "77+9" (multiple BOMs/garbage), strip them all
-          while (base64.startsWith("77+9")) {
-            base64 = base64.substring(4);
-          }
-
-          // Additional check for JPEG/JFIF/Exif headers
-          // A valid JPEG often starts with /9j/ (FF D8 FF)
-          // If it doesn't start with /9j/ but claims to be image/jpeg, we might have an issue
-          if (blob.type === 'image/jpeg' && !base64.startsWith('/9j/') && base64.length > 100) {
-             console.warn("[Artist] Suspicious JPEG base64 start:", base64.substring(0, 20));
-             // Sometimes the BOM stripping above isn't enough if there are other headers or garbage
-             // Try to find the actual start of the JPEG
-             const jpegStart = base64.indexOf('/9j/');
-             if (jpegStart > 0 && jpegStart < 100) {
-                console.warn(`[Artist] Found JPEG start at index ${jpegStart}, trimming prefix...`);
-                base64 = base64.substring(jpegStart);
-             }
-          }
-
-          resolve(base64);
         };
-        reader.onerror = () => reject(new Error("FileReader error"));
-        reader.readAsDataURL(blob);
       });
 
-      refImagePart = {
-        inlineData: {
-          mimeType: blob.type || "image/jpeg",
-          data: base64Data
-        }
-      };
-      console.log(`[Artist] Reference image loaded successfully (${blob.type}, ${Math.round(base64Data.length / 1024)}KB)`);
+      const results = await Promise.all(fetchPromises);
+      results.forEach(res => {
+        if (res) refImageParts.push(res);
+      });
+
+      console.log(`[Artist] ${refImageParts.length} reference images loaded successfully.`);
     } catch (err) {
-      console.warn(`[Artist] Failed to load reference ${refUri}. Proceeding with text-only style emulation.`, err);
+      console.warn(`[Artist] Failed to load references. Proceeding with text-only style emulation.`, err);
     }
   }
 
-  // Fallback instruction if image fails to load
+  // Fallback instruction if images fail to load
   let styleInstruction = `
     --- VISUAL REFERENCE INSTRUCTION ---
-    Use the attached image as a STRICT STYLE SOURCE. 
-    Adopt the line weight, stroke confidence, and level of detail from the reference.
-    Do NOT copy the subject matter of the reference; only copy the artistic style.
+    Use the attached images as STRICT STYLE SOURCES. 
+    Adopt the line weight, stroke confidence, and level of detail from the references.
+    Do NOT copy the subject matter of the references; only copy the artistic style.
   `;
 
-  if (!refImagePart) {
+  if (refImageParts.length === 0) {
     styleInstruction = `
         --- STYLE EMULATION MODE (IMPORTANT) ---
         You must strictly adhere to the LINE STYLE and ART TECHNIQUE described below.
@@ -248,8 +279,8 @@ const renderImage = async (
       contents: { 
         role: 'user', 
         parts: [
-          // Ensure image comes before text for optimal understanding
-          ...(refImagePart ? [refImagePart] : []),
+          // Ensure images come before text for optimal understanding
+          ...refImageParts,
           { text: promptText }
         ]
       },

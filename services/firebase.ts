@@ -600,7 +600,8 @@ export const saveSketch = async (
   imageData: string | Blob,
   promptContext: AppSketchContext,
   isPublic: boolean = true,
-  isBookmark: boolean = false // Optional flag to mark as bookmark immediately (e.g. for demo saves)
+  isBookmark: boolean = false, // Optional flag to mark as bookmark immediately (e.g. for demo saves)
+  tags: string[] = [] // Liturgical tags for categorization
 ): Promise<Sketch> => {
   try {
     if (!auth.currentUser) throw new Error("Must be logged in to save");
@@ -639,7 +640,7 @@ export const saveSketch = async (
 
     const sketchesRef = collection(db, "sketches");
 
-    const newSketchData = {
+    const newSketchData: any = {
       userId: userId,
       imageUrl: url,
       storagePath: path,
@@ -650,6 +651,11 @@ export const saveSketch = async (
       isBookmark: isBookmark,
       promptData: promptDataMap // CRITICAL FIX: Added missing metadata saving
     };
+
+    // Only add tags if provided (avoid empty array in Firestore)
+    if (tags && tags.length > 0) {
+      newSketchData.tags = tags;
+    }
 
     const docRef = await addDoc(sketchesRef, newSketchData);
 
@@ -731,6 +737,7 @@ export const getUserBlessedSketchIds = async (userId: string): Promise<string[]>
 
 // 5. Get User's Personal Gallery (My Creations)
 export const getUserGallery = async (userId: string) => {
+  console.time('getUserGallery:firestore');
   try {
     const q = query(
       collection(db, "sketches"),
@@ -738,7 +745,9 @@ export const getUserGallery = async (userId: string) => {
     );
 
     const snapshot = await getDocs(q);
-
+    console.timeEnd('getUserGallery:firestore');
+    
+    console.time('getUserGallery:processing');
     const sketches = snapshot.docs.map(doc => {
       const data = doc.data() as any;
       return {
@@ -749,7 +758,9 @@ export const getUserGallery = async (userId: string) => {
     }) as any[];
 
     const creations = sketches.filter((s: any) => !s.isBookmark);
-    return creations.sort((a, b) => b.timestamp - a.timestamp);
+    const result = creations.sort((a, b) => b.timestamp - a.timestamp);
+    console.timeEnd('getUserGallery:processing');
+    return result;
   } catch (error) {
     console.error("Error fetching user gallery:", error);
     throw error;
@@ -758,6 +769,7 @@ export const getUserGallery = async (userId: string) => {
 
 // 6. Get Public Community Gallery
 export const getPublicGallery = async (currentUserId?: string) => {
+  console.time('getPublicGallery:firestore');
   try {
     const q = query(
       collection(db, 'sketches'),
@@ -766,7 +778,9 @@ export const getPublicGallery = async (currentUserId?: string) => {
     );
 
     const snapshot = await getDocs(q);
+    console.timeEnd('getPublicGallery:firestore');
 
+    console.time('getPublicGallery:processing');
     const sketches = snapshot.docs.map(doc => {
       const data = doc.data() as any;
       return {
@@ -782,11 +796,13 @@ export const getPublicGallery = async (currentUserId?: string) => {
       publicSketches = publicSketches.filter((s: any) => s.userId !== currentUserId);
     }
 
-    return publicSketches.sort((a, b) => {
+    const result = publicSketches.sort((a, b) => {
       const blessDiff = (b.blessCount || 0) - (a.blessCount || 0);
       if (blessDiff !== 0) return blessDiff;
       return b.timestamp - a.timestamp;
     });
+    console.timeEnd('getPublicGallery:processing');
+    return result;
   } catch (error: any) {
     // If permission denied (e.g. Anon Auth is disabled + Security Rules require Auth), 
     // explicitly throw so UI can handle "Login Required" state.
@@ -860,8 +876,8 @@ export const deleteSketch = async (sketchId: string, storagePath: string, isBook
       // B. THUMBNAIL (From Firestore Record if available)
       if (thumbnailPath) pathsToDelete.add(thumbnailPath);
 
-      // C. HARDCODED THUMBNAIL (Structure: .../sketches/user_uploads/ID_400x533.png)
-      // This ensures the nested folder structure requested is targeted
+      // C. HARDCODED THUMBNAIL (Structure: .../sketches/ID_400x533.ext)
+      // This ensures the correct path is targeted for deletion.
       const lastSlash = storagePath.lastIndexOf('/');
       const lastDot = storagePath.lastIndexOf('.');
       if (lastSlash !== -1 && lastDot !== -1) {
@@ -869,9 +885,8 @@ export const deleteSketch = async (sketchId: string, storagePath: string, isBook
         const filename = storagePath.substring(lastSlash + 1, lastDot);
         const ext = storagePath.substring(lastDot + 1);
 
-        // Hardcoded nested structure
-        pathsToDelete.add(`${dir}/user_uploads/${filename}_400x533.${ext}`);
-        pathsToDelete.add(`${dir}/user_uploads/${filename}_400x533.webp`); // WebP variant
+        // Corrected path construction for the specific thumbnail extension.
+        pathsToDelete.add(`${dir}/${filename}_400x533.${ext}`);
       }
 
       // D. Legacy Fallbacks (Standard resize location)
@@ -899,19 +914,21 @@ export const deleteSketch = async (sketchId: string, storagePath: string, isBook
       await Promise.all(deletePromises);
     }
 
-    // 3. CASCADE DELETE: Remove all bookmarks associated with this sketch from OTHER users' saved collections
-    try {
-      const bookmarksQuery = query(
-        collection(db, "sketches"),
-        where("originalSketchId", "==", sketchId)
-      );
-
-      const bookmarkSnaps = await getDocs(bookmarksQuery);
-      const deletePromises = bookmarkSnaps.docs.map(d => deleteDoc(d.ref));
-      await Promise.all(deletePromises);
-    } catch (cascadeError) {
-      console.warn("Could not cascade delete bookmarks (likely permission issue):", cascadeError);
-    }
+    // 3. CASCADE DELETE: Disabled for now due to permissions.
+    // Orphaned bookmarks are harmless - they just point to a non-existent sketch.
+    // TODO: Implement via Cloud Function with admin privileges for proper cascade deletion.
+    // try {
+    //   const bookmarksQuery = query(
+    //     collection(db, "sketches"),
+    //     where("originalSketchId", "==", sketchId)
+    //   );
+    //
+    //   const bookmarkSnaps = await getDocs(bookmarksQuery);
+    //   const deletePromises = bookmarkSnaps.docs.map(d => deleteDoc(d.ref));
+    //   await Promise.all(deletePromises);
+    // } catch (cascadeError) {
+    //   console.warn("Could not cascade delete bookmarks (likely permission issue):", cascadeError);
+    // }
 
   } catch (error) {
     console.error("Error deleting sketch:", error);
@@ -932,6 +949,19 @@ export const updateSketchVisibility = async (sketchId: string, isPublic: boolean
   }
 };
 
+// 9b. Update Sketch Tags
+export const updateSketchTags = async (sketchId: string, tags: string[]) => {
+  try {
+    const sketchRef = doc(db, "sketches", sketchId);
+    await updateDoc(sketchRef, {
+      tags: tags.length > 0 ? tags : [] // Allow empty array to clear tags
+    });
+  } catch (error) {
+    console.error("Error updating tags:", error);
+    throw error;
+  }
+};
+
 // 10. Bookmark/Save Sketch
 export const toggleBookmark = async (userId: string, sketch: Sketch) => {
   try {
@@ -944,22 +974,28 @@ export const toggleBookmark = async (userId: string, sketch: Sketch) => {
       await deleteDoc(bookmarkRef);
       return false;
     } else {
-      const { id, ...sketchData } = sketch;
-      const dataToSave = { ...sketchData };
-      delete (dataToSave as any).isBookmark;
-      delete (dataToSave as any).originalSketchId;
-      delete (dataToSave as any).originalOwnerId;
-
-      await setDoc(bookmarkRef, {
-        ...dataToSave,
+      const newBookmarkData = {
         userId: userId,
-        isPublic: false,
         isBookmark: true,
-        originalSketchId: actualTargetId,
-        originalOwnerId: sketch.userId,
+        isPublic: false,
         createdAt: serverTimestamp(),
-        blessCount: 0
-      });
+        blessCount: 0,
+        originalSketchId: sketch.originalSketchId || sketch.id,
+        originalOwnerId: sketch.originalOwnerId || sketch.userId,
+        promptData: sketch.promptData,
+        imageUrl: sketch.imageUrl,
+        storagePath: sketch.storagePath,
+        thumbnailPath: sketch.thumbnailPath
+      };
+
+      // --- DEEP DIVE LOGGING ---
+      console.log("--- Firebase Bookmark Attempt ---");
+      console.log("Current User ID:", userId);
+      console.log("Generated Bookmark ID:", bookmarkId);
+      console.log("Data Payload:", JSON.stringify(newBookmarkData, null, 2));
+      // --- END LOGGING ---
+
+      await setDoc(bookmarkRef, newBookmarkData);
       return true;
     }
   } catch (error) {

@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { Helmet } from 'react-helmet-async';
 import { Check, Zap, Crown, Sparkles, HelpCircle, ArrowLeft } from 'lucide-react';
 import { Button } from './ui/Button';
 
@@ -72,9 +73,21 @@ export const PricingPage: React.FC<PricingPageProps> = ({ onBack, onSelectPlan }
   ];
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-12 md:py-20 animate-in fade-in duration-500">
-      
-      {/* Back Button */}
+    <>
+      <Helmet>
+        <title>Pricing - Affordable Bible Coloring Page Credits | Bible Sketch</title>
+        <meta name="description" content="Get credits to create custom Bible coloring pages. No subscriptions - pay only for what you use. Perfect for Sunday School teachers, homeschool families, and church ministries. Plans start at $4.99." />
+        <meta property="og:title" content="Pricing - Affordable Bible Coloring Page Credits | Bible Sketch" />
+        <meta property="og:description" content="Get credits to create custom Bible coloring pages. No subscriptions - pay only for what you use. Perfect for Sunday School teachers, homeschool families, and church ministries." />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Pricing - Affordable Bible Coloring Page Credits | Bible Sketch" />
+        <meta name="twitter:description" content="Get credits to create custom Bible coloring pages. No subscriptions - pay only for what you use." />
+      </Helmet>
+
+      <div className="max-w-7xl mx-auto px-4 py-12 md:py-20 animate-in fade-in duration-500">
+
+        {/* Back Button */}
       <button 
         onClick={onBack}
         className="flex items-center gap-2 text-gray-500 hover:text-[#7C3AED] font-bold mb-8 transition-colors group"
@@ -96,7 +109,85 @@ export const PricingPage: React.FC<PricingPageProps> = ({ onBack, onSelectPlan }
         </p>
       </div>
 
-      {/* Pricing Cards */}
+      {/* Premium Plan - Featured */}
+      <div className="w-full mb-16">
+        <div className="relative bg-gradient-to-br from-purple-600 to-purple-800 rounded-3xl p-8 md:p-10 text-white shadow-2xl shadow-purple-300/50 border-4 border-purple-300">
+          {/* Featured Badge */}
+          <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-[#FCD34D] text-purple-900 text-xs font-bold uppercase tracking-widest py-2 px-5 rounded-full shadow-lg border-2 border-white whitespace-nowrap">
+            Best Value
+          </div>
+
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+            {/* Left Side - Info */}
+            <div className="flex-1">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center">
+                  <Crown className="w-6 h-6 text-[#FCD34D]" />
+                </div>
+                <div>
+                  <h3 className="font-display text-2xl md:text-3xl font-bold">Premium Plan</h3>
+                  <p className="text-purple-200 text-sm">For dedicated teachers & ministries</p>
+                </div>
+              </div>
+
+              <div className="flex items-baseline gap-2 mb-4">
+                <span className="text-4xl md:text-5xl font-bold">$9.99</span>
+                <span className="text-purple-200 font-medium">/ one-time</span>
+              </div>
+
+              {/* Features */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="flex items-center gap-2 text-sm">
+                  <div className="p-0.5 bg-[#FCD34D] rounded-full">
+                    <Check className="w-3 h-3 text-purple-900" strokeWidth={4} />
+                  </div>
+                  <span className="font-medium">Unlimited Downloads & Prints</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <div className="p-0.5 bg-[#FCD34D] rounded-full">
+                    <Check className="w-3 h-3 text-purple-900" strokeWidth={4} />
+                  </div>
+                  <span className="font-medium">15 Credits Included</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <div className="p-0.5 bg-[#FCD34D] rounded-full">
+                    <Check className="w-3 h-3 text-purple-900" strokeWidth={4} />
+                  </div>
+                  <span>High-Res PDF Download</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <div className="p-0.5 bg-[#FCD34D] rounded-full">
+                    <Check className="w-3 h-3 text-purple-900" strokeWidth={4} />
+                  </div>
+                  <span>No Watermark</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Side - CTA */}
+            <div className="md:text-right">
+              <Button
+                variant="outline"
+                size="lg"
+                className="w-full md:w-auto bg-white text-purple-700 hover:bg-purple-50 border-2 border-white font-bold shadow-lg"
+                onClick={() => onSelectPlan('premium', 9.99, 15)}
+              >
+                Get Premium
+              </Button>
+              <p className="text-xs text-purple-200 mt-2">Never worry about limits again</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Divider */}
+      <div className="flex items-center gap-4 max-w-md mx-auto mb-12">
+        <div className="flex-1 h-px bg-gray-200"></div>
+        <span className="text-sm font-bold text-gray-400 uppercase tracking-wider">Or Pay As You Go</span>
+        <div className="flex-1 h-px bg-gray-200"></div>
+      </div>
+
+      {/* Credit Packs */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8 lg:gap-12 mb-24 px-2 items-stretch">
         {tiers.map((tier) => (
           <div 
@@ -213,6 +304,7 @@ export const PricingPage: React.FC<PricingPageProps> = ({ onBack, onSelectPlan }
         </p>
       </div>
 
-    </div>
+      </div>
+    </>
   );
 };

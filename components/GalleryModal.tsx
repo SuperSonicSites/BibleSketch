@@ -1,9 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
-import { X, Printer, Download, Trash2, Globe, Lock, Heart, AlertTriangle, Bookmark, Check, User as UserIcon, Wand2, AlertCircle, Facebook, Save, RotateCcw, BookOpen } from 'lucide-react';
+import { X, Printer, Download, Trash2, Globe, Lock, Heart, AlertTriangle, Bookmark, Check, User as UserIcon, Wand2, AlertCircle, Facebook, Save, RotateCcw, Tag } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Sketch, AgeGroup, ArtStyle } from '../types';
-import { deleteSketch, updateSketchVisibility, toggleBookmark, checkIsBookmarked, getUserDocument, deductCredits, saveSketch, canDownload, deductDownload } from '../services/firebase';
+import { deleteSketch, updateSketchVisibility, toggleBookmark, checkIsBookmarked, getUserDocument, deductCredits, saveSketch, canDownload, deductDownload, auth, updateSketchTags } from '../services/firebase';
+import { TagSelector, TagDisplay } from './TagSelector';
 import { editColoringPage } from '../services/gemini';
 import { embedLogoOnImage } from '../utils/imageProcessing';
 import { WatermarkOverlay } from './WatermarkOverlay';
@@ -56,14 +57,32 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
   // Premium Modal State
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [downloadsRemaining, setDownloadsRemaining] = useState(0);
+  const [isPremiumUser, setIsPremiumUser] = useState(false);
+
+  // Tags State
+  const [isEditingTags, setIsEditingTags] = useState(false);
+  const [localTags, setLocalTags] = useState<string[]>(sketch.tags || []);
+  const [isSavingTags, setIsSavingTags] = useState(false);
+
+  // Fetch download quota on mount
+  useEffect(() => {
+    if (currentUserId) {
+      canDownload(currentUserId).then(quota => {
+        setDownloadsRemaining(quota.remaining);
+        setIsPremiumUser(quota.isPremium);
+      });
+    }
+  }, [currentUserId]);
 
   useEffect(() => {
     let active = true;
-    if (currentUserId) {
-      if (sketch.isBookmark) {
+    const currentUser = auth.currentUser;
+
+    if (currentUser) {
+      if (sketch.isBookmark && sketch.userId === currentUser.uid) {
         setIsBookmarked(true);
       } else {
-        checkIsBookmarked(currentUserId, sketch.id).then((saved) => {
+        checkIsBookmarked(currentUser.uid, sketch.id).then((saved) => {
           if (active) setIsBookmarked(saved);
         });
       }
@@ -89,8 +108,12 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
     setIsEditing(false);
     setEditPrompt("");
 
+    // Reset tags state
+    setLocalTags(sketch.tags || []);
+    setIsEditingTags(false);
+
     return () => { active = false; };
-  }, [currentUserId, sketch.id, sketch.isBookmark, sketch.userId, isOwner]);
+  }, [sketch.id, sketch.isBookmark, sketch.userId, isOwner]);
 
   if (!isOpen) return null;
 
@@ -132,6 +155,10 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
 
         // Deduct from quota (skipped for premium users)
         await deductDownload(currentUserId);
+        // Update displayed count
+        if (!isPremiumUser) {
+          setDownloadsRemaining(prev => Math.max(0, prev - 1));
+        }
       }
     } catch (e) {
       console.error("Print failed", e);
@@ -168,6 +195,10 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
 
       // Deduct from quota (skipped for premium users)
       await deductDownload(currentUserId);
+      // Update displayed count
+      if (!isPremiumUser) {
+        setDownloadsRemaining(prev => Math.max(0, prev - 1));
+      }
     } catch (error) {
       console.error("Download failed", error);
       alert("Could not download image.");
@@ -286,14 +317,14 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
   };
 
   const handleBookmarkClick = async () => {
-    if (!currentUserId) {
+    if (!auth.currentUser) {
       alert("Please log in to save sketches.");
       return;
     }
     setBookmarkLoading(true);
     try {
       const newStatus = !isBookmarked;
-      await toggleBookmark(currentUserId, sketch);
+      await toggleBookmark(auth.currentUser.uid, sketch);
       setIsBookmarked(newStatus);
       onBookmark(sketch.id, newStatus);
 
@@ -312,6 +343,25 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
     if (onAuthorClick && sketch.userId) {
       onAuthorClick(sketch.userId);
     }
+  };
+
+  const handleSaveTags = async () => {
+    setIsSavingTags(true);
+    try {
+      await updateSketchTags(sketch.id, localTags);
+      onUpdate(sketch.id, { tags: localTags });
+      setIsEditingTags(false);
+    } catch (error) {
+      console.error("Failed to save tags:", error);
+      alert("Failed to save tags. Please try again.");
+    } finally {
+      setIsSavingTags(false);
+    }
+  };
+
+  const handleCancelTagEdit = () => {
+    setLocalTags(sketch.tags || []);
+    setIsEditingTags(false);
   };
 
   const handleFacebookShare = (e: React.MouseEvent) => {
@@ -461,6 +511,9 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
                 >
                   <Printer className="w-5 h-5" />
                   Print PDF
+                  {!isOwner && !isPremiumUser && currentUserId && (
+                    <span className="ml-1 text-xs opacity-80">({downloadsRemaining} left)</span>
+                  )}
                 </Button>
 
                 <Button
@@ -471,6 +524,9 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
                 >
                   <Download className="w-5 h-5" />
                   Download
+                  {!isOwner && !isPremiumUser && currentUserId && (
+                    <span className="ml-1 text-xs opacity-80">({downloadsRemaining} left)</span>
+                  )}
                 </Button>
 
                 {currentUserId && !isOwner && (
@@ -508,6 +564,63 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
 
           {isOwner && (
             <div className="mt-auto border-t border-gray-100 pt-6 space-y-3">
+
+              {/* Tags Section */}
+              {!sketch.isBookmark && (
+                <div className="bg-purple-50 rounded-2xl p-4 border border-purple-100 mb-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2 text-[#7C3AED] font-bold text-sm">
+                      <Tag className="w-4 h-4" />
+                      <span>Tags</span>
+                    </div>
+                    {!isEditingTags && (
+                      <button
+                        onClick={() => setIsEditingTags(true)}
+                        className="text-xs font-bold text-gray-500 hover:text-[#7C3AED] underline underline-offset-2"
+                      >
+                        {localTags.length > 0 ? 'Edit' : 'Add Tags'}
+                      </button>
+                    )}
+                  </div>
+
+                  {isEditingTags ? (
+                    <div className="space-y-3 animate-in slide-in-from-bottom-2 duration-200">
+                      <TagSelector
+                        selectedTags={localTags}
+                        onChange={setLocalTags}
+                        compact
+                      />
+                      <div className="flex gap-2 pt-2">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={handleSaveTags}
+                          isLoading={isSavingTags}
+                          className="flex-1 text-xs py-1 h-8"
+                        >
+                          Save Tags
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleCancelTagEdit}
+                          className="text-xs py-1 h-8"
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      {localTags.length > 0 ? (
+                        <TagDisplay tags={localTags} size="sm" />
+                      ) : (
+                        <p className="text-xs text-gray-400 italic">No tags yet. Add tags to help others discover this sketch.</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Edit Section (Refine Creation) */}
               <div className={`bg-purple-50 rounded-2xl p-4 border border-purple-100 mb-4 ${previewImage ? 'ring-2 ring-[#FCD34D]' : ''}`}>

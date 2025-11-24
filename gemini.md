@@ -1,0 +1,1 @@
+Here are the changes to display both credits and downloads left in the ProfileModal component.

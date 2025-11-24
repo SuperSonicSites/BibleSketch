@@ -15,6 +15,7 @@ export const ArtistBadge: React.FC<ArtistBadgeProps> = ({ userId, onAuthorClick,
   useEffect(() => {
     let mounted = true;
     if (userId) {
+      console.log(`[ArtistBadge] Fetching profile for user: ${userId}`);
       getUserDocument(userId).then(doc => {
         if (mounted && doc) {
            const data = doc as any;

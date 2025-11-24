@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { BookOpen, Menu, User as UserIcon, LogOut, Settings, X, Coins } from 'lucide-react';
+import { Menu, User as UserIcon, LogOut, Settings, X, Coins } from 'lucide-react';
 import { Button } from './ui/Button';
 import { User } from '../services/firebase';
 
@@ -53,8 +53,11 @@ export const Header: React.FC<HeaderProps> = ({
           }}
         >
           <div className="relative transition-transform duration-300 group-hover:scale-105">
-            <BookOpen className="w-8 h-8 md:w-10 md:h-10 text-[#7C3AED]" strokeWidth={2.5} />
-            <div className="absolute -top-1 -right-1 w-3 h-3 md:w-4 md:h-4 bg-[#FCD34D] rounded-full border-2 border-[#FFF7ED]"></div>
+            <img 
+              src="/logo.png" 
+              alt="Bible Sketch Logo" 
+              className="w-10 h-10 md:w-12 md:h-12 object-contain"
+            />
           </div>
           <span className="text-xl md:text-3xl font-display font-bold text-[#1F2937]">
             Bible Sketch

@@ -5,7 +5,12 @@ const { defineSecret } = require("firebase-functions/params");
 // Define the secret for the API key
 const geminiApiKey = defineSecret("GEMINI_API_KEY");
 
-exports.generateContent = onCall({ secrets: [geminiApiKey] }, async (request) => {
+exports.generateContent = onCall({ 
+    secrets: [geminiApiKey],
+    cors: true,
+    timeoutSeconds: 300,
+    memory: "1GiB"
+}, async (request) => {
     // 1. Authentication Check (Optional but recommended)
     // if (!request.auth) {
     //   throw new HttpsError('unauthenticated', 'The function must be called while authenticated.');

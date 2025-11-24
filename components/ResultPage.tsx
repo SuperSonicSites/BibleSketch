@@ -17,7 +17,7 @@ interface ResultPageProps {
   onBack: () => void;
   onRequireAuth: (action: () => void) => void;
   currentUser: any;
-  onSave: (isPublic: boolean, finalImage: string) => Promise<void>;
+  onSave: (isPublic: boolean, finalImage: string, tags: string[]) => Promise<void>;
 }
 
 // Helper to draw text on image
@@ -39,14 +39,14 @@ const drawTextOnImage = (base64: string, text: string): Promise<string> => {
       ctx.drawImage(img, 0, 0);
 
       // Text Configuration
-      // Responsive font size based on image width (approx 5% of width)
-      const fontSize = Math.max(24, Math.floor(img.width * 0.05));
+      // Responsive font size based on image width (approx 3% of width - smaller)
+      const fontSize = Math.max(16, Math.floor(img.width * 0.03));
       ctx.font = `bold ${fontSize}px sans-serif`;
-      ctx.textAlign = 'right';
+      ctx.textAlign = 'center';
       ctx.textBaseline = 'bottom';
 
-      const padding = Math.floor(img.width * 0.04);
-      const x = canvas.width - padding;
+      const padding = Math.floor(img.width * 0.02);
+      const x = canvas.width / 2;
       const y = canvas.height - padding;
 
       // Stroke (Halo) for readability against black lines
@@ -268,10 +268,10 @@ export const ResultPage: React.FC<ResultPageProps> = ({
     }
   };
 
-  const handleSaveConfirm = async (isPublic: boolean) => {
+  const handleSaveConfirm = async (isPublic: boolean, tags: string[]) => {
     setIsSaving(true);
     try {
-      await onSave(isPublic, currentImage);
+      await onSave(isPublic, currentImage, tags);
     } catch (e) {
       console.error("Save failed", e);
     } finally {

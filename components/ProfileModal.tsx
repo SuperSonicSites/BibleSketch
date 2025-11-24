@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { X, User as UserIcon, Mail, Trash2, Save, AlertTriangle, Loader2, Crown, Coins, Image as ImageIcon, Clock, Plus, Minus, Receipt } from 'lucide-react';
+import { X, User as UserIcon, Mail, Trash2, Save, AlertTriangle, Loader2, Crown, Coins, Image as ImageIcon, Clock, Plus, Minus, Receipt, Download } from 'lucide-react';
 import { Button } from './ui/Button';
 import { updateUserProfile, deleteUserAccount, getUserDocument, getPurchaseHistory, User } from '../services/firebase';
 import { CreditTransaction } from '../types';
@@ -20,6 +20,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, use
   const [photoName, setPhotoName] = useState('');
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [credits, setCredits] = useState<number>(0);
+  const [downloads, setDownloads] = useState<number>(0);
   const [isPremium, setIsPremium] = useState<boolean>(false);
 
   // History State
@@ -43,12 +44,14 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, use
             setName(data.displayName || '');
             setPhotoName(data.photoFileName || '');
             setCredits(data.credits ?? 0);
+            setDownloads(data.downloads ?? 0);
             setIsPremium(data.isPremium ?? false);
           } else {
             // Fallback to Auth data if doc doesn't exist
             setName(user.displayName || '');
             setPhotoName('');
             setCredits(0);
+            setDownloads(0);
             setIsPremium(false);
           }
         })
@@ -166,7 +169,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, use
             <form onSubmit={handleUpdate} className="space-y-4">
 
               {/* Account Stats */}
-              <div className="grid grid-cols-2 gap-4 mb-6">
+              <div className="space-y-4 mb-6">
                 <div className="bg-purple-50 p-3 rounded-xl flex items-center gap-3 border border-purple-100">
                   <div className="bg-white p-2 rounded-full shadow-sm">
                     <Crown className={`w-5 h-5 ${isPremium ? 'text-yellow-500' : 'text-gray-400'}`} />
@@ -181,8 +184,17 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, use
                     <Coins className="w-5 h-5 text-yellow-500" />
                   </div>
                   <div>
-                    <p className="text-xs font-bold text-gray-500 uppercase">Credits</p>
-                    <p className="text-sm font-bold text-[#1F2937]">{credits} Available</p>
+                    <p className="text-xs font-bold text-gray-500 uppercase">Image Credits</p>
+                    <p className="text-sm font-bold text-[#1F2937]">{credits}</p>
+                  </div>
+                </div>
+                <div className="bg-blue-50 p-3 rounded-xl flex items-center gap-3 border border-blue-100">
+                  <div className="bg-white p-2 rounded-full shadow-sm">
+                    <Download className="w-5 h-5 text-blue-500" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-gray-500 uppercase">Downloads/Prints</p>
+                    <p className="text-sm font-bold text-[#1F2937]">{isPremium ? 'Unlimited' : downloads}</p>
                   </div>
                 </div>
               </div>
