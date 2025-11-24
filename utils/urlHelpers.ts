@@ -14,5 +14,6 @@ export const generateSketchSlug = (sketch: Sketch) => {
 
 export const getSketchUrl = (sketch: Sketch) => {
   if (!sketch.isPublic) return '#';
-  return `/coloring-page/${sketch.id}?ref=${generateSketchSlug(sketch)}`;
+  const slug = generateSketchSlug(sketch);
+  return `/coloring-page/${slug}/${sketch.id}`;
 };

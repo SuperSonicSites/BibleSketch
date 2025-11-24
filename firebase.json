@@ -8,6 +8,14 @@
     ],
     "rewrites": [
       {
+        "source": "/sitemap.xml",
+        "function": "sitemap"
+      },
+      {
+        "source": "/coloring-page/**",
+        "function": "sketchRender"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }

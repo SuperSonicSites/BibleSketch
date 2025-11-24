@@ -12,6 +12,7 @@ import { TermsPage } from './components/TermsPage';
 import { PricingPage } from './components/PricingPage';
 import { SketchPage } from './components/SketchPage';
 import { TagPage } from './components/TagPage';
+import { VerifiedPage } from './components/VerifiedPage';
 import { auth, onAuthStateChanged, logoutUser, onUserProfileChanged, ensureAnonymousSession } from './services/firebase';
 
 // Wrapper to extract ID from params for the Gallery component
@@ -186,7 +187,13 @@ function AppContent() {
             <TermsPage onBack={() => navigate('/')} />
           } />
 
+          <Route path="/verified" element={<VerifiedPage />} />
+
           <Route path="/coloring-page/:id" element={
+             <SketchPage user={user} onRequireAuth={handleSketchPageAuth} />
+          } />
+
+          <Route path="/coloring-page/:slug/:id" element={
              <SketchPage user={user} onRequireAuth={handleSketchPageAuth} />
           } />
 

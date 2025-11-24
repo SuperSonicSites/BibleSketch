@@ -213,7 +213,9 @@ export const registerUser = async (email: string, pass: string, name: string, ph
       storagePath: storagePath
     }, true);
 
-    await firebaseSendEmailVerification(user);
+    await firebaseSendEmailVerification(user, {
+      url: window.location.origin + '/verified'
+    });
     await firebaseSignOut(auth);
 
     return user;
