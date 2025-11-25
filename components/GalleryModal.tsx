@@ -10,6 +10,8 @@ import { embedLogoOnImage } from '../utils/imageProcessing';
 import { WatermarkOverlay } from './WatermarkOverlay';
 import { PremiumModal } from './PremiumModal';
 import { LazyImage } from './ui/LazyImage';
+import { generateSketchSlug } from '../utils/urlHelpers';
+import { APP_DOMAIN } from '../constants';
 
 interface GalleryModalProps {
   isOpen: boolean;
@@ -288,7 +290,7 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
           startVerse: sketch.promptData.start_verse,
           endVerse: sketch.promptData.end_verse
         },
-        ageGroup: sketch.promptData.age_group as AgeGroup,
+        ageGroup: (sketch.promptData.age_group === "Pre-Teen" ? AgeGroup.TEEN : sketch.promptData.age_group) as AgeGroup,
         artStyle: sketch.promptData.art_style as ArtStyle
       };
 
@@ -366,14 +368,41 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
 
   const handleFacebookShare = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const shareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(previewImage || sketch.imageUrl)}`;
+    const slug = generateSketchSlug(sketch);
+    const shareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(`${APP_DOMAIN}/coloring-page/${slug}/${sketch.id}`)}`;
     window.open(shareUrl, '_blank');
   };
 
   const handlePinterestShare = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const description = `${sketch.promptData?.book} ${sketch.promptData?.chapter} - Created with Bible Sketch`;
-    const shareUrl = `https://pinterest.com/pin/create/button/?url=${encodeURIComponent(window.location.href)}&media=${encodeURIComponent(previewImage || sketch.imageUrl)}&description=${encodeURIComponent(description)}`;
+    const slug = generateSketchSlug(sketch);
+    const url = `${APP_DOMAIN}/coloring-page/${slug}/${sketch.id}`;
+    
+    const book = sketch.promptData?.book || "Bible";
+    const chapter = sketch.promptData?.chapter || "Sketch";
+    const startVerse = sketch.promptData?.start_verse;
+    const endVerse = sketch.promptData?.end_verse;
+    const ageGroup = sketch.promptData?.age_group || "All Ages";
+    const style = sketch.promptData?.art_style || "Coloring Page";
+
+    let verseRange = "";
+    if (startVerse) {
+        verseRange = `:${startVerse}`;
+        if (endVerse && endVerse > startVerse) {
+            verseRange += `-${endVerse}`;
+        }
+    }
+
+    const baseDesc = `${book} ${chapter}${verseRange} (${ageGroup} - ${style} Style)`;
+    const cta = "Visit BibleSketch to download the free printable version. BibleSketch.app";
+
+    // Process tags
+    const sketchTags = sketch.tags ? sketch.tags.map(t => `#${t.replace(/\s+/g, '')}`).join(' ') : '';
+    const defaultTags = "#BibleSketch #Coloring #BibleColoring #ChristianArt";
+    const allTags = `${sketchTags} ${defaultTags}`.trim();
+
+    const description = `${baseDesc}\n\n${cta}\n\n${allTags}`;
+    const shareUrl = `https://pinterest.com/pin/create/button/?url=${encodeURIComponent(url)}&media=${encodeURIComponent(previewImage || sketch.imageUrl)}&description=${encodeURIComponent(description)}`;
     window.open(shareUrl, '_blank');
   };
 
@@ -435,7 +464,7 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
             <h2 className="font-display text-2xl font-bold text-gray-800 mb-1">{promptText}</h2>
             <div className="flex flex-wrap gap-2 text-sm text-gray-500 mb-2">
               <span className="bg-purple-50 text-[#7C3AED] px-2 py-0.5 rounded-md font-bold text-xs uppercase">
-                {sketch.promptData?.age_group || "General"}
+                {(sketch.promptData?.age_group === "Pre-Teen" ? "Teen" : sketch.promptData?.age_group) || "General"}
               </span>
               <span className="text-gray-300">•</span>
               <span>{dateText}</span>

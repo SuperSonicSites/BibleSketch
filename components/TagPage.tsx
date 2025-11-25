@@ -6,7 +6,7 @@ import { Sketch } from '../types';
 import { Heart, ArrowLeft, Facebook, ChevronLeft, ChevronRight, Tag, Loader2 } from 'lucide-react';
 import { LITURGICAL_TAGS, BIBLE_BOOKS } from '../constants';
 import { FilterBar, SortOption } from './FilterBar';
-import { getSketchUrl } from '../utils/urlHelpers';
+import { getSketchUrl, generateSketchSlug } from '../utils/urlHelpers';
 import { LazyImage } from './ui/LazyImage';
 import { ArtistBadge } from './ArtistBadge';
 
@@ -49,7 +49,6 @@ export const TagPage: React.FC<TagPageProps> = ({ userId, onRequireAuth, onAutho
 
     const categoryDescriptions: Record<string, string> = {
       season: `Discover beautiful ${tagInfo.label} coloring pages from Bible stories. Perfect for celebrating the ${tagInfo.label} season in Sunday School, VBS, or family devotionals. Free printable Bible coloring sheets for all ages.`,
-      context: `Browse ${tagInfo.label} coloring pages featuring Biblical scenes and characters. Ideal for ${tagInfo.label} activities, church events, and Christian education. Free printable Bible illustrations for children and adults.`,
       theme: `Explore ${tagInfo.label} coloring pages from Scripture. These Biblical coloring sheets feature stories and lessons about ${tagInfo.label.toLowerCase()}. Perfect for Sunday School, homeschool, or personal Bible study.`
     };
 
@@ -117,11 +116,14 @@ export const TagPage: React.FC<TagPageProps> = ({ userId, onRequireAuth, onAutho
     });
   }, [sketches]);
 
+  // Helper to normalize age group
+  const normalizeAge = (age: string) => age === "Pre-Teen" ? "Teen" : age;
+
   // Available age groups
   const availableAges = useMemo(() => {
     const ageSet = new Set<string>();
     sketches.forEach(s => {
-      if (s.promptData?.age_group) ageSet.add(s.promptData.age_group);
+      if (s.promptData?.age_group) ageSet.add(normalizeAge(s.promptData.age_group));
     });
     return Array.from(ageSet).sort();
   }, [sketches]);
@@ -144,7 +146,7 @@ export const TagPage: React.FC<TagPageProps> = ({ userId, onRequireAuth, onAutho
     }
 
     if (activeAgeFilter !== 'All') {
-      result = result.filter(s => s.promptData?.age_group === activeAgeFilter);
+      result = result.filter(s => normalizeAge(s.promptData?.age_group || '') === activeAgeFilter);
     }
 
     if (activeStyleFilter !== 'All') {
@@ -204,15 +206,42 @@ export const TagPage: React.FC<TagPageProps> = ({ userId, onRequireAuth, onAutho
   const handleFacebookShare = (e: React.MouseEvent, sketch: Sketch) => {
     e.stopPropagation();
     e.preventDefault();
-    const shareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(sketch.imageUrl)}`;
+    const slug = generateSketchSlug(sketch);
+    const shareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(`${window.location.origin}/coloring-page/${slug}/${sketch.id}`)}`;
     window.open(shareUrl, '_blank');
   };
 
   const handlePinterestShare = (e: React.MouseEvent, sketch: Sketch) => {
     e.stopPropagation();
     e.preventDefault();
-    const description = `${sketch.promptData?.book} ${sketch.promptData?.chapter} - Created with Bible Sketch`;
-    const shareUrl = `https://pinterest.com/pin/create/button/?url=${encodeURIComponent(window.location.href)}&media=${encodeURIComponent(sketch.imageUrl)}&description=${encodeURIComponent(description)}`;
+    const slug = generateSketchSlug(sketch);
+    const url = `${window.location.origin}/coloring-page/${slug}/${sketch.id}`;
+    
+    const book = sketch.promptData?.book || "Bible";
+    const chapter = sketch.promptData?.chapter || "Sketch";
+    const startVerse = sketch.promptData?.start_verse;
+    const endVerse = sketch.promptData?.end_verse;
+    const ageGroup = sketch.promptData?.age_group || "All Ages";
+    const style = sketch.promptData?.art_style || "Coloring Page";
+
+    let verseRange = "";
+    if (startVerse) {
+        verseRange = `:${startVerse}`;
+        if (endVerse && endVerse > startVerse) {
+            verseRange += `-${endVerse}`;
+        }
+    }
+
+    const baseDesc = `${book} ${chapter}${verseRange} (${ageGroup} - ${style} Style)`;
+    const cta = "Visit BibleSketch to download the free printable version. BibleSketch.app";
+
+    // Process tags
+    const sketchTags = sketch.tags ? sketch.tags.map(t => `#${t.replace(/\s+/g, '')}`).join(' ') : '';
+    const defaultTags = "#BibleSketch #Coloring #BibleColoring #ChristianArt";
+    const allTags = `${sketchTags} ${defaultTags}`.trim();
+
+    const description = `${baseDesc}\n\n${cta}\n\n${allTags}`;
+    const shareUrl = `https://pinterest.com/pin/create/button/?url=${encodeURIComponent(url)}&media=${encodeURIComponent(sketch.imageUrl)}&description=${encodeURIComponent(description)}`;
     window.open(shareUrl, '_blank');
   };
 
@@ -328,7 +357,7 @@ export const TagPage: React.FC<TagPageProps> = ({ userId, onRequireAuth, onAutho
 
                   <p className="text-xs text-gray-500 truncate mt-1 mb-auto">
                     {sketch.promptData
-                      ? `${sketch.promptData.art_style} • ${sketch.promptData.age_group}`
+                      ? `${sketch.promptData.art_style} • ${normalizeAge(sketch.promptData.age_group)}`
                       : new Date(sketch.timestamp || Date.now()).toLocaleDateString()}
                   </p>
 

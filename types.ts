@@ -3,7 +3,7 @@
 export enum AgeGroup {
   TODDLER = "Toddler",
   YOUNG_CHILD = "Young Child",
-  PRE_TEEN = "Pre-Teen",
+  TEEN = "Teen",
   ADULT = "Adult"
 }
 

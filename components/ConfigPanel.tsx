@@ -13,14 +13,14 @@ interface ConfigPanelProps {
 export const ConfigPanel: React.FC<ConfigPanelProps> = ({ age, setAge, style, setStyle }) => {
   
   // Helper for slider steps
-  const ageSteps = [AgeGroup.TODDLER, AgeGroup.YOUNG_CHILD, AgeGroup.PRE_TEEN, AgeGroup.ADULT];
+  const ageSteps = [AgeGroup.TODDLER, AgeGroup.YOUNG_CHILD, AgeGroup.TEEN, AgeGroup.ADULT];
   const currentStepIndex = ageSteps.indexOf(age);
 
   // Define available styles per age group
   const VALID_STYLES: Record<AgeGroup, ArtStyle[]> = {
     [AgeGroup.TODDLER]: [ArtStyle.SUNDAY_SCHOOL],
     [AgeGroup.YOUNG_CHILD]: [ArtStyle.SUNDAY_SCHOOL, ArtStyle.COMIC, ArtStyle.STAINED_GLASS, ArtStyle.ICONOGRAPHY],
-    [AgeGroup.PRE_TEEN]: [ArtStyle.CLASSIC, ArtStyle.STAINED_GLASS, ArtStyle.ICONOGRAPHY, ArtStyle.COMIC],
+    [AgeGroup.TEEN]: [ArtStyle.CLASSIC, ArtStyle.STAINED_GLASS, ArtStyle.ICONOGRAPHY, ArtStyle.COMIC],
     [AgeGroup.ADULT]: [ArtStyle.CLASSIC, ArtStyle.STAINED_GLASS, ArtStyle.ICONOGRAPHY]
   };
 
@@ -28,7 +28,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({ age, setAge, style, se
   const AGE_DESCRIPTIONS = {
     [AgeGroup.TODDLER]: "Big, chunky shapes with ultra-thick lines. Minimal detail. Perfect for crayons and little hands.",
     [AgeGroup.YOUNG_CHILD]: "Classic storybook style. Clear characters with friendly expressions and moderate detail.",
-    [AgeGroup.PRE_TEEN]: "Dynamic, comic-book style illustration. Action-oriented poses with finer details.",
+    [AgeGroup.TEEN]: "Dynamic, comic-book style illustration. Action-oriented poses with finer details.",
     [AgeGroup.ADULT]: "Intricate, mathematical patterns and zentangle designs. High complexity for stress relief and focus."
   };
 
@@ -125,7 +125,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({ age, setAge, style, se
               key={s}
               onClick={() => setStyle(s)}
               className={`
-                relative px-4 py-2 md:px-6 md:py-3 rounded-full border-2 font-bold text-sm md:text-base transition-all duration-200
+                relative px-4 py-2 md:px-6 md:py-3 rounded-full border-2 font-bold text-sm transition-all duration-200
                 ${style === s 
                   ? "bg-white border-[#FCD34D] text-gray-900 shadow-sm scale-105" 
                   : "bg-white border-transparent text-gray-400 hover:bg-gray-50 hover:border-gray-200"}

@@ -13,7 +13,7 @@
       "type": "image/png"
     }
   ],
-  "start_url": ".",
+  "start_url": "https://BibleSketch.app",
   "display": "standalone",
   "theme_color": "#FFF7ED",
   "background_color": "#FFF7ED"

@@ -30,11 +30,10 @@ export const TagSelector: React.FC<TagSelectorProps> = ({
 
   const categoryLabels: Record<string, string> = {
     season: 'Liturgical Seasons',
-    context: 'Teaching Context',
     theme: 'Themes'
   };
 
-  const categoryOrder = ['season', 'context', 'theme'];
+  const categoryOrder = ['season', 'theme'];
 
   if (compact) {
     // Compact mode: flat list of tag chips

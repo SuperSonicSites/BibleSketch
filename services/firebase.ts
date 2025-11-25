@@ -13,7 +13,8 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
   signInAnonymously,
-  getAdditionalUserInfo
+  getAdditionalUserInfo,
+  connectAuthEmulator
 } from "firebase/auth";
 import type { User } from "firebase/auth";
 
@@ -35,7 +36,8 @@ import {
   onSnapshot,
   serverTimestamp,
   increment,
-  getDocs
+  getDocs,
+  connectFirestoreEmulator
 } from "firebase/firestore";
 
 import {
@@ -46,7 +48,8 @@ import {
   getDownloadURL,
   deleteObject,
   getBytes,
-  listAll
+  listAll,
+  connectStorageEmulator
 } from "firebase/storage";
 
 import { BibleReference, AgeGroup, ArtStyle, Sketch, CreditTransaction } from "../types";
@@ -54,14 +57,14 @@ import { BibleReference, AgeGroup, ArtStyle, Sketch, CreditTransaction } from ".
 // Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyAxrHQdjvie8JQnX18WRAqnwH3vwt5N5LI",
-  authDomain: "biblesketch-5104c.firebaseapp.com",
+  authDomain: "BibleSketch.app",
   projectId: "biblesketch-5104c",
   storageBucket: "biblesketch-5104c.firebasestorage.app",
   messagingSenderId: "31072353772",
   appId: "1:31072353772:web:2f992ceb14538c051f94c9"
 };
 
-import { getFunctions } from "firebase/functions";
+import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
@@ -69,6 +72,15 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 export const functions = getFunctions(app);
+
+// Connect to Emulators if running locally
+if (location.hostname === "localhost") {
+  console.log("🔌 Connecting to Firebase Emulators...");
+  connectAuthEmulator(auth, "http://localhost:9099");
+  connectFirestoreEmulator(db, 'localhost', 8080);
+  connectStorageEmulator(storage, 'localhost', 9199);
+  connectFunctionsEmulator(functions, 'localhost', 5001);
+}
 export type { User };
 
 // --- Helper: Upload Profile Image ---
@@ -776,7 +788,8 @@ export const getPublicGallery = async (currentUserId?: string) => {
     const q = query(
       collection(db, 'sketches'),
       where('isPublic', '==', true),
-      limit(100)
+      orderBy('createdAt', 'desc'),
+      limit(50)
     );
 
     const snapshot = await getDocs(q);

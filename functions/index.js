@@ -2,6 +2,8 @@ const { onCall, HttpsError, onRequest } = require("firebase-functions/v2/https")
 const { GoogleGenAI } = require("@google/genai");
 const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
+const fs = require('fs');
+const path = require('path');
 
 // Initialize admin if not already done
 if (admin.apps.length === 0) {
@@ -23,14 +25,13 @@ const generateSketchSlug = (data) => {
 };
 
 // --- HELPER: Constants (Mirrored from Frontend) ---
-const AGE_GROUPS = ["Toddler", "Young Child", "Pre-Teen", "Adult"];
+const AGE_GROUPS = ["Toddler", "Young Child", "Teen", "Adult"];
 const ART_STYLES = ["Sunday School", "Stained Glass", "Iconography", "Comic", "Classic"];
 
 // Liturgical tags for static sitemap generation
 const LITURGICAL_TAGS = [
   'advent', 'christmas', 'lent', 'holy-week', 'easter', 'pentecost',
-  'sunday-school', 'vbs', 'family-devotional', 'youth-group', 'bible-study',
-  'miracles', 'parables', 'prophets', 'creation', 'the-fall', 'faith-heroes', 'prayer', 'worship'
+  'creation', 'the-fall', 'exile', 'resurrection'
 ];
 
 exports.generateContent = onCall({ 
@@ -178,8 +179,8 @@ exports.generateContent = onCall({
 // 1. SITEMAP GENERATOR (Dynamic + Deduplicated + Segmented)
 // ---------------------------------------------------------
 exports.sitemap = onRequest(async (req, res) => {
-  const host = req.headers.host || 'biblesketch.com';
-  const protocol = req.headers['x-forwarded-proto'] || 'https';
+  const host = 'BibleSketch.app';
+  const protocol = 'https';
   const baseUrl = `${protocol}://${host}`;
   
   // type = 'index' | 'recent' | 'tags' | 'toddler-sunday-school' etc.
@@ -200,7 +201,7 @@ exports.sitemap = onRequest(async (req, res) => {
       const VALID_COMBINATIONS = [
         { age: "Toddler", styles: ["Sunday School"] },
         { age: "Young Child", styles: ["Sunday School", "Stained Glass", "Iconography", "Comic"] },
-        { age: "Pre-Teen", styles: ["Classic", "Stained Glass", "Iconography", "Comic"] },
+        { age: "Teen", styles: ["Classic", "Stained Glass", "Iconography", "Comic"] },
         { age: "Adult", styles: ["Classic", "Stained Glass", "Iconography"] }
       ];
 
@@ -261,8 +262,13 @@ exports.sitemap = onRequest(async (req, res) => {
          for (const style of ART_STYLES) {
             const key = `${age.toLowerCase().replace(/ /g, '-')}-${style.toLowerCase().replace(/ /g, '-')}`;
             if (key === type) {
-                query = query.where("promptData.age_group", "==", age)
-                             .where("promptData.art_style", "==", style)
+                if (age === "Teen") {
+                   query = query.where("promptData.age_group", "in", ["Teen", "Pre-Teen"]);
+                } else {
+                   query = query.where("promptData.age_group", "==", age);
+                }
+
+                query = query.where("promptData.art_style", "==", style)
                              .orderBy("createdAt", "desc")
                              .limit(5000);
                 found = true;
@@ -332,74 +338,166 @@ exports.sitemap = onRequest(async (req, res) => {
 // ---------------------------------------------------------
 // 2. SEO RENDERER (Social Previews + Canonical Tags)
 // ---------------------------------------------------------
-exports.sketchRender = onRequest(async (req, res) => {
-  const host = req.headers.host || 'biblesketch.com';
-  const protocol = req.headers['x-forwarded-proto'] || 'https';
+
+// Cache the index.html template in memory to reduce fetch calls/latency
+// Note: Cache is cleared on each function cold start
+// Version: 1.1 (Force update for index.html refresh)
+let cachedIndexHtml = null;
+
+// Helper to get index.html
+async function getIndexHtml(baseUrl) {
+  // Skip cache during initial development/debugging
+  // if (cachedIndexHtml) return cachedIndexHtml;
+
+  // 1. Try reading from local filesystem (Best for speed & stability)
+  try {
+    const localPath = path.join(__dirname, 'index.html');
+    if (fs.existsSync(localPath)) {
+        const html = fs.readFileSync(localPath, 'utf8');
+        console.log("[getIndexHtml] Loaded from local file system.");
+        // Basic validation
+        if (html.includes("<html")) {
+            cachedIndexHtml = html;
+            return html;
+        }
+    }
+  } catch (fsError) {
+    console.warn("[getIndexHtml] Local file read failed:", fsError);
+  }
+
+  try {
+    // 2. Try local hosting URL first with timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000); // 3s timeout
+
+    const response = await fetch(`${baseUrl}/index.html`, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) throw new Error(`Failed to fetch local index.html: ${response.status}`);
+    const html = await response.text();
+
+    if (html.includes("<!doctype html") || html.includes("<html")) {
+      cachedIndexHtml = html;
+      return html;
+    } else {
+      throw new Error("Invalid HTML content");
+    }
+  } catch (e) {
+    console.error("Primary fetch failed, trying fallback:", e);
+    // Fallback to production URL if local fails (e.g. inside function emulator or weird routing)
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
+      
+      const response = await fetch("https://BibleSketch.app/index.html", { signal: controller.signal });
+      clearTimeout(timeoutId);
+
+      if (!response.ok) throw new Error("Fallback fetch failed");
+      return await response.text();
+    } catch (fallbackError) {
+      console.error("All fetches failed:", fallbackError);
+      // Absolute fallback
+      return `<!doctype html><html lang="en"><head><meta charset="UTF-8"/><title>Bible Sketch</title></head><body><div id="root"></div><script>window.location.reload();</script></body></html>`;
+    }
+  }
+}
+
+exports.sketchRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (req, res) => {
+  const host = 'BibleSketch.app';
+  const protocol = 'https';
   const baseUrl = `${protocol}://${host}`;
+  const userAgent = req.headers['user-agent'] || 'Unknown';
 
-  const pathParts = req.path.split('/');
-  const sketchId = pathParts[pathParts.length - 1];
+  // Robust ID Extraction
+  // Split by slash and filter out empty strings (handles trailing slashes)
+  const pathSegments = req.path.split('/').filter(p => p.length > 0);
+  const sketchId = pathSegments[pathSegments.length - 1];
 
-  const serveDefaultApp = () => {
-     const fetchUrl = `${baseUrl}/index.html`;
-     fetch(fetchUrl)
-        .then(response => response.text())
-        .then(html => res.send(html))
-        .catch(e => {
-            fetch("https://biblesketch.com/index.html")
-                .then(r => r.text())
-                .then(h => res.send(h))
-                .catch(() => res.status(500).send("Error loading app."));
-        });
+  console.log(`[sketchRender] Path: ${req.path} | ID: ${sketchId} | UA: ${userAgent}`);
+
+  const serveDefault = async () => {
+    const html = await getIndexHtml(baseUrl);
+    res.send(html);
   };
 
   if (!sketchId) {
-    return serveDefaultApp();
+    console.log("[sketchRender] No sketch ID found, serving default.");
+    return serveDefault();
   }
 
   try {
     const doc = await admin.firestore().collection("sketches").doc(sketchId).get();
-    
+
     if (!doc.exists) {
-      return serveDefaultApp();
+      console.log(`[sketchRender] Sketch ${sketchId} not found.`);
+      return serveDefault();
     }
 
     const data = doc.data();
     const book = data.promptData?.book || "Bible";
     const chapter = data.promptData?.chapter || "Story";
-    const verses = data.promptData?.start_verse ? `:${data.promptData.start_verse}` : "";
+    const startVerse = data.promptData?.start_verse;
+    const endVerse = data.promptData?.end_verse;
+    const ageGroup = data.promptData?.age_group || "All Ages";
     const style = data.promptData?.art_style || "Coloring Page";
-    
-    const title = `${book} ${chapter}${verses} Coloring Page | Bible Sketch`;
-    const description = `Free printable coloring page of ${book} ${chapter} in ${style} style. Created with Bible Sketch.`;
+
+    let verseRange = "";
+    if (startVerse) {
+      verseRange = `:${startVerse}`;
+      if (endVerse && endVerse > startVerse) {
+        verseRange += `-${endVerse}`;
+      }
+    }
+
+    const title = `${book} ${chapter}${verseRange} Coloring Page - ${style} Style | Bible Sketch`;
+    const description = `Free printable ${book} ${chapter}${verseRange} coloring page for ${ageGroup} in ${style} style. Created with Bible Sketch.`;
     const imageUrl = data.imageUrl;
 
     const slug = generateSketchSlug(data);
     const canonicalUrl = `${baseUrl}/coloring-page/${slug}/${sketchId}`;
 
-    const appResponse = await fetch(`${baseUrl}/index.html`);
-    let html = await appResponse.text();
+    let html = await getIndexHtml(baseUrl);
 
-    html = html.replace(/<title>.*?<\/title>/, `<title>${title}</title>`)
-               .replace('content="Bible Sketch Platform"', `content="${title}"`)
-               .replace('</head>', `
-                  <link rel="canonical" href="${canonicalUrl}" />
-                  <meta property="og:title" content="${title}" />
-                  <meta property="og:description" content="${description}" />
-                  <meta property="og:image" content="${imageUrl}" />
-                  <meta property="og:type" content="article" />
-                  <meta property="og:url" content="${canonicalUrl}" />
-                  <meta name="twitter:card" content="summary_large_image" />
-                  <meta name="twitter:title" content="${title}" />
-                  <meta name="twitter:description" content="${description}" />
-                  <meta name="twitter:image" content="${imageUrl}" />
-                  </head>`);
+    // Injection Strategy:
+    // 1. Replace <title>
+    // 2. Inject Meta Tags before </head>
+
+    // Replace Title
+    html = html.replace(/<title>.*?<\/title>/i, `<title>${title}</title>`);
+
+    // Prepare Meta Tags
+    const metaTags = `
+    <meta name="description" content="${description}" />
+    <link rel="canonical" href="${canonicalUrl}" />
+    
+    <!-- Open Graph -->
+    <meta property="og:title" content="${title}" />
+    <meta property="og:description" content="${description}" />
+    <meta property="og:image" content="${imageUrl}" />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="${canonicalUrl}" />
+    <meta property="og:site_name" content="Bible Sketch" />
+    
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${title}" />
+    <meta name="twitter:description" content="${description}" />
+    <meta name="twitter:image" content="${imageUrl}" />
+    `;
+
+    // Inject before </head>
+    if (html.includes('</head>')) {
+      html = html.replace('</head>', `${metaTags}</head>`);
+    } else {
+      // Fallback if </head> is missing
+      html += metaTags;
+    }
 
     res.set('Cache-Control', 'public, max-age=3600, s-maxage=7200');
     res.status(200).send(html);
 
   } catch (error) {
-    console.error("SEO Render Error:", error);
-    serveDefaultApp();
+    console.error("[sketchRender] Error:", error);
+    serveDefault();
   }
 });

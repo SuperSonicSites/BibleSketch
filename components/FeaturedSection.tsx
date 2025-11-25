@@ -7,7 +7,7 @@ import { Heart, Facebook, ChevronLeft, ChevronRight, AlertCircle, User } from 'l
 import { BIBLE_BOOKS, LITURGICAL_TAGS } from '../constants';
 import { FilterBar, SortOption } from './FilterBar';
 import { GalleryModal } from './GalleryModal';
-import { getSketchUrl } from '../utils/urlHelpers';
+import { getSketchUrl, generateSketchSlug } from '../utils/urlHelpers';
 import { Button } from './ui/Button';
 import { LazyImage } from './ui/LazyImage';
 import { ArtistBadge } from './ArtistBadge';
@@ -42,7 +42,7 @@ export const FeaturedSection: React.FC<FeaturedSectionProps> = ({
   const [activeTagFilter, setActiveTagFilter] = useState<string>('All');
   const [activeAgeFilter, setActiveAgeFilter] = useState<string>('All');
   const [activeStyleFilter, setActiveStyleFilter] = useState<string>('All');
-  const [activeSort, setActiveSort] = useState<SortOption>('popular');
+  const [activeSort, setActiveSort] = useState<SortOption>('newest');
   const [blessedIds, setBlessedIds] = useState<Set<string>>(new Set());
   const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(new Set());
 
@@ -139,12 +139,15 @@ export const FeaturedSection: React.FC<FeaturedSectionProps> = ({
       });
   }, [sketches]);
 
+  // Helper to normalize age group
+  const normalizeAge = (age: string) => age === "Pre-Teen" ? "Teen" : age;
+
   // Derived: Available Age Groups
   const availableAges = useMemo(() => {
     const ageSet = new Set<string>();
     sketches.forEach(s => {
       if (s.promptData?.age_group) {
-        ageSet.add(s.promptData.age_group);
+        ageSet.add(normalizeAge(s.promptData.age_group));
       }
     });
     return Array.from(ageSet).sort();
@@ -177,7 +180,7 @@ export const FeaturedSection: React.FC<FeaturedSectionProps> = ({
 
     // Filter by age
     if (activeAgeFilter !== 'All') {
-      result = result.filter(s => s.promptData?.age_group === activeAgeFilter);
+      result = result.filter(s => normalizeAge(s.promptData?.age_group || '') === activeAgeFilter);
     }
 
     // Filter by style
@@ -245,15 +248,42 @@ export const FeaturedSection: React.FC<FeaturedSectionProps> = ({
   const handleFacebookShare = (e: React.MouseEvent, sketch: Sketch) => {
     e.stopPropagation();
     e.preventDefault();
-    const shareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(sketch.imageUrl)}`;
+    const slug = generateSketchSlug(sketch);
+    const shareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(`${window.location.origin}/coloring-page/${slug}/${sketch.id}`)}`;
     window.open(shareUrl, '_blank');
   };
 
   const handlePinterestShare = (e: React.MouseEvent, sketch: Sketch) => {
     e.stopPropagation();
     e.preventDefault();
-    const description = `${sketch.promptData?.book} ${sketch.promptData?.chapter} - Created with Bible Sketch`;
-    const shareUrl = `https://pinterest.com/pin/create/button/?url=${encodeURIComponent(window.location.href)}&media=${encodeURIComponent(sketch.imageUrl)}&description=${encodeURIComponent(description)}`;
+    const slug = generateSketchSlug(sketch);
+    const url = `${window.location.origin}/coloring-page/${slug}/${sketch.id}`;
+    
+    const book = sketch.promptData?.book || "Bible";
+    const chapter = sketch.promptData?.chapter || "Sketch";
+    const startVerse = sketch.promptData?.start_verse;
+    const endVerse = sketch.promptData?.end_verse;
+    const ageGroup = sketch.promptData?.age_group || "All Ages";
+    const style = sketch.promptData?.art_style || "Coloring Page";
+
+    let verseRange = "";
+    if (startVerse) {
+        verseRange = `:${startVerse}`;
+        if (endVerse && endVerse > startVerse) {
+            verseRange += `-${endVerse}`;
+        }
+    }
+
+    const baseDesc = `${book} ${chapter}${verseRange} (${ageGroup} - ${style} Style)`;
+    const cta = "Visit BibleSketch to download the free printable version. BibleSketch.app";
+
+    // Process tags
+    const sketchTags = sketch.tags ? sketch.tags.map(t => `#${t.replace(/\s+/g, '')}`).join(' ') : '';
+    const defaultTags = "#BibleSketch #Coloring #BibleColoring #ChristianArt";
+    const allTags = `${sketchTags} ${defaultTags}`.trim();
+
+    const description = `${baseDesc}\n\n${cta}\n\n${allTags}`;
+    const shareUrl = `https://pinterest.com/pin/create/button/?url=${encodeURIComponent(url)}&media=${encodeURIComponent(sketch.imageUrl)}&description=${encodeURIComponent(description)}`;
     window.open(shareUrl, '_blank');
   };
 
@@ -340,7 +370,7 @@ export const FeaturedSection: React.FC<FeaturedSectionProps> = ({
          </div>
       ) : (
          <>
-           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+           <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
               {displayedSketches.map((sketch) => (
                  <Link 
                     key={sketch.id}
@@ -369,7 +399,7 @@ export const FeaturedSection: React.FC<FeaturedSectionProps> = ({
                       {/* Subtitle: Style Reference (was Date) */}
                       <p className="text-xs text-gray-500 truncate mt-1 mb-auto">
                          {sketch.promptData 
-                            ? `${sketch.promptData.art_style} • ${sketch.promptData.age_group}` 
+                            ? `${sketch.promptData.art_style} • ${normalizeAge(sketch.promptData.age_group)}` 
                             : new Date(sketch.timestamp || Date.now()).toLocaleDateString()}
                       </p>
                       

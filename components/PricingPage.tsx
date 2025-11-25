@@ -131,8 +131,8 @@ export const PricingPage: React.FC<PricingPageProps> = ({ onBack, onSelectPlan }
               </div>
 
               <div className="flex items-baseline gap-2 mb-4">
-                <span className="text-4xl md:text-5xl font-bold">$9.99</span>
-                <span className="text-purple-200 font-medium">/ one-time</span>
+                <span className="text-4xl md:text-5xl font-bold">$4.99</span>
+                <span className="text-purple-200 font-medium">/ month</span>
               </div>
 
               {/* Features */}
@@ -147,7 +147,7 @@ export const PricingPage: React.FC<PricingPageProps> = ({ onBack, onSelectPlan }
                   <div className="p-0.5 bg-[#FCD34D] rounded-full">
                     <Check className="w-3 h-3 text-purple-900" strokeWidth={4} />
                   </div>
-                  <span className="font-medium">15 Credits Included</span>
+                  <span className="font-medium">10 Credits Per Month Included</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
                   <div className="p-0.5 bg-[#FCD34D] rounded-full">

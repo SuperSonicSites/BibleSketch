@@ -5,6 +5,7 @@ import { Helmet } from 'react-helmet-async';
 import { Printer, Download, Heart, Facebook, AlertTriangle, ArrowRight, Lock, Bookmark, Check, Loader2, Trash2, Globe, Tag } from 'lucide-react';
 import { getSketchById, blessSketch, getUserBlessedSketchIds, getUserDocument, toggleBookmark, checkIsBookmarked, auth, deleteSketch, updateSketchVisibility, canDownload, deductDownload, updateSketchTags } from '../services/firebase';
 import { Sketch } from '../types';
+import { generateSketchSlug } from '../utils/urlHelpers';
 import { Button } from './ui/Button';
 import { WatermarkOverlay } from './WatermarkOverlay';
 import { PremiumModal } from './PremiumModal';
@@ -12,6 +13,7 @@ import { LazyImage } from './ui/LazyImage';
 import { TagDisplay, TagSelector } from './TagSelector';
 
 import { SketchSEO } from './SketchSEO';
+import { APP_DOMAIN } from '../constants';
 
 // Pinterest Icon
 const PinterestIcon = ({ className }: { className?: string }) => (
@@ -263,11 +265,37 @@ export const SketchPage: React.FC<SketchPageProps> = ({ user, onRequireAuth }) =
 
   const handleShare = (platform: 'facebook' | 'pinterest') => {
     if (!sketch) return;
-    const url = window.location.href;
+    
+    // Construct SEO-friendly URL
+    const slug = generateSketchSlug(sketch);
+    const url = `${APP_DOMAIN}/coloring-page/${slug}/${sketch.id}`;
+    
     const img = sketch.imageUrl;
     const book = sketch.promptData?.book || "Bible";
     const chapter = sketch.promptData?.chapter || "Sketch";
-    const desc = `${book} ${chapter} Coloring Page`;
+    const startVerse = sketch.promptData?.start_verse;
+    const endVerse = sketch.promptData?.end_verse;
+    const ageGroupRaw = sketch.promptData?.age_group;
+    const ageGroup = ageGroupRaw === "Pre-Teen" ? "Teen" : (ageGroupRaw || "All Ages");
+    const style = sketch.promptData?.art_style || "Coloring Page";
+
+    let verseRange = "";
+    if (startVerse) {
+        verseRange = `:${startVerse}`;
+        if (endVerse && endVerse > startVerse) {
+            verseRange += `-${endVerse}`;
+        }
+    }
+
+    const baseDesc = `${book} ${chapter}${verseRange} (${ageGroup} - ${style} Style)`;
+    const cta = "Visit BibleSketch to download the free printable version. BibleSketch.app";
+
+    // Process tags
+    const sketchTags = sketch.tags ? sketch.tags.map(t => `#${t.replace(/\s+/g, '')}`).join(' ') : '';
+    const defaultTags = "#BibleSketch #Coloring #BibleColoring #ChristianArt";
+    const allTags = `${sketchTags} ${defaultTags}`.trim();
+
+    const desc = `${baseDesc}\n\n${cta}\n\n${allTags}`;
 
     if (platform === 'facebook') {
       window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`, '_blank');
@@ -356,14 +384,22 @@ export const SketchPage: React.FC<SketchPageProps> = ({ user, onRequireAuth }) =
   let description = 'Free printable Bible coloring page. Perfect for Sunday School, VBS, homeschool, and family devotionals.';
   let imageUrl = sketch?.imageUrl;
 
+  // Helper to display "Teen" instead of legacy "Pre-Teen"
+  const displayAgeGroup = (age: string | undefined) => {
+    if (age === "Pre-Teen") return "Teen";
+    return age;
+  };
+
   if (sketch?.promptData) {
     const { book, chapter, start_verse, end_verse, age_group, art_style } = sketch.promptData;
     const verseRange = end_verse && end_verse > start_verse
       ? `${start_verse}-${end_verse}`
       : `${start_verse}`;
 
+    const visibleAge = displayAgeGroup(age_group);
+
     title = `${book} ${chapter}:${verseRange} Coloring Page - ${art_style} Style | Bible Sketch`;
-    description = `Free printable ${book} ${chapter}:${verseRange} coloring page in ${art_style} style. Perfect for ${age_group} in Sunday School, VBS, or family devotionals. High-quality Bible coloring sheet created with Bible Sketch.`;
+    description = `Free printable ${book} ${chapter}:${verseRange} coloring page in ${art_style} style. Perfect for ${visibleAge} in Sunday School, VBS, or family devotionals. High-quality Bible coloring sheet created with Bible Sketch.`;
   }
 
   return (
@@ -372,7 +408,10 @@ export const SketchPage: React.FC<SketchPageProps> = ({ user, onRequireAuth }) =
         title={title} 
         description={description} 
         imageUrl={imageUrl} 
-        url={window.location.href}
+        url={`${APP_DOMAIN}/coloring-page/${generateSketchSlug(sketch)}/${sketch.id}`}
+        authorName={authorName}
+        authorProfileUrl={`${APP_DOMAIN}/profile/${sketch.userId}`}
+        datePublished={new Date(sketch.timestamp).toISOString()}
       />
 
       <div className="max-w-7xl mx-auto px-4 py-12 animate-in fade-in duration-500">
@@ -423,7 +462,7 @@ export const SketchPage: React.FC<SketchPageProps> = ({ user, onRequireAuth }) =
 
               <div className="flex flex-wrap gap-3 text-sm text-gray-500 mb-4">
                 <span className="bg-purple-50 text-[#7C3AED] px-3 py-1 rounded-full font-bold text-xs uppercase tracking-wide">
-                  {sketch.promptData?.age_group}
+                  {displayAgeGroup(sketch.promptData?.age_group)}
                 </span>
                 <span className="flex items-center">
                   Created by {authorName}

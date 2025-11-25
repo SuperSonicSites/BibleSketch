@@ -28,30 +28,46 @@ export const LazyImage: React.FC<LazyImageProps> = ({
     let isMounted = true;
     setIsLoaded(false);
     setHasError(false);
+    
+    // OPTIMIZATION: Trust explicit thumbnail path immediately (0-latency)
+    if (thumbnailPath) {
+       // We trust the DB provided path, so we don't "check" it first.
+       // We just convert the Storage Path (gs:// or relative) to a Download URL.
+       // Note: If thumbnailPath is already a full http URL, we could use it directly, 
+       // but our DB stores relative storage paths usually.
+       
+       const resolveDirect = async () => {
+         try {
+             const refPtr = ref(storage, thumbnailPath);
+             const url = await getDownloadURL(refPtr);
+             if (isMounted) setCurrentSrc(url);
+         } catch (e) {
+             console.warn("Direct thumbnail load failed, falling back to src", e);
+             if (isMounted) setCurrentSrc(src);
+         }
+       };
+       resolveDirect();
+       return () => { isMounted = false; };
+    }
+    
     setCurrentSrc(null); 
 
     const resolveImage = async () => {
       const candidates: string[] = [];
 
-      // 1. Explicit Thumbnail Path from DB
-      if (thumbnailPath) candidates.push(thumbnailPath);
-
-      // 2. Constructed Paths from Storage Path (if available)
-      if (storagePath) {
+      // 1. Explicit Thumbnail Path from DB - HANDLED ABOVE in Direct Optimization
+      // if (thumbnailPath) candidates.push(thumbnailPath);
+      
+      // 2. Legacy Fallback: Construct Standard Thumbnail Path (if explicit path missing)
+      // Only try this if we have a storage path and no explicit thumbnail path
+      if (storagePath && !thumbnailPath) {
           const ext = storagePath.split('.').pop();
           const lastSlash = storagePath.lastIndexOf('/');
           const dir = storagePath.substring(0, lastSlash);
           const name = storagePath.substring(lastSlash + 1, storagePath.lastIndexOf('.'));
           
-          // A. Standard Resize Extension Path (Same Directory)
+          // Standard Resize Extension Path (Matches saveSketch prediction)
           candidates.push(`${dir}/${name}_400x533.${ext}`);
-          
-          // B. User Requested "user_uploads" Subfolder Path
-          candidates.push(`${dir}/user_uploads/${name}_400x533.${ext}`);
-
-          // C. Also try WebP versions for both A and B
-          candidates.push(`${dir}/${name}_400x533.webp`);
-          candidates.push(`${dir}/user_uploads/${name}_400x533.webp`);
       }
 
       // Attempt to load candidates sequentially
@@ -81,7 +97,7 @@ export const LazyImage: React.FC<LazyImageProps> = ({
     resolveImage();
 
     return () => { isMounted = false; };
-  }, [src, thumbnailPath, storagePath]);
+  }, [src, thumbnailPath]);
 
   return (
     <div className={`relative overflow-hidden bg-gray-100 ${aspectRatio} ${className}`}>

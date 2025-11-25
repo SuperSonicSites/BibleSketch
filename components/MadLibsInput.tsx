@@ -9,6 +9,83 @@ interface MadLibsInputProps {
   onChange: (val: BibleReference) => void;
 }
 
+const NumericInput = ({ 
+  value, 
+  onChange, 
+  className,
+  placeholder,
+  autoFocus
+}: { 
+  value: number | undefined, 
+  onChange: (val: number | undefined) => void, 
+  className?: string,
+  placeholder?: string,
+  autoFocus?: boolean
+}) => {
+  const [localValue, setLocalValue] = useState(value?.toString() ?? "");
+  const [isFocused, setIsFocused] = useState(false);
+
+  // Sync with external prop changes only when not focused to avoid fighting the user
+  useEffect(() => {
+    if (!isFocused) {
+       setLocalValue(value?.toString() ?? "");
+    }
+  }, [value, isFocused]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newVal = e.target.value;
+    
+    // Allow empty string or digits only
+    if (newVal === "" || /^\d+$/.test(newVal)) {
+      setLocalValue(newVal);
+      
+      if (newVal === "") {
+         // Do not update parent on empty string while typing
+         // Wait for blur or valid number
+      } else {
+        const num = parseInt(newVal);
+        if (!isNaN(num)) {
+          // We propagate the change immediately so other UI can react,
+          // BUT we rely on the parent component NOT to clamp it while typing
+          // or we remove the clamping logic from the parent's onChange handler.
+          onChange(num);
+        }
+      }
+    }
+  };
+
+  const handleBlur = () => {
+    setIsFocused(false);
+    if (localValue === "" || isNaN(parseInt(localValue))) {
+       // If empty/invalid on blur, revert to current prop value
+       setLocalValue(value?.toString() ?? "");
+    } else {
+       // Ensure formatted correctly and respect min value
+       let num = parseInt(localValue);
+       if (min !== undefined && num < min) {
+         num = min;
+       }
+       setLocalValue(num.toString());
+       onChange(num);
+    }
+  };
+
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      pattern="[0-9]*"
+      className={className}
+      value={localValue}
+      onChange={handleChange}
+      onFocus={() => setIsFocused(true)}
+      onBlur={handleBlur}
+      placeholder={placeholder}
+      autoFocus={autoFocus}
+    />
+  );
+};
+
 export const MadLibsInput: React.FC<MadLibsInputProps> = ({ value, onChange }) => {
   const [isBookOpen, setIsBookOpen] = useState(false);
   const [bookSearch, setBookSearch] = useState("");
@@ -80,12 +157,10 @@ export const MadLibsInput: React.FC<MadLibsInputProps> = ({ value, onChange }) =
 
       {/* Chapter Input */}
       <div className="inline-block mx-2 md:mx-3 w-16 md:w-24 align-bottom">
-        <input 
-          type="number" 
-          min="1"
+        <NumericInput 
           className="w-full border-b-2 border-[#7C3AED] text-[#7C3AED] text-center bg-transparent focus:outline-none focus:bg-purple-50 rounded-t-md"
           value={value.chapter}
-          onChange={(e) => onChange({ ...value, chapter: parseInt(e.target.value) || 1 })}
+          onChange={(val) => onChange({ ...value, chapter: val || 1 })}
         />
       </div>
 
@@ -93,19 +168,23 @@ export const MadLibsInput: React.FC<MadLibsInputProps> = ({ value, onChange }) =
 
       {/* Start Verse Input */}
       <div className="inline-block ml-2 md:ml-3 w-14 md:w-20 align-bottom">
-        <input 
-          type="number" 
-          min="1"
+        <NumericInput 
           className="w-full border-b-2 border-[#7C3AED] text-[#7C3AED] text-center bg-transparent focus:outline-none focus:bg-purple-50 rounded-t-md"
           value={value.startVerse}
-          onChange={(e) => {
-             const newStart = parseInt(e.target.value) || 1;
-             // Ensure end verse isn't less than start verse
-             let newEnd = value.endVerse;
-             if (newEnd !== undefined && newEnd < newStart) {
-               newEnd = undefined;
-             }
-             onChange({ ...value, startVerse: newStart, endVerse: newEnd });
+          onChange={(val) => {
+             // Allow any number while typing
+             const newStart = val || 1;
+             
+             // We do NOT force the end verse to reset immediately while typing
+             // This allows the user to type "2" when start is "15" without breaking logic
+             // We only clean up invalid ranges if end verse is explicitly set and lower
+             
+             // Only if the new start is definitely higher than current end, we might want to update end,
+             // BUT for better UX, let's just update start and let end be invalid temporarily until they fix it
+             // or we fix it on blur/submit.
+             
+             // However, to keep it simple: Just update start.
+             onChange({ ...value, startVerse: newStart });
           }}
         />
       </div>
@@ -114,22 +193,13 @@ export const MadLibsInput: React.FC<MadLibsInputProps> = ({ value, onChange }) =
 
       {/* End Verse Input */}
       <div className="inline-block mr-2 md:mr-3 w-14 md:w-20 align-bottom">
-        <input 
-          type="number" 
-          min={value.startVerse}
+        <NumericInput 
           placeholder="#"
           className="w-full border-b-2 border-[#7C3AED] text-[#7C3AED] text-center bg-transparent focus:outline-none focus:bg-purple-50 rounded-t-md placeholder-purple-200/50"
-          value={value.endVerse || ''}
-          onChange={(e) => {
-             const val = parseInt(e.target.value);
-             onChange({ ...value, endVerse: isNaN(val) ? undefined : val })
-          }}
-          onBlur={(e) => {
-             const val = parseInt(e.target.value);
-             // Clean up invalid ranges on blur
-             if (!isNaN(val) && val < value.startVerse) {
-                onChange({ ...value, endVerse: undefined });
-             }
+          value={value.endVerse}
+          onChange={(val) => {
+             // Allow typing any value.
+             onChange({ ...value, endVerse: val });
           }}
         />
       </div>

@@ -7,9 +7,10 @@ import { Heart, AlertTriangle, Globe, User, ExternalLink, Bookmark, ArrowLeft, F
 import { GalleryModal } from './GalleryModal';
 import { BIBLE_BOOKS, LITURGICAL_TAGS } from '../constants';
 import { FilterBar, SortOption } from './FilterBar';
-import { getSketchUrl } from '../utils/urlHelpers';
+import { getSketchUrl, generateSketchSlug } from '../utils/urlHelpers';
 import { LazyImage } from './ui/LazyImage';
 import { ArtistBadge } from './ArtistBadge';
+import { APP_DOMAIN } from '../constants';
 
 interface GalleryProps {
   userId?: string;
@@ -237,12 +238,15 @@ export const Gallery: React.FC<GalleryProps> = ({ userId, publicProfileId, onBac
       });
   }, [images]);
 
+  // Helper to normalize age group for display and filtering
+  const normalizeAge = (age: string) => age === "Pre-Teen" ? "Teen" : age;
+
   // --- Derived State: Available Age Groups ---
   const availableAges = useMemo(() => {
     const ageSet = new Set<string>();
     images.forEach(img => {
       if (img.promptData?.age_group) {
-        ageSet.add(img.promptData.age_group);
+        ageSet.add(normalizeAge(img.promptData.age_group));
       }
     });
     return Array.from(ageSet).sort();
@@ -272,7 +276,7 @@ export const Gallery: React.FC<GalleryProps> = ({ userId, publicProfileId, onBac
     }
 
     if (activeAgeFilter !== 'All') {
-      result = result.filter(img => img.promptData?.age_group === activeAgeFilter);
+      result = result.filter(img => normalizeAge(img.promptData?.age_group || '') === activeAgeFilter);
     }
 
     if (activeStyleFilter !== 'All') {
@@ -343,15 +347,42 @@ export const Gallery: React.FC<GalleryProps> = ({ userId, publicProfileId, onBac
   const handleFacebookShare = (e: React.MouseEvent, sketch: Sketch) => {
     e.stopPropagation();
     e.preventDefault();
-    const shareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(sketch.imageUrl)}`;
+    const slug = generateSketchSlug(sketch);
+    const shareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(`${APP_DOMAIN}/coloring-page/${slug}/${sketch.id}`)}`;
     window.open(shareUrl, '_blank');
   };
 
   const handlePinterestShare = (e: React.MouseEvent, sketch: Sketch) => {
     e.stopPropagation();
     e.preventDefault();
-    const description = `${sketch.promptData?.book} ${sketch.promptData?.chapter} - Created with Bible Sketch`;
-    const shareUrl = `https://pinterest.com/pin/create/button/?url=${encodeURIComponent(window.location.href)}&media=${encodeURIComponent(sketch.imageUrl)}&description=${encodeURIComponent(description)}`;
+    const slug = generateSketchSlug(sketch);
+    const url = `${APP_DOMAIN}/coloring-page/${slug}/${sketch.id}`;
+    
+    const book = sketch.promptData?.book || "Bible";
+    const chapter = sketch.promptData?.chapter || "Sketch";
+    const startVerse = sketch.promptData?.start_verse;
+    const endVerse = sketch.promptData?.end_verse;
+    const ageGroup = sketch.promptData?.age_group || "All Ages";
+    const style = sketch.promptData?.art_style || "Coloring Page";
+
+    let verseRange = "";
+    if (startVerse) {
+        verseRange = `:${startVerse}`;
+        if (endVerse && endVerse > startVerse) {
+            verseRange += `-${endVerse}`;
+        }
+    }
+
+    const baseDesc = `${book} ${chapter}${verseRange} (${ageGroup} - ${style} Style)`;
+    const cta = "Visit BibleSketch to download the free printable version. BibleSketch.app";
+
+    // Process tags
+    const sketchTags = sketch.tags ? sketch.tags.map(t => `#${t.replace(/\s+/g, '')}`).join(' ') : '';
+    const defaultTags = "#BibleSketch #Coloring #BibleColoring #ChristianArt";
+    const allTags = `${sketchTags} ${defaultTags}`.trim();
+
+    const description = `${baseDesc}\n\n${cta}\n\n${allTags}`;
+    const shareUrl = `https://pinterest.com/pin/create/button/?url=${encodeURIComponent(url)}&media=${encodeURIComponent(sketch.imageUrl)}&description=${encodeURIComponent(description)}`;
     window.open(shareUrl, '_blank');
   };
 
@@ -571,7 +602,7 @@ export const Gallery: React.FC<GalleryProps> = ({ userId, publicProfileId, onBac
                       {/* Subtitle: Style Reference (was Date) */}
                       <p className="text-xs text-gray-500 truncate mt-1 mb-auto">
                          {img.promptData 
-                            ? `${img.promptData.art_style} • ${img.promptData.age_group}` 
+                            ? `${img.promptData.art_style} • ${normalizeAge(img.promptData.age_group)}` 
                             : new Date(img.timestamp || Date.now()).toLocaleDateString()}
                       </p>
                       

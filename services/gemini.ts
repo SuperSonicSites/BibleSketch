@@ -44,8 +44,8 @@ const callGeminiProxy = async (params: { model: string, contents: any, config?: 
 // --- UTILS ---
 const callWithRetry = async <T>(
   fn: () => Promise<T>,
-  retries = 5, // Increased retries for better stability
-  initialDelay = 2000
+  retries = 5, // Keep high retry count
+  initialDelay = 3000 // INCREASE: Start with 3s wait (was 2000)
 ): Promise<T> => {
   let delay = initialDelay;
   for (let i = 0; i < retries; i++) {
@@ -53,16 +53,19 @@ const callWithRetry = async <T>(
       return await fn();
     } catch (error: any) {
       // Check for 429 (Quota) or 503 (Service Unavailable)
+      // Also check for 500 which sometimes masks a 503
       const errorCode = error.status || error.code;
       const errorMessage = error.message || "";
       const isRetryable =
         errorCode === 429 ||
         errorCode === 503 ||
+        errorCode === 500 || // ADDED: Sometimes overload manifests as 500
         errorMessage.includes("Resource has been exhausted") ||
+        errorMessage.includes("overloaded") || // ADDED: Explicit check
         errorMessage.includes("quota");
 
       if (isRetryable && i < retries - 1) {
-        console.warn(`Gemini API limit hit (${errorCode}). Retrying in ${delay}ms...`);
+        console.warn(`Gemini API hit limit/error (${errorCode}). Retrying in ${delay}ms...`);
         await new Promise(resolve => setTimeout(resolve, delay));
         delay *= 2; // Exponential backoff
         continue;
@@ -81,7 +84,11 @@ const generateCreativeBrief = async (
   ageGroup: AgeGroup,
   artStyle: ArtStyle
 ): Promise<ArchitectBrief> => {
-  const refString = `${reference.book} ${reference.chapter}:${reference.startVerse}`;
+  const refString = `${reference.book} ${reference.chapter}:${reference.startVerse}${
+    reference.endVerse && reference.endVerse > reference.startVerse
+      ? '-' + reference.endVerse
+      : ''
+  }`;
 
   const ageRules = AGE_LOGIC[ageGroup];
   const styleRules = STYLE_LOGIC[artStyle];
@@ -100,8 +107,8 @@ const generateCreativeBrief = async (
     
     CRITICAL RULES:
     1. ${CHRISTIAN_GUIDELINES}
-    2. IF the scene involves God the Father, you MUST add "human face, old man, zeus" to negative_prompt.
-    3. IF the scene is Genesis pre-fall, you MUST add "thorns, dead plants" to negative_prompt.
+    2. IF the scene is Genesis pre-fall, you MUST add "thorns, dead plants" to negative_prompt.
+    3. CHECK SCRIPTURE: If the INPUT passage does not exist in the standard protestant bible, return JSON with a single field: {"error": "INVALID_REFERENCE"}.
 
     OUTPUT JSON:
     {
@@ -122,8 +129,15 @@ const generateCreativeBrief = async (
 
     const text = response.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!text) throw new Error("Architect returned empty response");
-    return JSON.parse(text) as ArchitectBrief;
+    
+    const parsed = JSON.parse(text);
+    if (parsed.error === "INVALID_REFERENCE") {
+      throw new Error("INVALID_REFERENCE");
+    }
+    
+    return parsed as ArchitectBrief;
   } catch (e: any) {
+    if (e.message === "INVALID_REFERENCE") throw e;
     throw new Error(`Architect Failed: ${e.message}`);
   }
 };
@@ -177,7 +191,7 @@ const renderImage = async (
             // Resize image if it's too large (limit payload size)
             const img = new Image();
             img.onload = () => {
-              const MAX_DIM = 1024;
+              const MAX_DIM = 512;
               if (img.width > MAX_DIM || img.height > MAX_DIM) {
                 const canvas = document.createElement('canvas');
                 let width = img.width;
@@ -287,7 +301,7 @@ const renderImage = async (
       config: {
         responseModalities: [Modality.IMAGE],
         imageConfig: {
-          imageSize: "4K",
+          imageSize: "2K",
           aspectRatio: "3:4"
         },
         safetySettings: [{ category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE }]

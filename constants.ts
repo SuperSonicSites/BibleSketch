@@ -2,6 +2,11 @@
 import { AgeGroup, ArtStyle } from './types';
 
 // ==========================================
+// 0. APP CONFIGURATION
+// ==========================================
+export const APP_DOMAIN = 'https://BibleSketch.app';
+
+// ==========================================
 // 1. MODEL CONFIGURATION
 // ==========================================
 // "Nano Banana Pro" (gemini-3-pro-image-preview) is used for the Artist
@@ -37,11 +42,11 @@ export const REFERENCE_MAP: Record<string, string | string[]> = {
   [`${AgeGroup.YOUNG_CHILD}_${ArtStyle.ICONOGRAPHY}`]:   `${BASE_PATH}child-iconography.jpg`,
   [`${AgeGroup.YOUNG_CHILD}_${ArtStyle.COMIC}`]:         [`${BASE_PATH}child-comicbook.jpg`, `${BASE_PATH}child-comicbook-2.jpg`],
 
-  // PRE_TEEN
-  [`${AgeGroup.PRE_TEEN}_${ArtStyle.CLASSIC}`]:          [`${BASE_PATH}teen-classic.jpg`, `${BASE_PATH}teen-classic-2.jpg`],
-  [`${AgeGroup.PRE_TEEN}_${ArtStyle.STAINED_GLASS}`]:    [`${BASE_PATH}teen-stainglass.jpg`, `${BASE_PATH}teen-stainglass-2.jpg`],
-  [`${AgeGroup.PRE_TEEN}_${ArtStyle.ICONOGRAPHY}`]:      `${BASE_PATH}teen-iconography.jpg`,
-  [`${AgeGroup.PRE_TEEN}_${ArtStyle.COMIC}`]:            [`${BASE_PATH}teen-comicbook.jpg`, `${BASE_PATH}teen-comicbook-2.jpg`],
+  // TEEN
+  [`${AgeGroup.TEEN}_${ArtStyle.CLASSIC}`]:          [`${BASE_PATH}teen-classic.jpg`, `${BASE_PATH}teen-classic-2.jpg`],
+  [`${AgeGroup.TEEN}_${ArtStyle.STAINED_GLASS}`]:    [`${BASE_PATH}teen-stainglass.jpg`, `${BASE_PATH}teen-stainglass-2.jpg`],
+  [`${AgeGroup.TEEN}_${ArtStyle.ICONOGRAPHY}`]:      `${BASE_PATH}teen-iconography.jpg`,
+  [`${AgeGroup.TEEN}_${ArtStyle.COMIC}`]:            [`${BASE_PATH}teen-comicbook.jpg`, `${BASE_PATH}teen-comicbook-2.jpg`],
 
   // ADULT
   [`${AgeGroup.ADULT}_${ArtStyle.CLASSIC}`]:             `${BASE_PATH}adult-classic.jpg`,
@@ -61,7 +66,7 @@ export const AGE_LOGIC = {
     keywords: "STORYBOOK LINE ART. PURE WHITE BACKGROUND. OUTLINE ONLY. NO SOLID FILLS. Consistent, medium-thick outlines (approx 2mm). Focus on clear object separation. Detailed environments are acceptable (water, sky) but must maintain large, colorable segments.",
     subjectFocus: "Interaction between maximum two characters. Clear action. Visual storytelling that reflects specific narrative emotion."
   },
-  [AgeGroup.PRE_TEEN]: {
+  [AgeGroup.TEEN]: {
     keywords: "ENGAGING COLORING BOOK STYLE. PURE WHITE BACKGROUND. OUTLINE ONLY. NO SOLID FILLS. Variable line weight (thick outer contours, ultra-fine inner lines). Complex, full-page environment with intricate detail while leaving plenty of white space for drawing. Avoid large, solid black areas.", 
     subjectFocus: "Dramatic angles, cinematic composition. **Ensure natural human height and scale. No giant figures unless giants are explicitly mentioned.**"
   },
@@ -99,7 +104,7 @@ export const BIBLE_BOOKS = [
 // ==========================================
 
 export const CHRISTIAN_GUIDELINES = `
-1. **TRINITY VISUAL RULES (STRICT):** - **God the Father:** NEVER depict as a human/man. Use SYMBOLS only: A Hand reaching from clouds (Manus Dei), a Bright Light, or Clouds.
+1. **TRINITY VISUAL RULES (STRICT):** - **God the Father:** NEVER depict as a human/man. Focus on the *effect* of His presence (light rays, wind, reaction of nature/people). Do NOT use a physical representation (like a hand) unless specifically appropriate for Genesis Creation scenes.
    - **Jesus:** Depict as a historical human male (Middle Eastern descent).
    - **Holy Spirit:** Depict as a Dove or Tongues of Fire.
 2. **Subject Count:** Draw EXACTLY the number of characters described.
@@ -124,22 +129,11 @@ export const LITURGICAL_TAGS = [
   { id: 'easter', label: 'Easter', category: 'season' },
   { id: 'pentecost', label: 'Pentecost', category: 'season' },
 
-  // Teaching Context
-  { id: 'sunday-school', label: 'Sunday School', category: 'context' },
-  { id: 'vbs', label: 'VBS', category: 'context' },
-  { id: 'family-devotional', label: 'Family Devotional', category: 'context' },
-  { id: 'youth-group', label: 'Youth Group', category: 'context' },
-  { id: 'bible-study', label: 'Bible Study', category: 'context' },
-
   // Themes
-  { id: 'miracles', label: 'Miracles', category: 'theme' },
-  { id: 'parables', label: 'Parables', category: 'theme' },
-  { id: 'prophets', label: 'Prophets', category: 'theme' },
   { id: 'creation', label: 'Creation', category: 'theme' },
   { id: 'the-fall', label: 'The Fall', category: 'theme' },
-  { id: 'faith-heroes', label: 'Faith Heroes', category: 'theme' },
-  { id: 'prayer', label: 'Prayer', category: 'theme' },
-  { id: 'worship', label: 'Worship', category: 'theme' },
+  { id: 'exile', label: 'Exile', category: 'theme' },
+  { id: 'resurrection', label: 'Resurrection', category: 'theme' },
 ] as const;
 
 export type LiturgicalTagId = typeof LITURGICAL_TAGS[number]['id'];
