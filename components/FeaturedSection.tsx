@@ -7,7 +7,8 @@ import { Heart, Facebook, ChevronLeft, ChevronRight, AlertCircle, User } from 'l
 import { BIBLE_BOOKS, LITURGICAL_TAGS } from '../constants';
 import { FilterBar, SortOption } from './FilterBar';
 import { GalleryModal } from './GalleryModal';
-import { getSketchUrl, generateSketchSlug } from '../utils/urlHelpers';
+import { getSketchUrl } from '../utils/urlHelpers';
+import { generateShareData, openSharePopup } from '../utils/socialSharing';
 import { Button } from './ui/Button';
 import { LazyImage } from './ui/LazyImage';
 import { ArtistBadge } from './ArtistBadge';
@@ -248,43 +249,17 @@ export const FeaturedSection: React.FC<FeaturedSectionProps> = ({
   const handleFacebookShare = (e: React.MouseEvent, sketch: Sketch) => {
     e.stopPropagation();
     e.preventDefault();
-    const slug = generateSketchSlug(sketch);
-    const shareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(`${window.location.origin}/coloring-page/${slug}/${sketch.id}`)}`;
-    window.open(shareUrl, '_blank');
+    const { url } = generateShareData(sketch, 'facebook');
+    const shareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`;
+    openSharePopup(shareUrl);
   };
 
   const handlePinterestShare = (e: React.MouseEvent, sketch: Sketch) => {
     e.stopPropagation();
     e.preventDefault();
-    const slug = generateSketchSlug(sketch);
-    const url = `${window.location.origin}/coloring-page/${slug}/${sketch.id}`;
-    
-    const book = sketch.promptData?.book || "Bible";
-    const chapter = sketch.promptData?.chapter || "Sketch";
-    const startVerse = sketch.promptData?.start_verse;
-    const endVerse = sketch.promptData?.end_verse;
-    const ageGroup = sketch.promptData?.age_group || "All Ages";
-    const style = sketch.promptData?.art_style || "Coloring Page";
-
-    let verseRange = "";
-    if (startVerse) {
-        verseRange = `:${startVerse}`;
-        if (endVerse && endVerse > startVerse) {
-            verseRange += `-${endVerse}`;
-        }
-    }
-
-    const baseDesc = `${book} ${chapter}${verseRange} (${ageGroup} - ${style} Style)`;
-    const cta = "Visit BibleSketch to download the free printable version. BibleSketch.app";
-
-    // Process tags
-    const sketchTags = sketch.tags ? sketch.tags.map(t => `#${t.replace(/\s+/g, '')}`).join(' ') : '';
-    const defaultTags = "#BibleSketch #Coloring #BibleColoring #ChristianArt";
-    const allTags = `${sketchTags} ${defaultTags}`.trim();
-
-    const description = `${baseDesc}\n\n${cta}\n\n${allTags}`;
+    const { url, description } = generateShareData(sketch, 'pinterest');
     const shareUrl = `https://pinterest.com/pin/create/button/?url=${encodeURIComponent(url)}&media=${encodeURIComponent(sketch.imageUrl)}&description=${encodeURIComponent(description)}`;
-    window.open(shareUrl, '_blank');
+    openSharePopup(shareUrl);
   };
 
   const handleSketchDelete = (deletedId: string) => {
@@ -318,13 +293,13 @@ export const FeaturedSection: React.FC<FeaturedSectionProps> = ({
   };
 
   return (
-    <section className="w-full max-w-7xl mx-auto px-4 py-16 lg:py-24 border-t border-purple-50">
+    <section className="w-full max-w-7xl mx-auto px-4 py-8 md:py-16 lg:py-24 border-t border-purple-50">
       
-      <div className="text-center mb-12">
-        <h2 className="font-display text-3xl md:text-4xl font-bold text-[#1F2937] mb-4">
+      <div className="text-center mb-6 md:mb-12">
+        <h2 className="font-display text-2xl md:text-4xl font-bold text-[#1F2937] mb-2 md:mb-4">
            Community Favorites
         </h2>
-        <p className="text-gray-500 max-w-2xl mx-auto">
+        <p className="text-sm md:text-base text-gray-500 max-w-2xl mx-auto">
            Explore the most loved coloring pages created by the Bible Sketch community. 
            Bless your favorites or save them to your personal collection.
         </p>
@@ -370,70 +345,70 @@ export const FeaturedSection: React.FC<FeaturedSectionProps> = ({
          </div>
       ) : (
          <>
-           <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
               {displayedSketches.map((sketch) => (
                  <Link 
                     key={sketch.id}
                     to={getSketchUrl(sketch)}
-                    className="group bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-100 overflow-hidden cursor-pointer flex flex-col"
+                    className="group bg-white rounded-xl md:rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-100 overflow-hidden cursor-pointer flex flex-col"
                  >
                     {/* Image Container Replacement */}
                     <LazyImage 
                        src={sketch.imageUrl}
                        alt="Bible Sketch"
                        aspectRatio="aspect-[3/4]"
-                       className="p-4 bg-[#F9FAFB] group-hover:scale-105 transition-transform duration-500"
+                       className="p-2 md:p-4 bg-[#F9FAFB] group-hover:scale-105 transition-transform duration-500"
                        thumbnailPath={sketch.thumbnailPath}
                        storagePath={sketch.storagePath}
                     />
 
                     {/* Info Bar */}
-                    <div className="p-3 flex-1 flex flex-col">
+                    <div className="p-2 md:p-3 flex-1 flex flex-col">
                       {/* Title: Bible Reference */}
-                      <p className="font-bold text-sm text-gray-800 truncate">
+                      <p className="font-bold text-xs md:text-sm text-gray-800 truncate">
                         {sketch.promptData 
                           ? `${sketch.promptData.book} ${sketch.promptData.chapter}:${sketch.promptData.start_verse}${sketch.promptData.end_verse && sketch.promptData.end_verse > sketch.promptData.start_verse ? '-' + sketch.promptData.end_verse : ''}` 
                           : "Bible Scene"}
                       </p>
 
                       {/* Subtitle: Style Reference (was Date) */}
-                      <p className="text-xs text-gray-500 truncate mt-1 mb-auto">
+                      <p className="text-[10px] md:text-xs text-gray-500 truncate mt-0.5 md:mt-1 mb-auto">
                          {sketch.promptData 
                             ? `${sketch.promptData.art_style} • ${normalizeAge(sketch.promptData.age_group)}` 
                             : new Date(sketch.timestamp || Date.now()).toLocaleDateString()}
                       </p>
                       
-                      <div className="flex items-center justify-between mt-3 pt-2 border-t border-gray-50">
+                      <div className="flex items-center justify-between mt-2 md:mt-3 pt-1.5 md:pt-2 border-t border-gray-50">
                         {/* Link to User Library */}
                         <ArtistBadge userId={sketch.userId} onAuthorClick={onAuthorClick} />
 
                         <button 
                             onClick={(e) => handleBless(sketch.id, e)}
                             disabled={blessedIds.has(sketch.id)}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold transition-all border ${
+                            className={`flex items-center gap-1 md:gap-1.5 px-2 md:px-3 py-1 md:py-1.5 rounded-md md:rounded-lg text-xs md:text-sm font-bold transition-all border ${
                               blessedIds.has(sketch.id) 
                                 ? "bg-red-50 border-red-300 text-red-500 cursor-default" 
                                 : "bg-white border-gray-200 text-gray-400 hover:text-red-500 hover:border-red-300"
                             }`}
                           >
-                            <Heart className={`w-4 h-4 ${blessedIds.has(sketch.id) ? "fill-current" : ""}`} />
+                            <Heart className={`w-3 h-3 md:w-4 md:h-4 ${blessedIds.has(sketch.id) ? "fill-current" : ""}`} />
                             <span>{sketch.blessCount || 0}</span>
                           </button>
                       </div>
 
                       {/* Share Buttons */}
-                      <div className="flex gap-2 mt-3 pt-3 border-t border-gray-50">
+                      <div className="flex gap-1.5 md:gap-2 mt-2 md:mt-3 pt-2 md:pt-3 border-t border-gray-50">
                           <button 
                               onClick={(e) => handleFacebookShare(e, sketch)}
-                              className="flex-1 py-2 rounded-lg bg-blue-50 text-blue-500 hover:bg-blue-100 flex items-center justify-center transition-colors border border-blue-100"
+                              className="flex-1 py-1.5 md:py-2 rounded-md md:rounded-lg bg-blue-50 text-blue-500 hover:bg-blue-100 flex items-center justify-center transition-colors border border-blue-100"
                           >
-                              <Facebook className="w-4 h-4" />
+                              <Facebook className="w-3 h-3 md:w-4 md:h-4" />
                           </button>
                           <button 
                               onClick={(e) => handlePinterestShare(e, sketch)}
-                              className="flex-1 py-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 flex items-center justify-center transition-colors border border-red-100"
+                              className="flex-1 py-1.5 md:py-2 rounded-md md:rounded-lg bg-red-50 text-red-600 hover:bg-red-100 flex items-center justify-center transition-colors border border-red-100"
                           >
-                              <PinterestIcon className="w-4 h-4" />
+                              <PinterestIcon className="w-3 h-3 md:w-4 md:h-4" />
                           </button>
                       </div>
                     </div>

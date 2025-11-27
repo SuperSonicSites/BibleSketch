@@ -5,9 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node -e \"require('fs').copyFileSync('dist/index.html', 'functions/index.html')\"",
     "deploy": "npm run build && firebase deploy",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "emulators": "firebase emulators:start",
+    "emulators:import": "firebase emulators:start --import=./emulator-data --export-on-exit",
+    "dev:local": "concurrently \"npm run emulators\" \"npm run dev\""
   },
   "dependencies": {
     "react": "^19.2.0",

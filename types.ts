@@ -12,7 +12,8 @@ export enum ArtStyle {
   STAINED_GLASS = "Stained Glass",
   ICONOGRAPHY = "Iconography",
   COMIC = "Comic Book",
-  CLASSIC = "Classic"
+  CLASSIC = "Classic",
+  DOODLE = "Doodles"
 }
 
 export interface BibleReference {

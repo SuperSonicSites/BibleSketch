@@ -2,10 +2,11 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
-import { Printer, Download, Heart, Facebook, AlertTriangle, ArrowRight, Lock, Bookmark, Check, Loader2, Trash2, Globe, Tag } from 'lucide-react';
+import { Printer, Download, Heart, Facebook, AlertTriangle, ArrowRight, Lock, Bookmark, Check, Loader2, Trash2, Globe, Tag, Twitter, Link as LinkIcon, CheckCircle2 } from 'lucide-react';
 import { getSketchById, blessSketch, getUserBlessedSketchIds, getUserDocument, toggleBookmark, checkIsBookmarked, auth, deleteSketch, updateSketchVisibility, canDownload, deductDownload, updateSketchTags } from '../services/firebase';
 import { Sketch } from '../types';
 import { generateSketchSlug } from '../utils/urlHelpers';
+import { generateShareData, openSharePopup } from '../utils/socialSharing';
 import { Button } from './ui/Button';
 import { WatermarkOverlay } from './WatermarkOverlay';
 import { PremiumModal } from './PremiumModal';
@@ -55,6 +56,7 @@ export const SketchPage: React.FC<SketchPageProps> = ({ user, onRequireAuth }) =
   const [isEditingTags, setIsEditingTags] = useState(false);
   const [localTags, setLocalTags] = useState<string[]>([]);
   const [isSavingTags, setIsSavingTags] = useState(false);
+  const [showCopySuccess, setShowCopySuccess] = useState(false);
 
   // Fetch download quota on mount
   useEffect(() => {
@@ -263,45 +265,34 @@ export const SketchPage: React.FC<SketchPageProps> = ({ user, onRequireAuth }) =
     }
   };
 
-  const handleShare = (platform: 'facebook' | 'pinterest') => {
+  const handleShare = (platform: 'facebook' | 'pinterest' | 'twitter') => {
     if (!sketch) return;
     
-    // Construct SEO-friendly URL
-    const slug = generateSketchSlug(sketch);
-    const url = `${APP_DOMAIN}/coloring-page/${slug}/${sketch.id}`;
-    
+    const { url, description, title } = generateShareData(sketch, platform);
     const img = sketch.imageUrl;
-    const book = sketch.promptData?.book || "Bible";
-    const chapter = sketch.promptData?.chapter || "Sketch";
-    const startVerse = sketch.promptData?.start_verse;
-    const endVerse = sketch.promptData?.end_verse;
-    const ageGroupRaw = sketch.promptData?.age_group;
-    const ageGroup = ageGroupRaw === "Pre-Teen" ? "Teen" : (ageGroupRaw || "All Ages");
-    const style = sketch.promptData?.art_style || "Coloring Page";
-
-    let verseRange = "";
-    if (startVerse) {
-        verseRange = `:${startVerse}`;
-        if (endVerse && endVerse > startVerse) {
-            verseRange += `-${endVerse}`;
-        }
-    }
-
-    const baseDesc = `${book} ${chapter}${verseRange} (${ageGroup} - ${style} Style)`;
-    const cta = "Visit BibleSketch to download the free printable version. BibleSketch.app";
-
-    // Process tags
-    const sketchTags = sketch.tags ? sketch.tags.map(t => `#${t.replace(/\s+/g, '')}`).join(' ') : '';
-    const defaultTags = "#BibleSketch #Coloring #BibleColoring #ChristianArt";
-    const allTags = `${sketchTags} ${defaultTags}`.trim();
-
-    const desc = `${baseDesc}\n\n${cta}\n\n${allTags}`;
 
     if (platform === 'facebook') {
-      window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`, '_blank');
+      openSharePopup(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`);
+    } else if (platform === 'twitter') {
+      const text = `Check out this free ${title} coloring page! Created with Bible Sketch.`;
+      openSharePopup(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}&hashtags=BibleSketch,ChristianArt,ColoringPage`);
     } else {
-      window.open(`https://pinterest.com/pin/create/button/?url=${encodeURIComponent(url)}&media=${encodeURIComponent(img)}&description=${encodeURIComponent(desc)}`, '_blank');
+      openSharePopup(`https://pinterest.com/pin/create/button/?url=${encodeURIComponent(url)}&media=${encodeURIComponent(img)}&description=${encodeURIComponent(description)}`);
     }
+  };
+
+  const handleCopyLink = async () => {
+     if (!sketch) return;
+     const slug = generateSketchSlug(sketch);
+     const url = `${APP_DOMAIN}/coloring-page/${slug}/${sketch.id}`;
+     
+     try {
+        await navigator.clipboard.writeText(url);
+        setShowCopySuccess(true);
+        setTimeout(() => setShowCopySuccess(false), 2000);
+     } catch (err) {
+        console.error("Failed to copy", err);
+     }
   };
 
   const handleToggleVisibility = async () => {
@@ -390,17 +381,20 @@ export const SketchPage: React.FC<SketchPageProps> = ({ user, onRequireAuth }) =
     return age;
   };
 
+  // Use the shared utility to generate SEO content
+  let pinterestDescription = '';
   if (sketch?.promptData) {
-    const { book, chapter, start_verse, end_verse, age_group, art_style } = sketch.promptData;
-    const verseRange = end_verse && end_verse > start_verse
-      ? `${start_verse}-${end_verse}`
-      : `${start_verse}`;
-
-    const visibleAge = displayAgeGroup(age_group);
-
-    title = `${book} ${chapter}:${verseRange} Coloring Page - ${art_style} Style | Bible Sketch`;
-    description = `Free printable ${book} ${chapter}:${verseRange} coloring page in ${art_style} style. Perfect for ${visibleAge} in Sunday School, VBS, or family devotionals. High-quality Bible coloring sheet created with Bible Sketch.`;
+    const shareData = generateShareData(sketch, 'default');
+    title = shareData.title;
+    description = shareData.description;
+    
+    // Get Pinterest-specific description (includes title prepended)
+    const pinterestData = generateShareData(sketch, 'pinterest');
+    pinterestDescription = pinterestData.description;
   }
+
+  const keywords = sketch?.tags ? sketch.tags.join(', ') : "Bible, Coloring Page, Christian Art";
+  const genre = sketch?.promptData?.art_style || "Religious Art";
 
   return (
     <>
@@ -412,6 +406,9 @@ export const SketchPage: React.FC<SketchPageProps> = ({ user, onRequireAuth }) =
         authorName={authorName}
         authorProfileUrl={`${APP_DOMAIN}/profile/${sketch.userId}`}
         datePublished={new Date(sketch.timestamp).toISOString()}
+        blessCount={blessCount}
+        keywords={keywords}
+        genre={genre}
       />
 
       <div className="max-w-7xl mx-auto px-4 py-12 animate-in fade-in duration-500">
@@ -443,6 +440,7 @@ export const SketchPage: React.FC<SketchPageProps> = ({ user, onRequireAuth }) =
                   storagePath={sketch.storagePath}
                   className="w-full h-full relative z-0 bg-white"
                   aspectRatio="" // Parent handles aspect ratio
+                  data-pin-description={pinterestDescription}
                 />
 
                 {/* Watermark Overlay Layer */}
@@ -464,8 +462,14 @@ export const SketchPage: React.FC<SketchPageProps> = ({ user, onRequireAuth }) =
                 <span className="bg-purple-50 text-[#7C3AED] px-3 py-1 rounded-full font-bold text-xs uppercase tracking-wide">
                   {displayAgeGroup(sketch.promptData?.age_group)}
                 </span>
-                <span className="flex items-center">
-                  Created by {authorName}
+                <span className="flex items-center gap-1">
+                  Created by 
+                  <Link 
+                    to={`/profile/${sketch.userId}`}
+                    className="font-bold hover:text-[#7C3AED] hover:underline transition-colors"
+                  >
+                    {authorName}
+                  </Link>
                 </span>
                 <span className="text-gray-300">•</span>
                 <span>{new Date(sketch.timestamp).toLocaleDateString()}</span>
@@ -543,14 +547,21 @@ export const SketchPage: React.FC<SketchPageProps> = ({ user, onRequireAuth }) =
                     className="flex-1 py-3 rounded-xl border border-blue-100 bg-blue-50 text-blue-600 hover:bg-blue-100 hover:border-blue-200 flex items-center justify-center transition-colors gap-2 font-bold text-sm"
                   >
                     <Facebook className="w-5 h-5" />
-                    Facebook
+                    <span className="hidden sm:inline">Facebook</span>
                   </button>
                   <button
                     onClick={() => handleShare('pinterest')}
                     className="flex-1 py-3 rounded-xl border border-red-100 bg-red-50 text-red-600 hover:bg-red-100 hover:border-red-200 flex items-center justify-center transition-colors gap-2 font-bold text-sm"
                   >
                     <PinterestIcon className="w-5 h-5" />
-                    Pinterest
+                    <span className="hidden sm:inline">Pinterest</span>
+                  </button>
+                  <button
+                    onClick={handleCopyLink}
+                    className="flex-1 py-3 rounded-xl border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 flex items-center justify-center transition-colors gap-2 font-bold text-sm"
+                  >
+                    {showCopySuccess ? <CheckCircle2 className="w-5 h-5 text-green-500" /> : <LinkIcon className="w-5 h-5" />}
+                    <span className="hidden sm:inline">{showCopySuccess ? "Copied!" : "Copy Link"}</span>
                   </button>
                 </div>
               </div>
@@ -683,3 +694,4 @@ export const SketchPage: React.FC<SketchPageProps> = ({ user, onRequireAuth }) =
     </>
   );
 };
+

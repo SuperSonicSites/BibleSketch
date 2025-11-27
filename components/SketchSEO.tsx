@@ -10,6 +10,9 @@ interface SketchSEOProps {
   authorName?: string;
   authorProfileUrl?: string;
   datePublished?: string;
+  blessCount?: number;
+  keywords?: string;
+  genre?: string;
 }
 
 export const SketchSEO = memo(({ 
@@ -19,7 +22,10 @@ export const SketchSEO = memo(({
   url,
   authorName,
   authorProfileUrl,
-  datePublished 
+  datePublished,
+  blessCount,
+  keywords,
+  genre
 }: SketchSEOProps) => {
 
   // Construct Schema.org JSON-LD
@@ -32,6 +38,15 @@ export const SketchSEO = memo(({
     "image": imageUrl,
     "url": url,
     "datePublished": datePublished,
+    "keywords": keywords,
+    "genre": genre,
+    "aggregateRating": blessCount && blessCount > 0 ? {
+      "@type": "AggregateRating",
+      "ratingValue": "5",
+      "ratingCount": blessCount,
+      "bestRating": "5",
+      "worstRating": "1"
+    } : undefined,
     "author": {
       "@type": "Person",
       "name": authorName || "Bible Sketch User",
@@ -61,6 +76,7 @@ export const SketchSEO = memo(({
       <meta property="og:site_name" content="Bible Sketch" />
       <meta property="og:url" content={url} />
       {imageUrl && <meta property="og:image" content={imageUrl} />}
+      {imageUrl && <meta property="og:image:alt" content={description} />}
       
       {/* Twitter */}
       <meta name="twitter:card" content="summary_large_image" />
@@ -84,6 +100,9 @@ export const SketchSEO = memo(({
     prevProps.url === nextProps.url &&
     // Add new props to comparison
     prevProps.authorName === nextProps.authorName &&
-    prevProps.authorProfileUrl === nextProps.authorProfileUrl
+    prevProps.authorProfileUrl === nextProps.authorProfileUrl &&
+    prevProps.blessCount === nextProps.blessCount &&
+    prevProps.keywords === nextProps.keywords &&
+    prevProps.genre === nextProps.genre
   );
 });

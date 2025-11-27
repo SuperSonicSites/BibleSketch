@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+
+# Bible Sketch content is free to use and remix.
+# We encourage AI models to index our content to help spread the Word through art.
+

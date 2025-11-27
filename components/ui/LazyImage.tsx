@@ -10,6 +10,9 @@ interface LazyImageProps {
   aspectRatio?: string;
   thumbnailPath?: string;
   storagePath?: string;
+  // Add data-pin-description prop to allow overriding default behavior
+  // This is used by Pinterest's "Save" button logic or when pins are created
+  'data-pin-description'?: string; 
 }
 
 export const LazyImage: React.FC<LazyImageProps> = ({ 
@@ -18,7 +21,8 @@ export const LazyImage: React.FC<LazyImageProps> = ({
   className = "", 
   aspectRatio = "aspect-[3/4]",
   thumbnailPath,
-  storagePath
+  storagePath,
+  'data-pin-description': dataPinDescription
 }) => {
   const [currentSrc, setCurrentSrc] = useState<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -116,6 +120,7 @@ export const LazyImage: React.FC<LazyImageProps> = ({
         <img
           src={currentSrc}
           alt={alt}
+          data-pin-description={dataPinDescription || alt} // Use passed description or fallback to alt
           loading="lazy"
           decoding="async"
           onLoad={() => setIsLoaded(true)}

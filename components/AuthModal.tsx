@@ -245,9 +245,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialVi
               <h2 className="font-display text-3xl font-bold text-[#1F2937] text-center mb-2">
                 {view === 'login' ? 'Welcome Back' : 'Join Bible Sketch'}
               </h2>
-              <p className="text-center text-gray-500 mb-8">
+              <p className="text-center text-gray-500 mb-4">
                 {view === 'login' ? 'Log in to access your gallery.' : 'Create an account to save your artwork.'}
               </p>
+              
+              {/* Free Credits Banner - Only on Signup */}
+              {view === 'signup' && (
+                <div className="bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-xl p-3 mb-6 text-center">
+                  <p className="text-amber-800 font-bold flex items-center justify-center gap-2">
+                    <span className="text-xl">🎁</span> Start with 5 free credits
+                  </p>
+                  <p className="text-xs text-amber-600 mt-1">No credit card required</p>
+                </div>
+              )}
 
               {error && (
                 <div className="mb-6 p-3 bg-red-50 border border-red-100 rounded-xl flex items-start gap-2 text-red-600 text-sm">

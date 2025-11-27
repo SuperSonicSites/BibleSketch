@@ -21,6 +21,20 @@
       }
     }
   </script>
+
+  <!-- Pinterest Tag -->
+  <script>
+    !function(e){if(!window.pintrk){window.pintrk = function () {
+    window.pintrk.queue.push(Array.prototype.slice.call(arguments))};var
+      n=window.pintrk;n.queue=[],n.version="3.0";var
+      t=document.createElement("script");t.async=!0,t.src=e;var
+      r=document.getElementsByTagName("script")[0];
+      r.parentNode.insertBefore(t,r)}}("https://s.pinimg.com/ct/core.js");
+    pintrk('load', '2614149303230', {em: undefined});
+    pintrk('page');
+  </script>
+  <!-- end Pinterest Tag -->
+
   <link
     href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Nunito:wght@600;700;800&family=Quicksand:wght@500;600;700&display=swap"
     rel="stylesheet">
@@ -64,37 +78,129 @@
       background: #D1D5DB;
     }
 
-    /* Global Font Size Overrides - Increased readability as requested */
-    .text-xs {
-      font-size: 0.875rem !important;
-      line-height: 1.25rem !important;
+    /* Gift icon wiggle animation */
+    @keyframes wiggle {
+      0%, 100% { transform: rotate(0deg); }
+      25% { transform: rotate(-12deg); }
+      75% { transform: rotate(12deg); }
+    }
+    
+    .animate-wiggle {
+      animation: wiggle 1s ease-in-out infinite;
     }
 
-    /* 14px (was 12px) */
-    .text-sm {
-      font-size: 1rem !important;
-      line-height: 1.5rem !important;
+    /* Celebration animations */
+    @keyframes celebration-sparkle {
+      0% { transform: scale(0) rotate(0deg); opacity: 1; }
+      50% { transform: scale(1.2) rotate(180deg); opacity: 1; }
+      100% { transform: scale(0) rotate(360deg); opacity: 0; }
     }
 
-    /* 16px (was 14px) */
-    .text-base {
-      font-size: 1.125rem !important;
-      line-height: 1.75rem !important;
+    @keyframes celebration-fall {
+      0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+      100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
     }
 
-    /* 18px (was 16px) */
-    .text-lg {
-      font-size: 1.25rem !important;
-      line-height: 1.75rem !important;
+    @keyframes celebration-star {
+      0% { transform: scale(0) rotate(0deg); opacity: 0; }
+      20% { transform: scale(1.3) rotate(20deg); opacity: 1; }
+      40% { transform: scale(0.9) rotate(-10deg); opacity: 1; }
+      60% { transform: scale(1.1) rotate(10deg); opacity: 1; }
+      100% { transform: scale(0) rotate(0deg); opacity: 0; }
     }
 
-    /* 20px (was 18px) */
-    .text-xl {
-      font-size: 1.5rem !important;
-      line-height: 2rem !important;
+    @keyframes celebration-glow {
+      0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
+      30% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+      100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; }
     }
 
-    /* 24px (was 20px) */
+    @keyframes celebration-message {
+      0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+      20% { transform: translate(-50%, -50%) scale(1.05); opacity: 1; }
+      30% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+      80% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+      100% { transform: translate(-50%, -50%) scale(0.9); opacity: 0; }
+    }
+
+    @keyframes celebration-ring {
+      0% { transform: scale(0); opacity: 0.8; }
+      100% { transform: scale(3); opacity: 0; }
+    }
+
+    .animate-celebration-sparkle { animation: celebration-sparkle ease-out forwards; }
+    .animate-celebration-fall { animation: celebration-fall linear forwards; }
+    .animate-celebration-star { animation: celebration-star ease-out forwards; }
+    .animate-celebration-ring { animation: celebration-ring ease-out forwards; }
+    .animate-celebration-glow { animation: celebration-glow 2s ease-out forwards; }
+    .animate-celebration-message { animation: celebration-message 3.5s ease-out forwards; }
+
+    /* CTA Button shimmer effect */
+    @keyframes shimmer {
+      0% { background-position: -200% center; }
+      100% { background-position: 200% center; }
+    }
+    
+    .animate-shimmer {
+      background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(255,255,255,0.4) 50%,
+        transparent 100%
+      );
+      background-size: 200% 100%;
+      animation: shimmer 2.5s ease-in-out infinite;
+    }
+
+    /* Global Font Size Overrides - Mobile (slightly larger than Tailwind defaults) */
+    @media (max-width: 767px) {
+      .text-xs {
+        font-size: 0.8rem !important;
+        line-height: 1.1rem !important;
+      }
+      .text-sm {
+        font-size: 0.9rem !important;
+        line-height: 1.35rem !important;
+      }
+      .text-base {
+        font-size: 1rem !important;
+        line-height: 1.5rem !important;
+      }
+    }
+
+    /* Global Font Size Overrides - Increased readability (tablet+ only) */
+    @media (min-width: 768px) {
+      .text-xs {
+        font-size: 0.875rem !important;
+        line-height: 1.25rem !important;
+      }
+
+      /* 14px (was 12px) */
+      .text-sm {
+        font-size: 1rem !important;
+        line-height: 1.5rem !important;
+      }
+
+      /* 16px (was 14px) */
+      .text-base {
+        font-size: 1.125rem !important;
+        line-height: 1.75rem !important;
+      }
+
+      /* 18px (was 16px) */
+      .text-lg {
+        font-size: 1.25rem !important;
+        line-height: 1.75rem !important;
+      }
+
+      /* 20px (was 18px) */
+      .text-xl {
+        font-size: 1.5rem !important;
+        line-height: 2rem !important;
+      }
+
+      /* 24px (was 20px) */
+    }
 
     /* Security Gate: Watermark Pattern */
     /* Updated to match screenshot: Larger text, larger repeat interval, slightly more visible */
@@ -109,6 +215,11 @@
 </head>
 
 <body>
+  <!-- Pinterest noscript fallback (must be in body, not head) -->
+  <noscript>
+    <img height="1" width="1" style="display:none;" alt=""
+      src="https://ct.pinterest.com/v3/?event=init&tid=2614149303230&noscript=1" />
+  </noscript>
   <div id="root"></div>
 </body>
 

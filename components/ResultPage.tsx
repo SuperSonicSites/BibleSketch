@@ -5,6 +5,7 @@ import { Button } from './ui/Button';
 import { AgeGroup, ArtStyle, BibleReference } from '../types';
 import { SaveModal } from './SaveModal';
 import { PremiumModal } from './PremiumModal';
+import { CelebrationEffect } from './CelebrationEffect';
 import { editColoringPage } from '../services/gemini';
 import { deductCredits, auth, canDownload, deductDownload } from '../services/firebase';
 import { embedLogoOnImage } from '../utils/imageProcessing';
@@ -79,6 +80,7 @@ export const ResultPage: React.FC<ResultPageProps> = ({
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isProcessingAction, setIsProcessingAction] = useState(false);
+  const [showCelebration, setShowCelebration] = useState(true);
 
   // Edit State
   const [isEditing, setIsEditing] = useState(false);
@@ -281,6 +283,11 @@ export const ResultPage: React.FC<ResultPageProps> = ({
   };
 
   return (
+    <>
+      {showCelebration && (
+        <CelebrationEffect onComplete={() => setShowCelebration(false)} />
+      )}
+      
     <div className="max-w-7xl mx-auto px-4 py-8 animate-in fade-in duration-500">
       <button
         onClick={onBack}
@@ -474,5 +481,6 @@ export const ResultPage: React.FC<ResultPageProps> = ({
         remainingDownloads={downloadsRemaining}
       />
     </div>
+    </>
   );
 };

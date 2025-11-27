@@ -76,9 +76,9 @@ export const FilterBar: React.FC<FilterBarProps> = ({
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-8">
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-col md:flex-row gap-3">
         {/* Book Filter */}
-        <div className="flex-1 min-w-[140px]">
+        <div className="w-full md:flex-1">
           <SearchableSelect
             value={activeBook}
             onChange={onBookChange}
@@ -90,7 +90,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
         </div>
 
         {/* Age Filter */}
-        <div className="flex-1 min-w-[140px]">
+        <div className="w-full md:flex-1">
           <SearchableSelect
             value={activeAge}
             onChange={onAgeChange}
@@ -102,7 +102,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
         </div>
 
         {/* Style Filter */}
-        <div className="flex-1 min-w-[140px]">
+        <div className="w-full md:flex-1">
           <SearchableSelect
             value={activeStyle}
             onChange={onStyleChange}
@@ -115,7 +115,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
 
         {/* Tag Filter */}
         {!hideTagFilter && onTagChange && (
-          <div className="flex-1 min-w-[140px]">
+          <div className="w-full md:flex-1">
             <SearchableSelect
               value={activeTag}
               onChange={onTagChange}
@@ -132,7 +132,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
 
         {/* Sort Option */}
         {!hideSortFilter && onSortChange && (
-          <div className="relative flex-1 min-w-[140px]">
+          <div className="relative w-full md:flex-1">
             <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
               <ArrowUpDown className="w-4 h-4" />
             </div>
@@ -156,7 +156,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
         {hasActiveFilters && (
           <button
             onClick={clearAllFilters}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-red-500 hover:bg-red-50 border border-red-200 transition-colors"
+            className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-red-500 hover:bg-red-50 border border-red-200 transition-colors md:w-auto"
           >
             <X className="w-4 h-4" />
             Clear

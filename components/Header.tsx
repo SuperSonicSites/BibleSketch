@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Menu, User as UserIcon, LogOut, Settings, X, Coins } from 'lucide-react';
+import { Menu, User as UserIcon, LogOut, Settings, X, Coins, Gift } from 'lucide-react';
 import { Button } from './ui/Button';
 import { User } from '../services/firebase';
 
@@ -151,8 +151,9 @@ export const Header: React.FC<HeaderProps> = ({
               >
                 Log In
               </button>
-              <Button variant="primary" size="md" onClick={onSignupClick} className="font-bold shadow-md hover:shadow-lg">
-                Sign Up
+              <Button variant="primary" size="md" onClick={onSignupClick} className="font-bold shadow-md hover:shadow-lg group overflow-visible">
+                <Gift className="w-4 h-4 text-yellow-300 animate-wiggle" />
+                Claim Free Credits
               </Button>
             </>
           )}
@@ -260,7 +261,8 @@ export const Header: React.FC<HeaderProps> = ({
             {!user && (
               <div className="pt-3 mt-1 border-t border-gray-100 flex flex-col gap-3">
                   <Button onClick={() => { onSignupClick(); setIsMobileMenuOpen(false); }} className="w-full justify-center h-12 text-lg">
-                      Sign Up Free
+                      <Gift className="w-5 h-5 text-yellow-300 animate-wiggle" />
+                      Claim Free Credits
                   </Button>
               </div>
             )}

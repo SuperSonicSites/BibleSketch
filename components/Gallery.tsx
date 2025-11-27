@@ -7,10 +7,12 @@ import { Heart, AlertTriangle, Globe, User, ExternalLink, Bookmark, ArrowLeft, F
 import { GalleryModal } from './GalleryModal';
 import { BIBLE_BOOKS, LITURGICAL_TAGS } from '../constants';
 import { FilterBar, SortOption } from './FilterBar';
-import { getSketchUrl, generateSketchSlug } from '../utils/urlHelpers';
+import { getSketchUrl } from '../utils/urlHelpers';
+import { generateShareData, openSharePopup } from '../utils/socialSharing';
 import { LazyImage } from './ui/LazyImage';
 import { ArtistBadge } from './ArtistBadge';
 import { APP_DOMAIN } from '../constants';
+import { ProfileSEO } from './ProfileSEO';
 
 interface GalleryProps {
   userId?: string;
@@ -347,43 +349,17 @@ export const Gallery: React.FC<GalleryProps> = ({ userId, publicProfileId, onBac
   const handleFacebookShare = (e: React.MouseEvent, sketch: Sketch) => {
     e.stopPropagation();
     e.preventDefault();
-    const slug = generateSketchSlug(sketch);
-    const shareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(`${APP_DOMAIN}/coloring-page/${slug}/${sketch.id}`)}`;
-    window.open(shareUrl, '_blank');
+    const { url } = generateShareData(sketch, 'facebook');
+    const shareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`;
+    openSharePopup(shareUrl);
   };
 
   const handlePinterestShare = (e: React.MouseEvent, sketch: Sketch) => {
     e.stopPropagation();
     e.preventDefault();
-    const slug = generateSketchSlug(sketch);
-    const url = `${APP_DOMAIN}/coloring-page/${slug}/${sketch.id}`;
-    
-    const book = sketch.promptData?.book || "Bible";
-    const chapter = sketch.promptData?.chapter || "Sketch";
-    const startVerse = sketch.promptData?.start_verse;
-    const endVerse = sketch.promptData?.end_verse;
-    const ageGroup = sketch.promptData?.age_group || "All Ages";
-    const style = sketch.promptData?.art_style || "Coloring Page";
-
-    let verseRange = "";
-    if (startVerse) {
-        verseRange = `:${startVerse}`;
-        if (endVerse && endVerse > startVerse) {
-            verseRange += `-${endVerse}`;
-        }
-    }
-
-    const baseDesc = `${book} ${chapter}${verseRange} (${ageGroup} - ${style} Style)`;
-    const cta = "Visit BibleSketch to download the free printable version. BibleSketch.app";
-
-    // Process tags
-    const sketchTags = sketch.tags ? sketch.tags.map(t => `#${t.replace(/\s+/g, '')}`).join(' ') : '';
-    const defaultTags = "#BibleSketch #Coloring #BibleColoring #ChristianArt";
-    const allTags = `${sketchTags} ${defaultTags}`.trim();
-
-    const description = `${baseDesc}\n\n${cta}\n\n${allTags}`;
+    const { url, description } = generateShareData(sketch, 'pinterest');
     const shareUrl = `https://pinterest.com/pin/create/button/?url=${encodeURIComponent(url)}&media=${encodeURIComponent(sketch.imageUrl)}&description=${encodeURIComponent(description)}`;
-    window.open(shareUrl, '_blank');
+    openSharePopup(shareUrl);
   };
 
   const handleSketchDelete = (deletedId: string) => {
@@ -445,16 +421,27 @@ export const Gallery: React.FC<GalleryProps> = ({ userId, publicProfileId, onBac
 
   return (
     <>
-      <Helmet>
-        <title>{seoContent.title}</title>
-        <meta name="description" content={seoContent.description} />
-        <meta property="og:title" content={seoContent.title} />
-        <meta property="og:description" content={seoContent.description} />
-        <meta property="og:type" content="website" />
-        <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content={seoContent.title} />
-        <meta name="twitter:description" content={seoContent.description} />
-      </Helmet>
+      {publicProfileId ? (
+        <ProfileSEO 
+          profileId={publicProfileId}
+          name={profileData?.name || "Bible Sketch User"}
+          photo={profileData?.photo}
+          sketchCount={images.length}
+          sketches={images}
+          dataReady={!!profileData && !loading}
+        />
+      ) : (
+        <Helmet>
+          <title>{seoContent.title}</title>
+          <meta name="description" content={seoContent.description} />
+          <meta property="og:title" content={seoContent.title} />
+          <meta property="og:description" content={seoContent.description} />
+          <meta property="og:type" content="website" />
+          <meta name="twitter:card" content="summary_large_image" />
+          <meta name="twitter:title" content={seoContent.title} />
+          <meta name="twitter:description" content={seoContent.description} />
+        </Helmet>
+      )}
 
       <div className="max-w-7xl mx-auto px-4 py-8">
 
@@ -575,11 +562,11 @@ export const Gallery: React.FC<GalleryProps> = ({ userId, publicProfileId, onBac
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-4">
             {displayedImages.map((img, idx) => {
               const cardContent = (
                   <div 
-                    className="rounded-xl overflow-hidden bg-white shadow-sm hover:shadow-md transition-shadow group relative cursor-pointer border border-gray-100 flex flex-col h-full"
+                    className="rounded-lg md:rounded-xl overflow-hidden bg-white shadow-sm hover:shadow-md transition-shadow group relative cursor-pointer border border-gray-100 flex flex-col h-full"
                     onContextMenu={(e) => e.preventDefault()}
                   >
                     {/* Lazy Image Replacement with Thumbnail Support */}
@@ -591,52 +578,52 @@ export const Gallery: React.FC<GalleryProps> = ({ userId, publicProfileId, onBac
                       storagePath={img.storagePath}
                     />
 
-                    <div className="p-3 flex-1 flex flex-col">
+                    <div className="p-2 md:p-3 flex-1 flex flex-col">
                       {/* Title: Bible Reference */}
-                      <p className="font-bold text-sm text-gray-800 truncate">
+                      <p className="font-bold text-xs md:text-sm text-gray-800 truncate">
                         {img.promptData 
                           ? `${img.promptData.book} ${img.promptData.chapter}:${img.promptData.start_verse}${img.promptData.end_verse && img.promptData.end_verse > img.promptData.start_verse ? '-' + img.promptData.end_verse : ''}` 
                           : "Bible Scene"}
                       </p>
 
                       {/* Subtitle: Style Reference (was Date) */}
-                      <p className="text-xs text-gray-500 truncate mt-1 mb-auto">
+                      <p className="text-[10px] md:text-xs text-gray-500 truncate mt-0.5 md:mt-1 mb-auto">
                          {img.promptData 
                             ? `${img.promptData.art_style} • ${normalizeAge(img.promptData.age_group)}` 
                             : new Date(img.timestamp || Date.now()).toLocaleDateString()}
                       </p>
                       
-                      <div className="flex items-center justify-between mt-3 pt-2 border-t border-gray-50">
+                      <div className="flex items-center justify-between mt-2 md:mt-3 pt-1.5 md:pt-2 border-t border-gray-50">
                         {/* Link to User Library */}
                         <ArtistBadge userId={img.userId} onAuthorClick={onAuthorClick} />
 
                         <button 
                             onClick={(e) => handleBless(img.id, e)}
                             disabled={blessedIds.has(img.id)}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold transition-all border ${
+                            className={`flex items-center gap-1 md:gap-1.5 px-2 md:px-3 py-1 md:py-1.5 rounded-md md:rounded-lg text-xs md:text-sm font-bold transition-all border ${
                               blessedIds.has(img.id) 
                                 ? "bg-red-50 border-red-300 text-red-500 cursor-default" 
                                 : "bg-white border-gray-200 text-gray-400 hover:text-red-500 hover:border-red-300"
                             }`}
                           >
-                            <Heart className={`w-4 h-4 ${blessedIds.has(img.id) ? "fill-current" : ""}`} />
+                            <Heart className={`w-3 h-3 md:w-4 md:h-4 ${blessedIds.has(img.id) ? "fill-current" : ""}`} />
                             <span>{img.blessCount || 0}</span>
                           </button>
                       </div>
 
                       {/* Share Buttons */}
-                      <div className="flex gap-2 mt-3 pt-3 border-t border-gray-50">
+                      <div className="flex gap-1.5 md:gap-2 mt-2 md:mt-3 pt-2 md:pt-3 border-t border-gray-50">
                           <button 
                               onClick={(e) => handleFacebookShare(e, img)}
-                              className="flex-1 py-2 rounded-lg bg-blue-50 text-blue-500 hover:bg-blue-100 flex items-center justify-center transition-colors border border-blue-100"
+                              className="flex-1 py-1.5 md:py-2 rounded-md md:rounded-lg bg-blue-50 text-blue-500 hover:bg-blue-100 flex items-center justify-center transition-colors border border-blue-100"
                           >
-                              <Facebook className="w-4 h-4" />
+                              <Facebook className="w-3 h-3 md:w-4 md:h-4" />
                           </button>
                           <button 
                               onClick={(e) => handlePinterestShare(e, img)}
-                              className="flex-1 py-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 flex items-center justify-center transition-colors border border-red-100"
+                              className="flex-1 py-1.5 md:py-2 rounded-md md:rounded-lg bg-red-50 text-red-600 hover:bg-red-100 flex items-center justify-center transition-colors border border-red-100"
                           >
-                              <PinterestIcon className="w-4 h-4" />
+                              <PinterestIcon className="w-3 h-3 md:w-4 md:h-4" />
                           </button>
                       </div>
                     </div>

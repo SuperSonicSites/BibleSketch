@@ -829,6 +829,23 @@ export const getPublicGallery = async (currentUserId?: string) => {
   }
 };
 
+// 6b. Get Total Public Sketch Count (for social proof)
+export const getTotalPublicSketchCount = async (): Promise<number> => {
+  try {
+    const q = query(
+      collection(db, 'sketches'),
+      where('isPublic', '==', true)
+    );
+    const snapshot = await getDocs(q);
+    // Filter out bookmarks
+    const count = snapshot.docs.filter(doc => !doc.data().isBookmark).length;
+    return count;
+  } catch (error) {
+    console.error("Error fetching sketch count:", error);
+    return 0; // Return 0 on error to avoid breaking the UI
+  }
+};
+
 // 7. Get User's Public Gallery (For Profile View)
 export const getUserPublicGallery = async (targetUserId: string) => {
   try {

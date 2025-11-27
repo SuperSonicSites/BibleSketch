@@ -10,8 +10,7 @@ import { embedLogoOnImage } from '../utils/imageProcessing';
 import { WatermarkOverlay } from './WatermarkOverlay';
 import { PremiumModal } from './PremiumModal';
 import { LazyImage } from './ui/LazyImage';
-import { generateSketchSlug } from '../utils/urlHelpers';
-import { APP_DOMAIN } from '../constants';
+import { generateShareData, openSharePopup } from '../utils/socialSharing';
 
 interface GalleryModalProps {
   isOpen: boolean;
@@ -368,42 +367,17 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
 
   const handleFacebookShare = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const slug = generateSketchSlug(sketch);
-    const shareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(`${APP_DOMAIN}/coloring-page/${slug}/${sketch.id}`)}`;
-    window.open(shareUrl, '_blank');
+    const { url } = generateShareData(sketch, 'facebook');
+    const shareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`;
+    openSharePopup(shareUrl);
   };
 
   const handlePinterestShare = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const slug = generateSketchSlug(sketch);
-    const url = `${APP_DOMAIN}/coloring-page/${slug}/${sketch.id}`;
-    
-    const book = sketch.promptData?.book || "Bible";
-    const chapter = sketch.promptData?.chapter || "Sketch";
-    const startVerse = sketch.promptData?.start_verse;
-    const endVerse = sketch.promptData?.end_verse;
-    const ageGroup = sketch.promptData?.age_group || "All Ages";
-    const style = sketch.promptData?.art_style || "Coloring Page";
-
-    let verseRange = "";
-    if (startVerse) {
-        verseRange = `:${startVerse}`;
-        if (endVerse && endVerse > startVerse) {
-            verseRange += `-${endVerse}`;
-        }
-    }
-
-    const baseDesc = `${book} ${chapter}${verseRange} (${ageGroup} - ${style} Style)`;
-    const cta = "Visit BibleSketch to download the free printable version. BibleSketch.app";
-
-    // Process tags
-    const sketchTags = sketch.tags ? sketch.tags.map(t => `#${t.replace(/\s+/g, '')}`).join(' ') : '';
-    const defaultTags = "#BibleSketch #Coloring #BibleColoring #ChristianArt";
-    const allTags = `${sketchTags} ${defaultTags}`.trim();
-
-    const description = `${baseDesc}\n\n${cta}\n\n${allTags}`;
-    const shareUrl = `https://pinterest.com/pin/create/button/?url=${encodeURIComponent(url)}&media=${encodeURIComponent(previewImage || sketch.imageUrl)}&description=${encodeURIComponent(description)}`;
-    window.open(shareUrl, '_blank');
+    const { url, description } = generateShareData(sketch, 'pinterest');
+    const media = previewImage || sketch.imageUrl;
+    const shareUrl = `https://pinterest.com/pin/create/button/?url=${encodeURIComponent(url)}&media=${encodeURIComponent(media)}&description=${encodeURIComponent(description)}`;
+    openSharePopup(shareUrl);
   };
 
   const promptText = sketch.promptData

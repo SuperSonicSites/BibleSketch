@@ -51,7 +51,8 @@ export const REFERENCE_MAP: Record<string, string | string[]> = {
   // ADULT
   [`${AgeGroup.ADULT}_${ArtStyle.CLASSIC}`]:             `${BASE_PATH}adult-classic.jpg`,
   [`${AgeGroup.ADULT}_${ArtStyle.STAINED_GLASS}`]:       [`${BASE_PATH}adult-stainglass.jpg`, `${BASE_PATH}adult-stainglass-2.jpg`],
-  [`${AgeGroup.ADULT}_${ArtStyle.ICONOGRAPHY}`]:         `${BASE_PATH}adult-iconography.jpg`
+  [`${AgeGroup.ADULT}_${ArtStyle.ICONOGRAPHY}`]:         `${BASE_PATH}adult-iconography.jpg`,
+  [`${AgeGroup.ADULT}_${ArtStyle.DOODLE}`]:              [`${BASE_PATH}adult-doodle.jpg`, `${BASE_PATH}adult-doodle-2.jpg`]
 };
 
 // ==========================================
@@ -59,20 +60,20 @@ export const REFERENCE_MAP: Record<string, string | string[]> = {
 // ==========================================
 export const AGE_LOGIC = {
   [AgeGroup.TODDLER]: {
-    keywords: "SUNDAY SCHOOL COLORING ART. PURE WHITE BACKGROUND. OUTLINE ONLY. NO SOLID FILLS. Ultra-thick uniform black outlines (approx 4-5mm). NO shading, NO gradients, NO texture, NO fill. Do NOT use black ink to represent darkness or night; use symbols (stars, moon) on white space.",
-    subjectFocus: "Focus on a single central subject or a simple pair. Visuals must be iconic, cheerful, and easy to color. Simplify complex crowds to 1-2 representative figures."
+    keywords: "BOLD, SIMPLE LINE ART. FULL SCENE COVERAGE. Background elements (simple waves, hills, clouds) must fill the page edge-to-edge. OUTLINE ONLY. NO SOLID FILLS. Ultra-thick uniform black outlines (approx 4-5mm). NO shading. Proportions: Natural/Realistic (Simplified). NO cartoon/chibi/bobblehead style.",
+    subjectFocus: "Focus on a single central subject or a simple pair interacting with the environment. Do NOT float subjects in empty space. Visuals must be iconic, cheerful, and easy to color. Simplify complex crowds to 1-2 representative figures. Do NOT use black ink to represent darkness or night; use symbols (stars, moon) on white space."
   },
   [AgeGroup.YOUNG_CHILD]: {
     keywords: "STORYBOOK LINE ART. PURE WHITE BACKGROUND. OUTLINE ONLY. NO SOLID FILLS. Consistent, medium-thick outlines (approx 2mm). Focus on clear object separation. Detailed environments are acceptable (water, sky) but must maintain large, colorable segments.",
     subjectFocus: "Interaction between maximum two characters. Clear action. Visual storytelling that reflects specific narrative emotion."
   },
   [AgeGroup.TEEN]: {
-    keywords: "ENGAGING COLORING BOOK STYLE. PURE WHITE BACKGROUND. OUTLINE ONLY. NO SOLID FILLS. Variable line weight (thick outer contours, ultra-fine inner lines). Complex, full-page environment with intricate detail while leaving plenty of white space for drawing. Avoid large, solid black areas.", 
-    subjectFocus: "Dramatic angles, cinematic composition. **Ensure natural human height and scale. No giant figures unless giants are explicitly mentioned.**"
+    keywords: "ENGAGING COLORING BOOK STYLE. PURE WHITE BACKGROUND. OUTLINE ONLY. NO SOLID FILLS. NO hatching, NO cross-hatching, NO shading. Variable line weight (thick outer contours, fine inner lines). Complex composition with plenty of white space for coloring. Avoid large, solid black areas.", 
+    subjectFocus: "Cinematic composition. Clean outlines only. **Ensure natural human height and scale. No giant figures unless giants are explicitly mentioned.**"
   },
   [AgeGroup.ADULT]: {
-    keywords: "STRESS-RELIEF COLORING BOOK STYLE. PURE WHITE BACKGROUND. OUTLINE ONLY. NO SOLID FILLS. Intricate texture rendering (e.g., wood grain, knotwork). The resulting line work must be highly detailed and visually overwhelming, suitable for meditative coloring. Leaving enough white space for coloring.",
-    subjectFocus: "Symbolic, complex, full-page composition, highly detailed patterns filling the negative space."
+    keywords: "STRESS-RELIEF COLORING BOOK STYLE. PURE WHITE BACKGROUND. OUTLINE ONLY. NO SOLID FILLS. NO hatching, NO cross-hatching, NO texture shading. Use clean contour lines and decorative ornamental borders. Generous white space within each shape for pleasant coloring.",
+    subjectFocus: "Symbolic, elegant composition. Detail through ornamental flourishes and borders, NOT through texture fills or dense linework."
   }
 };
 
@@ -80,8 +81,9 @@ export const STYLE_LOGIC = {
   [ArtStyle.SUNDAY_SCHOOL]: "Gentle aesthetic, soft rounded edges, safe for children. Expressions must reflect the narrative's emotional tone.",
   [ArtStyle.STAINED_GLASS]: "Authentic medieval leaded glass. MOSAIC SEGMENTATION. Every shape must be fully enclosed by thick black lead-lines. No free-floating lines. Geometric subdivision. Stiff, architectural style.",
   [ArtStyle.ICONOGRAPHY]: "Byzantine orthodox style, formal stiff pose, halos with geometric patterns, flat perspective, spiritual and solemn.",
-  [ArtStyle.COMIC]: "Dynamic comic book shading, simple action lines, simple sketching lines,dramatic lighting, minimal inking.",
-  [ArtStyle.CLASSIC]: "Traditional fine art illustration. Realistic proportions, detailed hatching and cross-hatching, engraving aesthetic, high detail line work."
+  [ArtStyle.COMIC]: "Dynamic comic book style, bold clean outlines, simple action lines, expressive poses, NO shading, NO hatching, NO cross-hatching.",
+  [ArtStyle.CLASSIC]: "Traditional fine art illustration. Realistic proportions, clean detailed outlines, NO hatching, NO cross-hatching, NO shading. Intricate line work for detail without fill techniques.",
+  [ArtStyle.DOODLE]: "Whimsical zentangle-inspired doodle art. Hand-drawn organic linework with flowing, meditative patterns. Fill backgrounds and empty spaces with repetitive decorative motifs (swirls, leaves, waves, dots, paisley). Loose sketch-like quality. NO rigid geometric precision. Relaxed, freeform therapeutic coloring style."
 };
 
 export const BIBLE_BOOKS = [
@@ -110,9 +112,9 @@ export const CHRISTIAN_GUIDELINES = `
 2. **Subject Count:** Draw EXACTLY the number of characters described.
 3. **Biblical Accuracy:** - **Exodus:** Water walls must be liquid waves, not rock.
    - **Eden:** Serpents on ground/trees only (no wings/legs).
-4. **Chronological Consistency:** - **Pre-Fall (Gen 1-2):** NO SNAKES, NO APPLES, NO THORNS.
+4. **Chronological Consistency:** - **Pre-Fall (Gen 1-2):** NO SNAKES, NO APPLES, NO THORNS. NO CLOTHING. Use strategic visual modesty: foreground plants/flowers covering lower body, long hair, waist-deep water, or waist-up framing.
    - **Post-Fall (Gen 3+):** Clothing is animal skins (rough).
-5. **Modesty:** Women must be depicted modestly with respectful attire.
+5. **Modesty:** Private areas must ALWAYS be concealed. Pre-Fall: use environmental/natural elements (NOT clothing). Post-Fall+: use period-appropriate attire.
 6. **Scale:** Humans should always be depicted in natural, realistic scale. NO GIANT FIGURES.
 7. **Digital Safety:** ALL SHAPES MUST BE CLOSED PATHS (for bucket fill).
 `;
@@ -124,15 +126,20 @@ export const LITURGICAL_TAGS = [
   // Liturgical Seasons
   { id: 'advent', label: 'Advent', category: 'season' },
   { id: 'christmas', label: 'Christmas', category: 'season' },
+  { id: 'epiphany', label: 'Epiphany', category: 'season' },
   { id: 'lent', label: 'Lent', category: 'season' },
   { id: 'holy-week', label: 'Holy Week', category: 'season' },
   { id: 'easter', label: 'Easter', category: 'season' },
   { id: 'pentecost', label: 'Pentecost', category: 'season' },
+  { id: 'ordinary-time', label: 'Ordinary Time', category: 'season' },
 
   // Themes
   { id: 'creation', label: 'Creation', category: 'theme' },
   { id: 'the-fall', label: 'The Fall', category: 'theme' },
   { id: 'exile', label: 'Exile', category: 'theme' },
+  { id: 'prophets', label: 'Prophets', category: 'theme' },
+  { id: 'miracles', label: 'Miracles', category: 'theme' },
+  { id: 'parables', label: 'Parables', category: 'theme' },
   { id: 'resurrection', label: 'Resurrection', category: 'theme' },
 ] as const;
 
@@ -144,7 +151,7 @@ export const GOLDEN_NEGATIVES = [
 
   // STYLE NEGATIVES
   "color, colored, colorful, polychrome, chromatic, red, blue, green, yellow, pink, purple, orange, brown, gold, silver, rainbow",
-  "shading, grayscale, gradient, 3d render, photo, realistic texture, filled colors, grey, shadows, sketchiness, charcoal, smudge, blurry, dithering, noise",
+  "shading, grayscale, gradient, 3d render, photo, realistic texture, filled colors, grey, shadows, sketchiness, charcoal, smudge, blurry, dithering, noise, hatching, cross-hatching, wood grain texture, stippling",
   "duplicate characters, twins, clones, multiple versions of same character, crowd, extra people, collage, split screen, comic panels",
   "extra fingers, extra limbs, fused fingers, malformed hands, floating hands, anatomy disconnected, bad anatomy, mutation, missing limbs",
   "text, watermark, signature, writing, letters, numbers, bible verse numbers, chapter numbers, bottom text, footer, date, copyright",
@@ -158,4 +165,26 @@ export const GOLDEN_NEGATIVES = [
   // Coloring Book Physics
   "solid black areas, filled black shapes, heavy black background, dense cross-hatching, ink wash, filled hair, silhouette, inverted colors, night mode",
   "broken lines, gaps in lines, open shapes, sketching artifacts, unfinished lines"
+].join(", ");
+
+// ==========================================
+// 6. LAYOUT RULES (V2)
+// ==========================================
+export const LAYOUT_RULES = `
+CANVAS: FULL BLEED. Extend content to all 4 edges. NO margins. NO padding.
+ORIENTATION: Camera must be level. Keep vertical lines vertical. NO Dutch angles. NO camera tilt.
+NO decorative frames, borders, or margins.
+`;
+
+// ==========================================
+// 7. CRITICAL NEGATIVES (V2 - Optimized)
+// ==========================================
+// Reduced from ~800 to ~150 chars for faster generation
+export const CRITICAL_NEGATIVES = [
+  "color", "shading", "hatching", "3d", "solid black", "sketch", "noise",
+  "text", "watermark", "border", "rotated image", "tilted frame", "diagonal border",
+  "white border", "margin", "padding", "inset image",
+  "cartoon proportions", "chibi", "big head",
+  "face of god", "modern", "anachronism",
+  "bad anatomy", "extra limbs", "giant figure"
 ].join(", ");

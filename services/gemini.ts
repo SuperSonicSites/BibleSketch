@@ -6,6 +6,8 @@ import {
   MODELS,
   REFERENCE_MAP,
   GOLDEN_NEGATIVES,
+  LAYOUT_RULES,
+  CRITICAL_NEGATIVES,
   CHRISTIAN_GUIDELINES,
   AGE_LOGIC,
   STYLE_LOGIC
@@ -180,60 +182,27 @@ const renderImage = async (
           return null;
         }
 
-        // Convert to base64
+        // Convert to base64 (no resizing needed - images are pre-sized to 512px)
         const base64Data = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
           reader.onloadend = () => {
             const result = reader.result as string;
             let base64 = result.split(',')[1];
 
-            // --- IMAGE RESIZING ---
-            // Resize image if it's too large (limit payload size)
-            const img = new Image();
-            img.onload = () => {
-              const MAX_DIM = 512;
-              if (img.width > MAX_DIM || img.height > MAX_DIM) {
-                const canvas = document.createElement('canvas');
-                let width = img.width;
-                let height = img.height;
-                if (width > height) {
-                  if (width > MAX_DIM) {
-                    height *= MAX_DIM / width;
-                    width = MAX_DIM;
-                  }
-                } else {
-                  if (height > MAX_DIM) {
-                    width *= MAX_DIM / height;
-                    height = MAX_DIM;
-                  }
-                }
-                canvas.width = width;
-                canvas.height = height;
-                const ctx = canvas.getContext('2d');
-                ctx?.drawImage(img, 0, 0, width, height);
-                // Convert back to base64 (JPEG 80% quality)
-                const resizedData = canvas.toDataURL('image/jpeg', 0.8);
-                base64 = resizedData.split(',')[1];
-                console.log(`[Artist] Resized reference image from ${img.width}x${img.height} to ${width}x${height}`);
+            // Clean up base64 (BOM/Garbage removal)
+            if (base64.startsWith("77+9")) {
+              base64 = base64.substring(4);
+            }
+            while (base64.startsWith("77+9")) {
+              base64 = base64.substring(4);
+            }
+            if (blob.type === 'image/jpeg' && !base64.startsWith('/9j/') && base64.length > 100) {
+              const jpegStart = base64.indexOf('/9j/');
+              if (jpegStart > 0 && jpegStart < 100) {
+                base64 = base64.substring(jpegStart);
               }
-              
-              // Clean up base64 (BOM/Garbage removal)
-              if (base64.startsWith("77+9")) {
-                base64 = base64.substring(4);
-              }
-              while (base64.startsWith("77+9")) {
-                base64 = base64.substring(4);
-              }
-              if (blob.type === 'image/jpeg' && !base64.startsWith('/9j/') && base64.length > 100) {
-                 const jpegStart = base64.indexOf('/9j/');
-                 if (jpegStart > 0 && jpegStart < 100) {
-                    base64 = base64.substring(jpegStart);
-                 }
-              }
-              resolve(base64);
-            };
-            img.onerror = () => reject(new Error("Failed to load image for resizing"));
-            img.src = result; 
+            }
+            resolve(base64);
           };
           reader.onerror = () => reject(new Error("FileReader error"));
           reader.readAsDataURL(blob);
@@ -278,12 +247,15 @@ const renderImage = async (
   const promptText = `
     ${brief.positive_prompt}
     
+    --- LAYOUT REQUIREMENTS ---
+    ${LAYOUT_RULES}
+    
     --- TECHNICAL SPECIFICATIONS (STRICT) ---
     1. LINE STYLE: ${ageKeywords} 
     2. ART TECHNIQUE: ${styleKeywords}
     
     ${styleInstruction}
-    NEGATIVE PROMPT: ${brief.negative_prompt}, ${GOLDEN_NEGATIVES}
+    NEGATIVE PROMPT: ${brief.negative_prompt}, ${CRITICAL_NEGATIVES}
   `;
 
   try {
@@ -455,8 +427,16 @@ export const editColoringPage = async (
   const prompt = `
     Edit this image to be a coloring page.
     User Instruction: ${editPrompt}.
+    
+    --- LAYOUT REQUIREMENTS ---
+    ${LAYOUT_RULES}
+    
+    --- CONSTRAINTS ---
     STRICTLY maintain black and white line art style.
+    Do NOT shrink the image. Do NOT add a border.
     Output ONLY the modified image.
+    
+    NEGATIVE PROMPT: ${CRITICAL_NEGATIVES}
   `;
 
   try {

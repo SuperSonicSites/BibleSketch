@@ -26,7 +26,7 @@ const generateSketchSlug = (data) => {
 
 // --- HELPER: Constants (Mirrored from Frontend) ---
 const AGE_GROUPS = ["Toddler", "Young Child", "Teen", "Adult"];
-const ART_STYLES = ["Sunday School", "Stained Glass", "Iconography", "Comic", "Classic"];
+const ART_STYLES = ["Sunday School", "Stained Glass", "Iconography", "Comic", "Classic", "Doodles"];
 
 // Liturgical tags for static sitemap generation
 const LITURGICAL_TAGS = [
@@ -194,15 +194,21 @@ exports.sitemap = onRequest(async (req, res) => {
       // 1. Main "Recent" Sitemap
       sitemaps.push(`${baseUrl}/sitemap.xml?type=recent`);
 
+      // 1.5 "Popular" Sitemap (Most Blessed)
+      sitemaps.push(`${baseUrl}/sitemap.xml?type=popular`);
+
       // 2. "Tags" Sitemap (NEW)
       sitemaps.push(`${baseUrl}/sitemap.xml?type=tags`);
 
-      // 3. Generate Topic Sitemaps (Valid Age + Style combinations only)
+      // 3. "Profiles" Sitemap (Public user galleries)
+      sitemaps.push(`${baseUrl}/sitemap.xml?type=profiles`);
+
+      // 4. Generate Topic Sitemaps (Valid Age + Style combinations only)
       const VALID_COMBINATIONS = [
         { age: "Toddler", styles: ["Sunday School"] },
         { age: "Young Child", styles: ["Sunday School", "Stained Glass", "Iconography", "Comic"] },
         { age: "Teen", styles: ["Classic", "Stained Glass", "Iconography", "Comic"] },
-        { age: "Adult", styles: ["Classic", "Stained Glass", "Iconography"] }
+        { age: "Adult", styles: ["Classic", "Stained Glass", "Iconography", "Doodles"] }
       ];
 
       VALID_COMBINATIONS.forEach(group => {
@@ -248,12 +254,41 @@ exports.sitemap = onRequest(async (req, res) => {
         return res.status(200).send(xml);
     }
 
-    // --- C. CONTENT SITEMAPS ---
+    // --- C. PROFILES SITEMAP (Public user galleries) ---
+    if (type === 'profiles') {
+        const publicSketches = await admin.firestore()
+            .collection("sketches")
+            .where("isPublic", "==", true)
+            .select("userId")
+            .get();
+
+        const userIds = [...new Set(publicSketches.docs.map(d => d.data().userId))];
+
+        let xml = `<?xml version="1.0" encoding="UTF-8"?>
+        <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`;
+
+        userIds.forEach(uid => {
+            xml += `
+            <url>
+                <loc>${baseUrl}/profile/${uid}</loc>
+                <changefreq>weekly</changefreq>
+                <priority>0.6</priority>
+            </url>`;
+        });
+
+        xml += `</urlset>`;
+        res.set("Content-Type", "application/xml");
+        return res.status(200).send(xml);
+    }
+
+    // --- D. CONTENT SITEMAPS ---
     let query = admin.firestore().collection("sketches").where("isPublic", "==", true);
 
     // Apply Filters based on 'type'
     if (type === 'recent') {
        query = query.orderBy("createdAt", "desc").limit(5000);
+    } else if (type === 'popular') {
+       query = query.orderBy("blessCount", "desc").limit(1000);
     } else {
        // Parse "toddler-sunday-school" back to "Toddler" and "Sunday School"
        let found = false;
@@ -456,11 +491,54 @@ exports.sketchRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async
     const slug = generateSketchSlug(data);
     const canonicalUrl = `${baseUrl}/coloring-page/${slug}/${sketchId}`;
 
+    // Schema.org JSON-LD Construction
+    const blessCount = data.blessCount || 0;
+    const keywords = data.tags ? data.tags.join(', ') : "Bible, Coloring Page, Christian Art";
+    const genre = data.promptData?.art_style || "Religious Art";
+    const datePublished = data.createdAt && data.createdAt.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString();
+
+    const schemaData = {
+      "@context": "https://schema.org",
+      "@type": "CreativeWork",
+      "name": title,
+      "headline": title,
+      "description": description,
+      "image": imageUrl,
+      "url": canonicalUrl,
+      "datePublished": datePublished,
+      "keywords": keywords,
+      "genre": genre,
+      "aggregateRating": blessCount > 0 ? {
+        "@type": "AggregateRating",
+        "ratingValue": "5",
+        "ratingCount": blessCount,
+        "bestRating": "5",
+        "worstRating": "1"
+      } : undefined,
+      "author": {
+        "@type": "Person",
+        "name": "Bible Sketch User",
+        "url": `${baseUrl}/profile/${data.userId}`
+      },
+      "creator": {
+        "@type": "Person",
+        "name": "Bible Sketch User",
+        "url": `${baseUrl}/profile/${data.userId}`
+      },
+      "copyrightHolder": {
+        "@type": "Person",
+        "name": "Bible Sketch User"
+      }
+    };
+
+    const schemaScript = `<script type="application/ld+json">${JSON.stringify(schemaData)}</script>`;
+
     let html = await getIndexHtml(baseUrl);
 
     // Injection Strategy:
     // 1. Replace <title>
     // 2. Inject Meta Tags before </head>
+    // 3. Inject Schema JSON-LD before </head>
 
     // Replace Title
     html = html.replace(/<title>.*?<\/title>/i, `<title>${title}</title>`);
@@ -477,20 +555,14 @@ exports.sketchRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async
     <meta property="og:type" content="article" />
     <meta property="og:url" content="${canonicalUrl}" />
     <meta property="og:site_name" content="Bible Sketch" />
-    
-    <!-- Twitter -->
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="${title}" />
-    <meta name="twitter:description" content="${description}" />
-    <meta name="twitter:image" content="${imageUrl}" />
     `;
 
     // Inject before </head>
     if (html.includes('</head>')) {
-      html = html.replace('</head>', `${metaTags}</head>`);
+      html = html.replace('</head>', `${metaTags}\n${schemaScript}\n</head>`);
     } else {
       // Fallback if </head> is missing
-      html += metaTags;
+      html += metaTags + schemaScript;
     }
 
     res.set('Cache-Control', 'public, max-age=3600, s-maxage=7200');
@@ -498,6 +570,170 @@ exports.sketchRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async
 
   } catch (error) {
     console.error("[sketchRender] Error:", error);
+    serveDefault();
+  }
+});
+
+// ---------------------------------------------------------
+// 3. PROFILE PAGE SEO RENDERER (Server-Side Schema for Profiles)
+// ---------------------------------------------------------
+exports.profileRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (req, res) => {
+  const host = 'BibleSketch.app';
+  const protocol = 'https';
+  const baseUrl = `${protocol}://${host}`;
+  const userAgent = req.headers['user-agent'] || 'Unknown';
+
+  // Extract UID from /profile/:uid
+  const pathSegments = req.path.split('/').filter(p => p.length > 0);
+  // Expected: ["profile", "uid"]
+  const profileUid = pathSegments.length >= 2 ? pathSegments[1] : null;
+
+  console.log(`[profileRender] Path: ${req.path} | UID: ${profileUid} | UA: ${userAgent}`);
+
+  const serveDefault = async () => {
+    const html = await getIndexHtml(baseUrl);
+    res.send(html);
+  };
+
+  if (!profileUid) {
+    console.log("[profileRender] No profile UID found, serving default.");
+    return serveDefault();
+  }
+
+  try {
+    // 1. Fetch User Document
+    const userDoc = await admin.firestore().collection("users").doc(profileUid).get();
+    
+    let userName = "Bible Sketch User";
+    let userPhoto = `${baseUrl}/logo.png`;
+    
+    if (userDoc.exists) {
+      const userData = userDoc.data();
+      userName = userData.displayName || "Bible Sketch User";
+      userPhoto = userData.photoURL || `${baseUrl}/logo.png`;
+    }
+
+    // 2. Fetch User's Public Sketches (no orderBy - sort in memory to avoid index requirement)
+    const sketchesSnapshot = await admin.firestore()
+      .collection("sketches")
+      .where("userId", "==", profileUid)
+      .where("isPublic", "==", true)
+      .limit(50)
+      .get();
+
+    const sketches = sketchesSnapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        timestamp: data.createdAt?.toMillis?.() || Date.now()
+      };
+    }).sort((a, b) => b.timestamp - a.timestamp); // Sort in memory (newest first)
+
+    // 3. Build SEO Content
+    const profileUrl = `${baseUrl}/profile/${profileUid}`;
+    const title = `${userName}'s Bible Coloring Pages | Bible Sketch Gallery`;
+    const description = `Browse ${userName}'s collection of Bible coloring pages. Free printable Christian coloring sheets created with Bible Sketch.`;
+
+    // 4. Build Schema.org JSON-LD
+    const creativeWorks = sketches.map((sketch, index) => {
+      const slug = generateSketchSlug(sketch);
+      const sketchUrl = `${baseUrl}/coloring-page/${slug}/${sketch.id}`;
+      const sketchName = sketch.promptData 
+        ? `${sketch.promptData.book} ${sketch.promptData.chapter}` 
+        : "Bible Sketch";
+      
+      return {
+        "@type": "ListItem",
+        "position": index + 1,
+        "item": {
+          "@type": "VisualArtwork",
+          "name": sketchName,
+          "image": sketch.imageUrl,
+          "url": sketchUrl,
+          "datePublished": new Date(sketch.timestamp).toISOString(),
+          "author": {
+            "@type": "Person",
+            "name": userName,
+            "url": profileUrl
+          }
+        }
+      };
+    });
+
+    const schemaData = {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "ProfilePage",
+          "@id": profileUrl,
+          "mainEntity": {
+            "@type": "Person",
+            "name": userName,
+            "image": userPhoto,
+            "url": profileUrl,
+            "interactionStatistic": [
+              {
+                "@type": "InteractionCounter",
+                "interactionType": "https://schema.org/WriteAction",
+                "userInteractionCount": sketches.length
+              }
+            ]
+          }
+        }
+      ]
+    };
+
+    // Add ItemList to the graph if there are sketches
+    if (creativeWorks.length > 0) {
+      schemaData["@graph"].push({
+        "@type": "ItemList",
+        "name": `Sketches by ${userName}`,
+        "itemListElement": creativeWorks
+      });
+    }
+
+    const schemaScript = `<script type="application/ld+json">${JSON.stringify(schemaData)}</script>`;
+
+    // 5. Get and Modify HTML
+    let html = await getIndexHtml(baseUrl);
+
+    // Replace Title
+    html = html.replace(/<title>.*?<\/title>/i, `<title>${title}</title>`);
+
+    // Prepare Meta Tags
+    const metaTags = `
+    <meta name="description" content="${description}" />
+    <link rel="canonical" href="${profileUrl}" />
+    
+    <!-- Open Graph -->
+    <meta property="og:title" content="${title}" />
+    <meta property="og:description" content="${description}" />
+    <meta property="og:image" content="${userPhoto}" />
+    <meta property="og:type" content="profile" />
+    <meta property="og:url" content="${profileUrl}" />
+    <meta property="og:site_name" content="Bible Sketch" />
+    <meta property="profile:username" content="${userName}" />
+    
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="${title}" />
+    <meta name="twitter:description" content="${description}" />
+    <meta name="twitter:image" content="${userPhoto}" />
+    `;
+
+    // Inject before </head>
+    if (html.includes('</head>')) {
+      html = html.replace('</head>', `${metaTags}\n${schemaScript}\n</head>`);
+    } else {
+      html += metaTags + schemaScript;
+    }
+
+    res.set('Cache-Control', 'public, max-age=1800, s-maxage=3600'); // 30min client, 1hr CDN
+    res.status(200).send(html);
+
+  } catch (error) {
+    console.error("[profileRender] Error:", error);
     serveDefault();
   }
 });

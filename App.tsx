@@ -9,10 +9,12 @@ import { AuthModal } from './components/AuthModal';
 import { ProfileModal } from './components/ProfileModal';
 import { ErrorModal } from './components/ErrorModal';
 import { TermsPage } from './components/TermsPage';
+import { PrivacyPage } from './components/PrivacyPage';
 import { PricingPage } from './components/PricingPage';
 import { SketchPage } from './components/SketchPage';
 import { TagPage } from './components/TagPage';
 import { VerifiedPage } from './components/VerifiedPage';
+import { GlobalSEO } from './components/GlobalSEO';
 import { auth, onAuthStateChanged, logoutUser, onUserProfileChanged, ensureAnonymousSession } from './services/firebase';
 
 // Wrapper to extract ID from params for the Gallery component
@@ -151,14 +153,17 @@ function AppContent() {
       <div className="flex-grow">
         <Routes>
           <Route path="/" element={
-            <CreateTool 
-              user={user} 
-              onRequireAuth={requireAuth}
-              onNavigateToGallery={() => navigate('/gallery')}
-              onNavigateToProfile={(uid) => navigate(`/profile/${uid}`)}
-              setShowErrorModal={setShowErrorModal}
-              setErrorModalContent={setErrorModalContent}
-            />
+            <>
+              <GlobalSEO />
+              <CreateTool 
+                user={user} 
+                onRequireAuth={requireAuth}
+                onNavigateToGallery={() => navigate('/gallery')}
+                onNavigateToProfile={(uid) => navigate(`/profile/${uid}`)}
+                setShowErrorModal={setShowErrorModal}
+                setErrorModalContent={setErrorModalContent}
+              />
+            </>
           } />
           
           <Route path="/gallery" element={
@@ -185,6 +190,10 @@ function AppContent() {
 
           <Route path="/terms" element={
             <TermsPage onBack={() => navigate('/')} />
+          } />
+
+          <Route path="/privacy" element={
+            <PrivacyPage onBack={() => navigate('/')} />
           } />
 
           <Route path="/verified" element={<VerifiedPage />} />
@@ -218,6 +227,12 @@ function AppContent() {
                className="text-gray-400 hover:text-[#7C3AED] text-sm font-medium transition-colors"
              >
                Terms of Service
+             </button>
+             <button 
+               onClick={() => navigate('/privacy')}
+               className="text-gray-400 hover:text-[#7C3AED] text-sm font-medium transition-colors"
+             >
+               Privacy Policy
              </button>
            </div>
         </div>
