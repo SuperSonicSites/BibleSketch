@@ -81,6 +81,9 @@ export const CreateTool: React.FC<CreateToolProps> = ({
         await deductCredits(user.uid, 1, `Generated: ${reference.book} ${reference.chapter}`);
 
         setGeneratedImage(imageUrl);
+
+        // Track Pinterest custom design creation event
+        window.pintrk?.('track', 'custom', { event_name: 'DesignCreation' });
       } catch (error: any) {
         console.error("Generation Error:", error);
         const msg = (error.message || String(error)).toLowerCase();

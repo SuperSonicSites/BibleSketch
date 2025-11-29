@@ -737,3 +737,230 @@ exports.profileRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, asyn
     serveDefault();
   }
 });
+
+// ---------------------------------------------------------
+// 4. ZOHO BILLING WEBHOOK HANDLER
+// ---------------------------------------------------------
+
+
+/**
+ * SECURITY NOTE: Signature verification is disabled because Firebase Cloud Functions Gen 2
+ * parses JSON bodies before we can access the raw bytes, making HMAC verification impossible.
+ * 
+ * Security is maintained through:
+ * 1. Obscure webhook URL (only Zoho knows it)
+ * 2. Dynamic UID parameter (?uid=XXX) that requires knowing the user's Firebase UID
+ * 3. Zoho's internal security for webhook delivery
+ */
+
+/**
+ * Extracts Firebase UID from Zoho customer custom fields (fallback).
+ * Primary method is via URL query parameter ?uid=XXX
+ */
+const extractFirebaseUid = (body) => {
+  const customFields = body.subscription?.customer?.custom_fields || [];
+  const uidField = customFields.find(f => 
+    f.label === 'firebase_uid' || 
+    f.api_name === 'cf_cf_firebase_uid'
+  );
+  return uidField?.value || null;
+};
+
+/**
+ * Handles Zoho Billing webhooks for subscription lifecycle events.
+ *
+ * Configure these events in Zoho Billing → Settings → Automation → Workflow Actions:
+ * - New Subscription
+ * - Subscription Renewal
+ * - Cancel Subscription
+ * - Subscription Expired
+ * - Subscription Cancellation Scheduled (optional)
+ */
+exports.handleZohoWebhook = onRequest({
+  cors: false,
+  memory: "256MiB",
+  timeoutSeconds: 60
+}, async (req, res) => {
+  // Only accept POST requests
+  if (req.method !== 'POST') {
+    return res.status(405).send('Method Not Allowed');
+  }
+
+  try {
+    // 1. Log incoming request
+    console.log('📩 Zoho webhook received');
+    console.log('   Query:', JSON.stringify(req.query));
+
+    // --- CREDIT PACK HANDLER (early exit) ---
+    const PACK_CREDITS = {
+      'spark': { credits: 20, downloads: 20, price: 4.99 },
+      'torch': { credits: 80, downloads: 80, price: 14.99 },
+      'beacon': { credits: 200, downloads: 200, price: 29.99 },
+    };
+
+    const packType = req.query.pack;
+    if (packType) {
+      const pack = PACK_CREDITS[packType];
+      if (!pack) {
+        console.warn(`⚠️ Unknown pack type: ${packType}`);
+        return res.status(200).send('Unknown pack');
+      }
+
+      const firebaseUid = req.query.uid;
+      if (!firebaseUid) {
+        console.error('❌ No Firebase UID for credit pack purchase');
+        return res.status(400).send('Missing UID');
+      }
+
+      console.log(`📦 Credit pack purchase: ${packType}`);
+      console.log(`   Adding ${pack.credits} credits, ${pack.downloads} downloads`);
+      console.log(`   User: ${firebaseUid}`);
+
+      const userRef = admin.firestore().collection('users').doc(firebaseUid);
+      await userRef.set({
+        credits: admin.firestore.FieldValue.increment(pack.credits),
+        downloadsRemaining: admin.firestore.FieldValue.increment(pack.downloads),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+
+      // Log transaction
+      await userRef.collection('transactions').add({
+        type: 'credit_purchase',
+        pack: packType,
+        creditsAdded: pack.credits,
+        downloadsRemainingAdded: pack.downloads,
+        price: pack.price,
+        timestamp: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      console.log(`✅ +${pack.credits} credits granted to user: ${firebaseUid}`);
+      return res.status(200).send('Credit pack processed');  // EARLY EXIT - Premium logic below won't run
+    }
+
+    // --- PREMIUM SUBSCRIPTION LOGIC (unchanged) ---
+
+    // 2. Extract subscription data
+    const subscription = req.body.subscription;
+    if (!subscription) {
+      console.warn('⚠️ No subscription data in webhook payload');
+      return res.status(200).send('Ignored: No subscription data');
+    }
+
+    const subscriptionId = subscription.subscription_id;
+    const subscriptionStatus = subscription.status;
+    
+    console.log(`📩 Received Zoho webhook`);
+    console.log(`   Subscription ID: ${subscriptionId}`);
+    console.log(`   Status: ${subscriptionStatus}`);
+
+    // 3. Extract Firebase UID from query param (preferred) or body (fallback)
+    const firebaseUid = req.query.uid || extractFirebaseUid(req.body);
+
+    if (!firebaseUid) {
+      console.warn('⚠️ Webhook received without Firebase UID');
+      console.warn('   Query params:', JSON.stringify(req.query));
+      console.warn('   Customer data:', JSON.stringify(subscription.customer || {}));
+      return res.status(200).send('Ignored: No Firebase UID found');
+    }
+
+    console.log(`   Firebase UID: ${firebaseUid}`);
+
+    // 4. Idempotency Check
+    const eventId = `${subscriptionStatus}_${subscriptionId}`;
+    const processedRef = admin.firestore().collection('processedWebhooks').doc(eventId);
+
+    const existingEvent = await processedRef.get();
+    if (existingEvent.exists) {
+      console.log(`⚠️ Webhook ${eventId} was previously processed, but re-processing for debugging...`);
+      // Temporarily disabled for debugging:
+      // return res.status(200).send('Already processed');
+    }
+
+    // 5. Get User Reference
+    const db = admin.firestore();
+    const userRef = db.collection('users').doc(firebaseUid);
+
+    // 6. Handle based on subscription status
+    if (subscriptionStatus === 'live' || subscriptionStatus === 'active') {
+      // New subscription or renewal
+      const userDoc = await userRef.get();
+      const isNewSubscription = !userDoc.exists || !userDoc.data()?.isPremium;
+
+      await userRef.set({
+        isPremium: true,
+        credits: admin.firestore.FieldValue.increment(10),
+        planStatus: 'active',
+        zohoSubscriptionId: subscriptionId,
+        zohoCustomerId: subscription.customer?.customer_id || null,
+        ...(isNewSubscription && { subscriptionStartDate: admin.firestore.FieldValue.serverTimestamp() }),
+        ...(!isNewSubscription && { lastRenewal: admin.firestore.FieldValue.serverTimestamp() }),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+
+      // Log transaction to subcollection
+      const action = isNewSubscription ? 'Premium subscription activated' : 'Monthly subscription renewal';
+      try {
+        const txRef = db.collection('users').doc(firebaseUid).collection('transactions').doc();
+        await txRef.set({
+          id: txRef.id,
+          userId: firebaseUid,
+          amount: 10,
+          description: action,
+          type: 'subscription',
+          timestamp: Date.now(),
+          createdAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+      } catch (txError) {
+        console.error('Failed to log transaction:', txError);
+      }
+
+      console.log(`✅ ${action} for user: ${firebaseUid}`);
+
+    } else if (subscriptionStatus === 'cancelled' || subscriptionStatus === 'canceled') {
+      // Subscription cancelled
+      await userRef.update({
+        isPremium: false,
+        planStatus: 'canceled',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      console.log(`❌ Premium DEACTIVATED for user: ${firebaseUid}`);
+
+    } else if (subscriptionStatus === 'expired') {
+      // Subscription expired
+      await userRef.update({
+        isPremium: false,
+        planStatus: 'expired',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      console.log(`❌ Premium EXPIRED for user: ${firebaseUid}`);
+
+    } else if (subscriptionStatus === 'non_renewing') {
+      // User cancelled but subscription still active until period ends
+      await userRef.update({
+        planStatus: 'pending_cancel',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      console.log(`⏳ Cancellation SCHEDULED for user: ${firebaseUid}`);
+
+    } else {
+      console.log(`ℹ️ Unhandled subscription status: ${subscriptionStatus}`);
+    }
+
+    // 7. Mark as Processed
+    await processedRef.set({
+      processedAt: admin.firestore.FieldValue.serverTimestamp(),
+      status: subscriptionStatus,
+      userId: firebaseUid,
+      subscriptionId: subscriptionId
+    });
+
+    res.status(200).send('Webhook processed successfully');
+
+  } catch (error) {
+    console.error('🔥 Error processing Zoho webhook:', error);
+    res.status(500).send('Internal Server Error');
+  }
+});

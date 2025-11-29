@@ -12,6 +12,7 @@ import { WatermarkOverlay } from './WatermarkOverlay';
 import { PremiumModal } from './PremiumModal';
 import { LazyImage } from './ui/LazyImage';
 import { TagDisplay, TagSelector } from './TagSelector';
+import { RelatedSketches } from './RelatedSketches';
 
 import { SketchSEO } from './SketchSEO';
 import { APP_DOMAIN } from '../constants';
@@ -453,10 +454,13 @@ export const SketchPage: React.FC<SketchPageProps> = ({ user, onRequireAuth }) =
           {/* Details Column */}
           <div className="lg:col-span-5 flex flex-col">
             <div className="bg-white rounded-3xl p-8 border border-gray-100 shadow-sm flex-1">
-              <h1 className="font-display text-3xl md:text-4xl font-bold text-gray-800 mb-2">
+              <h1 className="font-display text-3xl md:text-4xl font-bold text-gray-800 mb-1">
                 {sketch.promptData?.book} {sketch.promptData?.chapter}:{sketch.promptData?.start_verse}
-                {sketch.promptData?.end_verse && sketch.promptData.end_verse > sketch.promptData.start_verse && `-${sketch.promptData.end_verse}`}
+                {sketch.promptData?.end_verse && sketch.promptData.end_verse > sketch.promptData.start_verse && `-${sketch.promptData.end_verse}`} Coloring Page
               </h1>
+              <p className="text-base text-gray-500 mb-4">
+                Free printable Bible coloring sheet for {displayAgeGroup(sketch.promptData?.age_group)}s
+              </p>
 
               <div className="flex flex-wrap gap-3 text-sm text-gray-500 mb-4">
                 <span className="bg-purple-50 text-[#7C3AED] px-3 py-1 rounded-full font-bold text-xs uppercase tracking-wide">
@@ -490,54 +494,109 @@ export const SketchPage: React.FC<SketchPageProps> = ({ user, onRequireAuth }) =
                 </div>
               )}
 
-              <div className="space-y-4 mb-10">
-                <Button
-                  variant="outline"
-                  className={`w-full gap-2 border-2 ${isBlessed ? "bg-red-50 border-red-400 text-red-500 cursor-default opacity-80" : "border-red-400 text-red-500 hover:bg-red-50"}`}
-                  onClick={handleBless}
-                  disabled={isBlessed}
-                >
-                  <Heart className={`w-5 h-5 ${isBlessed ? "fill-current" : ""}`} />
-                  {isBlessed ? "Blessed" : "Bless this Sketch"} ({blessCount})
-                </Button>
-
-                <Button
-                  variant="primary"
-                  size="lg"
-                  className="w-full gap-2 shadow-lg shadow-purple-100"
-                  onClick={handlePrint}
-                >
-                  <Printer className="w-5 h-5" />
-                  Print PDF
-                  {!isOwner && !isPremiumUser && user && (
-                    <span className="ml-1 text-xs opacity-80">({downloadsRemaining} left)</span>
-                  )}
-                </Button>
-
-                <Button
-                  variant="outline"
-                  className="w-full gap-2"
-                  onClick={handleDownload}
-                >
-                  <Download className="w-5 h-5" />
-                  Download Image
-                  {!isOwner && !isPremiumUser && user && (
-                    <span className="ml-1 text-xs opacity-80">({downloadsRemaining} left)</span>
-                  )}
-                </Button>
-
-                {!isOwner && (
-                  <Button
-                    variant={isBookmarked ? "secondary" : "outline"}
-                    className={`w-full gap-2 ${isBookmarked ? "bg-purple-50 border-purple-100 text-[#7C3AED]" : ""}`}
-                    onClick={handleBookmark}
-                    disabled={bookmarkLoading}
+              {/* Guest Signup CTA - Enhanced */}
+              {!user && (
+                <div className="bg-[#7C3AED] rounded-2xl p-6 mb-6 text-white overflow-hidden">
+                  <style>{`
+                    @keyframes float {
+                      0%, 100% { transform: translateY(0); }
+                      50% { transform: translateY(-4px); }
+                    }
+                    @keyframes slideIn {
+                      from { opacity: 0; transform: translateX(-10px); }
+                      to { opacity: 1; transform: translateX(0); }
+                    }
+                    @keyframes pulseGlow {
+                      0%, 100% { box-shadow: 0 4px 14px 0 rgba(251, 191, 36, 0.4); }
+                      50% { box-shadow: 0 4px 24px 6px rgba(251, 191, 36, 0.5); }
+                    }
+                    .animate-float { animation: float 3s ease-in-out infinite; }
+                    .animate-slideIn { animation: slideIn 0.4s ease-out forwards; opacity: 0; }
+                    .animate-pulseGlow { animation: pulseGlow 2s ease-in-out infinite; }
+                  `}</style>
+                  <h2 className="text-xl font-display font-bold mb-3 flex items-center gap-2">
+                    <span className="text-2xl animate-float inline-block">🎁</span> 
+                    Unlock This Coloring Page
+                  </h2>
+                  <p className="text-purple-200 text-sm mb-4">
+                    Create a free account to:
+                  </p>
+                  <ul className="text-white text-sm space-y-2 mb-5">
+                    <li className="flex items-center gap-2 animate-slideIn" style={{animationDelay: '0.1s'}}>
+                      <Printer className="w-4 h-4 text-amber-300" />
+                      Print this page (PDF)
+                    </li>
+                    <li className="flex items-center gap-2 animate-slideIn" style={{animationDelay: '0.2s'}}>
+                      <Download className="w-4 h-4 text-amber-300" />
+                      Download HD image
+                    </li>
+                    <li className="flex items-center gap-2 animate-slideIn" style={{animationDelay: '0.3s'}}>
+                      <Bookmark className="w-4 h-4 text-amber-300" />
+                      Save to your collection
+                    </li>
+                    <li className="flex items-center gap-2 animate-slideIn" style={{animationDelay: '0.4s'}}>
+                      <Check className="w-4 h-4 text-amber-300" />
+                      5 credits to create your own
+                    </li>
+                  </ul>
+                  <div className="bg-white/20 backdrop-blur-sm rounded-lg px-3 py-2 mb-4 text-center">
+                    <p className="text-white font-bold text-sm">
+                      ✨ Includes 5 free prints!
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => onRequireAuth(() => {})}
+                    className="w-full bg-amber-400 hover:bg-amber-300 text-gray-900 font-bold py-3 rounded-xl transition-all animate-pulseGlow"
                   >
-                    {isBookmarked ? <Check className="w-5 h-5" /> : <Bookmark className="w-5 h-5" />}
-                    {isBookmarked ? "Saved to Collection" : "Save to Collection"}
+                    Create Free Account
+                  </button>
+                  <p className="text-xs text-purple-200 text-center mt-2">
+                    No credit card required
+                  </p>
+                </div>
+              )}
+
+              {/* Action buttons - only for logged-in users (bless is on image overlay) */}
+              {user && (
+                <div className="space-y-4 mb-10">
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    className="w-full gap-2 shadow-lg shadow-purple-100"
+                    onClick={handlePrint}
+                  >
+                    <Printer className="w-5 h-5" />
+                    Print PDF
+                    {!isOwner && !isPremiumUser && (
+                      <span className="ml-1 text-xs opacity-80">({downloadsRemaining} left)</span>
+                    )}
                   </Button>
-                )}
-              </div>
+
+                  <Button
+                    variant="outline"
+                    className="w-full gap-2"
+                    onClick={handleDownload}
+                  >
+                    <Download className="w-5 h-5" />
+                    Download Image
+                    {!isOwner && !isPremiumUser && (
+                      <span className="ml-1 text-xs opacity-80">({downloadsRemaining} left)</span>
+                    )}
+                  </Button>
+
+                  {!isOwner && (
+                    <Button
+                      variant={isBookmarked ? "secondary" : "outline"}
+                      className={`w-full gap-2 ${isBookmarked ? "bg-purple-50 border-purple-100 text-[#7C3AED]" : ""}`}
+                      onClick={handleBookmark}
+                      disabled={bookmarkLoading}
+                    >
+                      {isBookmarked ? <Check className="w-5 h-5" /> : <Bookmark className="w-5 h-5" />}
+                      {isBookmarked ? "Saved to Collection" : "Save to Collection"}
+                    </Button>
+                  )}
+                </div>
+              )}
 
               <div className="pt-6 border-t border-gray-100 mb-8">
                 <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Share this sketch</p>
@@ -684,6 +743,15 @@ export const SketchPage: React.FC<SketchPageProps> = ({ user, onRequireAuth }) =
             </div>
           </div>
         </div>
+        
+        {/* Related Content - Lazy loaded */}
+        {sketch?.promptData?.age_group && sketch?.promptData?.art_style && (
+          <RelatedSketches 
+            currentSketchId={sketch.id}
+            ageGroup={sketch.promptData.age_group}
+            artStyle={sketch.promptData.art_style}
+          />
+        )}
       </div>
 
       <PremiumModal

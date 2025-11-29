@@ -36,6 +36,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialVi
     setIsLoading(true);
     try {
       await loginWithGoogle();
+      // Track Pinterest signup event for Google signups only (not logins)
+      if (view === 'signup') {
+        window.pintrk?.('track', 'signup');
+      }
       onClose();
     } catch (err: any) {
       console.error(err);
@@ -151,10 +155,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialVi
                 <h2 className="font-display text-2xl font-bold text-[#1F2937] mb-4">
                   Verify your email
                 </h2>
-                <p className="text-gray-500 mb-8 leading-relaxed">
+                <p className="text-gray-500 mb-4 leading-relaxed">
                   We have sent you a verification email to <br/>
                   <span className="font-bold text-gray-800">{email}</span>.<br/>
                   Verify it and log in.
+                </p>
+                <p className="text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-8 text-sm">
+                  <strong>Can't find it?</strong> Check your spam or junk folder.
                 </p>
                 <Button 
                   onClick={() => switchView('login')}

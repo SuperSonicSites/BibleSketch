@@ -83,7 +83,7 @@ export const STYLE_LOGIC = {
   [ArtStyle.ICONOGRAPHY]: "Byzantine orthodox style, formal stiff pose, halos with geometric patterns, flat perspective, spiritual and solemn.",
   [ArtStyle.COMIC]: "Dynamic comic book style, bold clean outlines, simple action lines, expressive poses, NO shading, NO hatching, NO cross-hatching.",
   [ArtStyle.CLASSIC]: "Traditional fine art illustration. Realistic proportions, clean detailed outlines, NO hatching, NO cross-hatching, NO shading. Intricate line work for detail without fill techniques.",
-  [ArtStyle.DOODLE]: "Whimsical zentangle-inspired doodle art. Hand-drawn organic linework with flowing, meditative patterns. Fill backgrounds and empty spaces with repetitive decorative motifs (swirls, leaves, waves, dots, paisley). Loose sketch-like quality. NO rigid geometric precision. Relaxed, freeform therapeutic coloring style."
+  [ArtStyle.DOODLE]: "Modern liturgical vector art. Bernardo Ramonfaur style illustration. Minimalist Catholic iconography. Faceted character design using straight lines and sharp corners. Clean vector lines with decorative hatching. Solemn and dignified atmosphere. Black and white ink sketch."
 };
 
 export const BIBLE_BOOKS = [

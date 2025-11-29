@@ -69,10 +69,10 @@ export const PremiumModal: React.FC<PremiumModalProps> = ({ isOpen, onClose, rem
                     <Button
                         variant="primary"
                         className="w-full h-12 gap-2 shadow-lg shadow-purple-100"
-                        onClick={() => window.open('https://billing.stripe.com/p/login/your-link-here', '_blank')}
+                        onClick={() => { onClose(); window.location.href = '/pricing'; }}
                     >
                         <Crown className="w-5 h-5" />
-                        Upgrade Now
+                        View Premium Options
                     </Button>
 
                     <button

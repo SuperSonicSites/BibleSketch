@@ -116,8 +116,45 @@ function AppContent() {
 
   const handlePlanSelection = (planId: string, price: number, credits: number) => {
     requireAuth(() => {
-      console.log(`Init checkout for plan: ${planId} (${credits} credits for $${price})`);
-      alert(`Redirecting to Stripe Checkout for ${credits} credits ($${price})... (Mock)`);
+      if (!user?.uid) {
+        console.error("No authenticated user");
+        return;
+      }
+
+      // Zoho Hosted Payment Page URLs
+      const ZOHO_PLAN_URLS: Record<string, string> = {
+        'premium': 'https://billing.zohosecure.ca/subscribe/c4eda214b750306200eded5d860ee14ac337b81ca6421fdb875baa1a2a7b3c2f/bible-sketch-premium',
+        'spark': 'https://billing.zohosecure.ca/subscribe/c4eda214b750306200eded5d860ee14af89aa6dc60075c271e442233279cd445/Spark?addon_code%5B0%5D=20credits&addon_quantity%5B0%5D=20',
+        'torch': 'https://billing.zohosecure.ca/subscribe/c4eda214b750306200eded5d860ee14af01b06f31285bf8e05af38a9b0c1e6f3/Torch?addon_code%5B0%5D=80credits&addon_quantity%5B0%5D=80',
+        'beacon': 'https://billing.zohosecure.ca/subscribe/c4eda214b750306200eded5d860ee14a60094b8252300a63400de1ca08bc5eda/200credits?addon_code%5B0%5D=200credit&addon_quantity%5B0%5D=200',
+      };
+
+      const planUrl = ZOHO_PLAN_URLS[planId];
+
+      if (!planUrl) {
+        console.error(`Unknown plan: ${planId}`);
+        return;
+      }
+
+      // Build success redirect - different param for subscription vs credit pack
+      const successParam = planId === 'premium' ? 'subscription=success' : `purchase=${planId}`;
+      const SUCCESS_REDIRECT = encodeURIComponent(`${window.location.origin}/pricing?${successParam}`);
+      
+      // Build Zoho Hosted Payment Page URL with Firebase UID
+      // Custom field parameter uses the API Field Name from Zoho Settings > Preferences > Customers > Field Customization
+      const checkoutUrl = `${planUrl}${planUrl.includes('?') ? '&' : '?'}cf_cf_firebase_uid=${encodeURIComponent(user.uid)}&redirect_url=${SUCCESS_REDIRECT}`;
+
+      console.log(`Redirecting to Zoho checkout: ${checkoutUrl}`);
+      
+      // Track Pinterest initiate checkout event
+      window.pintrk?.('track', 'initiatecheckout', {
+        value: price,
+        currency: 'USD'
+      });
+
+      // Redirect to Zoho Checkout
+      window.location.href = checkoutUrl;
+
     }, 'signup');
   };
 
@@ -185,6 +222,7 @@ function AppContent() {
             <PricingPage 
               onBack={() => navigate('/')} 
               onSelectPlan={handlePlanSelection}
+              isPremium={user?.isPremium || false}
             />
           } />
 

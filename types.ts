@@ -75,3 +75,10 @@ export interface CreditTransaction {
   timestamp: number;
   type: 'usage' | 'purchase' | 'bonus' | 'refund';
 }
+
+// Pinterest Tag type declaration
+declare global {
+  interface Window {
+    pintrk?: (action: string, event: string, data?: Record<string, any>) => void;
+  }
+}

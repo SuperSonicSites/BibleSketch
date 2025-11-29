@@ -59,5 +59,11 @@ service cloud.firestore {
         )
       );
     }
+
+    // Processed Webhooks: Admin SDK only (Cloud Functions bypass rules)
+    // Used for idempotency - prevents duplicate webhook processing
+    match /processedWebhooks/{eventId} {
+      allow read, write: if false;
+    }
   }
 }

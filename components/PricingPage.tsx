@@ -1,16 +1,60 @@
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
-import { Check, Zap, Crown, Sparkles, HelpCircle, ArrowLeft } from 'lucide-react';
+import { Check, Zap, Crown, Sparkles, HelpCircle, ArrowLeft, PartyPopper } from 'lucide-react';
 import { Button } from './ui/Button';
 
 interface PricingPageProps {
   onBack: () => void;
   onSelectPlan: (planId: string, price: number, credits: number) => void;
+  isPremium?: boolean;
 }
 
-export const PricingPage: React.FC<PricingPageProps> = ({ onBack, onSelectPlan }) => {
-  
+export const PricingPage: React.FC<PricingPageProps> = ({ onBack, onSelectPlan, isPremium = false }) => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [successMessage, setSuccessMessage] = useState({ title: '', subtitle: '' });
+
+  // Handle return from Zoho checkout
+  useEffect(() => {
+    const packPrices: Record<string, number> = { spark: 4.99, torch: 14.99, beacon: 29.99 };
+    const packCredits: Record<string, number> = { spark: 20, torch: 80, beacon: 200 };
+
+    const isSubscription = searchParams.get('subscription') === 'success';
+    const purchasedPack = searchParams.get('purchase');
+
+    if (isSubscription) {
+      // Track Pinterest checkout event for Premium
+      window.pintrk?.('track', 'checkout', {
+        value: 4.99,
+        currency: 'USD'
+      });
+      setSuccessMessage({
+        title: 'Welcome to Premium! 🎉',
+        subtitle: 'Your subscription is being activated. Features will unlock momentarily.'
+      });
+      setShowSuccess(true);
+      setSearchParams({});
+      const timer = setTimeout(() => setShowSuccess(false), 8000);
+      return () => clearTimeout(timer);
+    } else if (purchasedPack && packPrices[purchasedPack]) {
+      // Track Pinterest checkout event for credit pack
+      window.pintrk?.('track', 'checkout', {
+        value: packPrices[purchasedPack],
+        currency: 'USD'
+      });
+      setSuccessMessage({
+        title: 'Credits Added! 🎉',
+        subtitle: `${packCredits[purchasedPack]} credits + ${packCredits[purchasedPack]} bonus prints have been added to your account.`
+      });
+      setShowSuccess(true);
+      setSearchParams({});
+      const timer = setTimeout(() => setShowSuccess(false), 8000);
+      return () => clearTimeout(timer);
+    }
+  }, [searchParams, setSearchParams]);
+
   const tiers = [
     {
       id: 'spark',
@@ -86,6 +130,42 @@ export const PricingPage: React.FC<PricingPageProps> = ({ onBack, onSelectPlan }
       </Helmet>
 
       <div className="max-w-7xl mx-auto px-4 py-12 md:py-20 animate-in fade-in duration-500">
+
+        {/* Success Banner - After checkout return */}
+        {showSuccess && (
+          <div className="mb-8 bg-green-50 border border-green-200 rounded-2xl p-6 flex items-center gap-4 animate-in slide-in-from-top duration-300">
+            <div className="p-3 bg-green-100 rounded-full">
+              <PartyPopper className="w-6 h-6 text-green-600" />
+            </div>
+            <div>
+              <h3 className="font-bold text-green-800">{successMessage.title}</h3>
+              <p className="text-green-600 text-sm">{successMessage.subtitle}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Already Premium Banner */}
+        {isPremium && !showSuccess && (
+          <div className="mb-8 bg-purple-50 border border-purple-200 rounded-2xl p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-purple-100 rounded-full">
+                <Crown className="w-6 h-6 text-purple-600" />
+              </div>
+              <div>
+                <h3 className="font-bold text-purple-800">You're a Premium Member!</h3>
+                <p className="text-purple-600 text-sm">Enjoy unlimited downloads and monthly credits.</p>
+              </div>
+            </div>
+            <a 
+              href="https://billing.zohosecure.ca/portal/biblesketch/login"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-purple-600 hover:text-purple-800 font-medium text-sm underline whitespace-nowrap"
+            >
+              Manage Subscription →
+            </a>
+          </div>
+        )}
 
         {/* Back Button */}
       <button 
@@ -169,12 +249,15 @@ export const PricingPage: React.FC<PricingPageProps> = ({ onBack, onSelectPlan }
               <Button
                 variant="outline"
                 size="lg"
-                className="w-full md:w-auto bg-white text-purple-700 hover:bg-purple-50 border-2 border-white font-bold shadow-lg"
-                onClick={() => onSelectPlan('premium', 9.99, 15)}
+                className="w-full md:w-auto bg-white text-purple-700 hover:bg-purple-50 border-2 border-white font-bold shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={() => onSelectPlan('premium', 4.99, 10)}
+                disabled={isPremium}
               >
-                Get Premium
+                {isPremium ? 'Current Plan' : 'Get Premium'}
               </Button>
-              <p className="text-xs text-purple-200 mt-2">Never worry about limits again</p>
+              <p className="text-xs text-purple-200 mt-2">
+                {isPremium ? 'Thank you for your support!' : 'Cancel anytime'}
+              </p>
             </div>
           </div>
         </div>
@@ -223,14 +306,17 @@ export const PricingPage: React.FC<PricingPageProps> = ({ onBack, onSelectPlan }
                 <span className="text-4xl font-bold text-gray-900">${tier.price}</span>
                 <span className="text-gray-400 font-medium">/ one-time</span>
               </div>
-              <div className="flex items-center gap-2 mt-2">
+              <div className="flex flex-wrap items-center gap-2 mt-2">
                 <span className="text-sm font-bold text-[#7C3AED] bg-purple-50 px-2 py-1 rounded-md">
-                  {tier.credits} Images
+                  {tier.credits} Credits
                 </span>
-                <span className="text-xs text-gray-400">
-                  (${tier.costPerImage.toFixed(2)} / image)
+                <span className="text-xs font-semibold text-amber-700 bg-amber-50 px-2 py-1 rounded-md border border-amber-200">
+                  + {tier.credits} Bonus Prints ✨
                 </span>
               </div>
+              <span className="text-xs text-gray-400 mt-1 block">
+                (${tier.costPerImage.toFixed(2)} / image)
+              </span>
             </div>
 
             {/* Savings (Visible or Invisible Spacer) */}
@@ -299,7 +385,7 @@ export const PricingPage: React.FC<PricingPageProps> = ({ onBack, onSelectPlan }
       {/* Footer Note */}
       <div className="text-center mt-12">
         <p className="text-sm text-gray-400">
-          Payments are securely processed by Stripe. <br />
+          Payments are securely processed. <br />
           Need help? Contact support@biblesketch.com
         </p>
       </div>

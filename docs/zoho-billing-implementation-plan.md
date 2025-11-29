@@ -18,12 +18,13 @@
 
 | Setting | Value |
 |---------|-------|
-| **Custom Field Name** | `firebase_uid` |
+| **Custom Field Label** | `firebase_uid` |
+| **Custom Field API Name** | `cf_cf_firebase_uid` |
 | **Custom Field Location** | Customer Profile |
 | **Webhook Security** | Enabled with secret key |
 | **Webhook Signature Header** | `X-Zoho-Webhook-Signature` |
 | **Webhook Content-Type** | `application/json;charset=UTF-8` |
-| **URL Parameter for UID** | `cf_firebase_uid` |
+| **URL Parameter for UID** | `cf_cf_firebase_uid` |
 
 ---
 
@@ -88,9 +89,9 @@ const handlePlanSelection = (planId: string, price: number, credits: number) => 
     }
 
     // Build Zoho Hosted Payment Page URL
-    // cf_firebase_uid passes the UID to the Customer custom field
+    // cf_cf_firebase_uid is the API Field Name for the Customer custom field
     const SUCCESS_REDIRECT = encodeURIComponent(`${window.location.origin}/pricing?subscription=success`);
-    const checkoutUrl = `${planUrl}?cf_firebase_uid=${user.uid}&redirect_url=${SUCCESS_REDIRECT}`;
+    const checkoutUrl = `${planUrl}?cf_cf_firebase_uid=${encodeURIComponent(user.uid)}&redirect_url=${SUCCESS_REDIRECT}`;
 
     // Redirect to Zoho Checkout
     window.location.href = checkoutUrl;

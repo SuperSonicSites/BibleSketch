@@ -1,10 +1,15 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 export const VerifiedPage: React.FC = () => {
   const navigate = useNavigate();
   // We assume success if they reach this page via the redirect,
   // as Firebase only redirects here after successful verification.
+
+  // Track Pinterest signup event for verified email signups
+  useEffect(() => {
+    window.pintrk?.('track', 'signup');
+  }, []);
   
   return (
     <div className="min-h-[80vh] flex flex-col items-center justify-center p-4 text-center">

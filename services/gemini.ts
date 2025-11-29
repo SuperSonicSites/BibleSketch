@@ -13,7 +13,7 @@ import {
   STYLE_LOGIC
 } from "../constants";
 import { AgeGroup, ArtStyle, BibleReference } from "../types";
-import { postProcessImage } from "../utils/imageProcessing";
+import { postProcessImage, thresholdToBW } from "../utils/imageProcessing";
 import { downloadImageAsBase64 } from "../utils/storage";
 
 // --- TYPES ---
@@ -425,18 +425,21 @@ export const editColoringPage = async (
   const mimeType = base64Image.match(/data:([^;]+);base64/)?.[1] || "image/png";
 
   const prompt = `
-    Edit this image to be a coloring page.
-    User Instruction: ${editPrompt}.
+    TASK: Modify this existing coloring page image according to the user's instruction.
     
-    --- LAYOUT REQUIREMENTS ---
-    ${LAYOUT_RULES}
+    User Instruction: "${editPrompt}"
     
-    --- CONSTRAINTS ---
-    STRICTLY maintain black and white line art style.
-    Do NOT shrink the image. Do NOT add a border.
-    Output ONLY the modified image.
+    --- CRITICAL CANVAS RULES (MANDATORY) ---
+    1. PRESERVE EXACT CANVAS SIZE: The output must have the SAME dimensions as the input.
+    2. FULL BLEED: Content must extend to ALL 4 EDGES. NO white margins. NO padding. NO borders.
+    3. DO NOT zoom out, shrink, scale down, or add any empty space around the artwork.
+    4. The artwork must FILL THE ENTIRE CANVAS edge-to-edge, exactly like the input.
     
-    NEGATIVE PROMPT: ${CRITICAL_NEGATIVES}
+    --- STYLE CONSTRAINTS ---
+    - Maintain black and white line art style.
+    - Output ONLY the modified image.
+    
+    NEGATIVE PROMPT: ${CRITICAL_NEGATIVES}, white margin, white border, padding, zoomed out, scaled down, empty space around image, frame
   `;
 
   try {
@@ -452,7 +455,7 @@ export const editColoringPage = async (
       config: {
         responseModalities: [Modality.IMAGE],
         imageConfig: {
-          imageSize: "4K",
+          imageSize: "2K",
           aspectRatio: "3:4"
         },
         safetySettings: [{ category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE }]
@@ -466,8 +469,8 @@ export const editColoringPage = async (
       for (const part of candidates[0].content.parts) {
         if (part.inlineData) {
           const resultBase64 = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-          // Post-process to ensure B&W
-          return await postProcessImage(resultBase64);
+          // Threshold to B&W without adding margins (avoids progressive shrinking)
+          return await thresholdToBW(resultBase64);
         }
       }
     }

@@ -56,6 +56,76 @@ export const embedLogoOnImage = (imageSource: string): Promise<string> => {
  * 2. Converts to Grayscale.
  * 3. Thresholds (Eliminates light grays -> White, Snaps darks -> Black).
  */
+/**
+ * Threshold image to pure B&W without adding margins.
+ * Used for editing operations to avoid progressive shrinking.
+ */
+export const thresholdToBW = (base64Image: string): Promise<string> => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+
+      if (!ctx) {
+        resolve(base64Image);
+        return;
+      }
+
+      const width = img.width;
+      const height = img.height;
+      canvas.width = width;
+      canvas.height = height;
+
+      // Draw image at full size (no zoom-out)
+      ctx.drawImage(img, 0, 0, width, height);
+
+      // PIXEL MANIPULATION (Grayscale & Threshold)
+      try {
+        const imageData = ctx.getImageData(0, 0, width, height);
+        const data = imageData.data;
+
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i];
+          const g = data[i + 1];
+          const b = data[i + 2];
+
+          // Calculate Luminance
+          const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+
+          // Threshold: light grays (>160) become white, darks become black
+          let finalVal = luminance < 160 ? 0 : 255;
+
+          data[i] = finalVal;
+          data[i + 1] = finalVal;
+          data[i + 2] = finalVal;
+        }
+
+        ctx.putImageData(imageData, 0, 0);
+        resolve(canvas.toDataURL('image/png'));
+      } catch (err) {
+        console.error("Error processing pixel data", err);
+        resolve(base64Image);
+      }
+    };
+
+    img.onerror = (err) => {
+      console.error("Failed to load image for thresholding", err);
+      resolve(base64Image);
+    };
+
+    img.src = base64Image;
+  });
+};
+
+/**
+ * Post-processes the raw AI output to meet coloring book standards.
+ * 1. Adds padding (Zoom out to leave margins).
+ * 2. Converts to Grayscale.
+ * 3. Thresholds (Eliminates light grays -> White, Snaps darks -> Black).
+ */
 export const postProcessImage = (base64Image: string): Promise<string> => {
   return new Promise((resolve) => {
     const img = new Image();
