@@ -41,7 +41,7 @@ export const ArtistBadge: React.FC<ArtistBadgeProps> = ({ userId, onAuthorClick,
     >
         <div className="w-6 h-6 rounded-full bg-gray-100 group-hover/artist:bg-purple-100 flex items-center justify-center border border-gray-200 group-hover/artist:border-purple-200 transition-colors overflow-hidden shrink-0">
             {photo ? (
-              <img src={photo} alt={name} className="w-full h-full object-cover" />
+              <img src={photo} alt={name} className="w-full h-full object-cover" loading="lazy" />
             ) : (
               <User className="w-3 h-3" />
             )}

@@ -54,7 +54,7 @@ export const Header: React.FC<HeaderProps> = ({
         >
           <div className="relative transition-transform duration-300 group-hover:scale-105">
             <img 
-              src="/logo.png" 
+              src="/logo.webp" 
               alt="Bible Sketch Logo" 
               className="w-10 h-10 md:w-12 md:h-12 object-contain"
             />
@@ -76,7 +76,7 @@ export const Header: React.FC<HeaderProps> = ({
             onClick={() => onNavigate('gallery')}
             className={`text-lg font-bold ${currentView === 'gallery' ? 'text-[#7C3AED]' : 'text-gray-500'} hover:text-[#7C3AED] transition-colors`}
           >
-            Gallery
+            Explore
           </button>
           <button 
             onClick={() => onNavigate('pricing')}
@@ -93,7 +93,7 @@ export const Header: React.FC<HeaderProps> = ({
               >
                 <div className="w-11 h-11 rounded-full bg-purple-100 flex items-center justify-center text-[#7C3AED] overflow-hidden border-2 border-white shadow-sm">
                   {user.photoURL ? (
-                    <img src={user.photoURL} alt="User" className="w-full h-full object-cover" />
+                    <img src={user.photoURL} alt="User" className="w-full h-full object-cover" loading="lazy" />
                   ) : (
                     <UserIcon className="w-6 h-6" />
                   )}
@@ -168,7 +168,7 @@ export const Header: React.FC<HeaderProps> = ({
                  className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-[#7C3AED] overflow-hidden border border-purple-200 focus:outline-none focus:ring-2 focus:ring-purple-300"
                >
                   {user.photoURL ? (
-                    <img src={user.photoURL} alt="User" className="w-full h-full object-cover" />
+                    <img src={user.photoURL} alt="User" className="w-full h-full object-cover" loading="lazy" />
                   ) : (
                     <UserIcon className="w-6 h-6" />
                   )}
@@ -226,6 +226,8 @@ export const Header: React.FC<HeaderProps> = ({
           <button 
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
             className="text-gray-700 p-1 hover:bg-gray-100 rounded-lg transition-colors"
+            aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
+            aria-expanded={isMobileMenuOpen}
           >
              {isMobileMenuOpen ? (
                 <X className="w-8 h-8" />
@@ -249,7 +251,7 @@ export const Header: React.FC<HeaderProps> = ({
                 onClick={() => { onNavigate('gallery'); setIsMobileMenuOpen(false); }}
                 className={`text-left font-bold text-lg p-4 rounded-xl transition-colors ${currentView === 'gallery' ? 'bg-purple-50 text-[#7C3AED]' : 'text-gray-600 hover:bg-gray-50'}`}
             >
-                View Gallery
+                Explore
             </button>
             <button 
                 onClick={() => { onNavigate('pricing'); setIsMobileMenuOpen(false); }}

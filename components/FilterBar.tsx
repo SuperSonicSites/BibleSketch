@@ -139,6 +139,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
             <select
               value={activeSort}
               onChange={(e) => onSortChange(e.target.value as SortOption)}
+              aria-label="Sort sketches by"
               className="appearance-none w-full pl-10 pr-10 py-2.5 px-4 rounded-xl text-sm font-medium cursor-pointer transition-all duration-200 bg-amber-50 border border-amber-200 text-amber-700 hover:border-amber-300 hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             >
               <option value="popular">Most Popular</option>

@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
-import { getUserGallery, getPublicGallery, blessSketch, getSavedSketches, getUserPublicGallery, getUserDocument, getUserBlessedSketchIds } from '../services/firebase';
-import { Sketch } from '../types';
-import { Heart, AlertTriangle, Globe, User, ExternalLink, Bookmark, ArrowLeft, Facebook, ChevronLeft, ChevronRight } from 'lucide-react';
+import { getUserGallery, getPublicGallery, blessSketch, getSavedSketches, getUserPublicGallery, getUserDocument, getUserBlessedSketchIds, getFilteredPublicGallery, FilteredGalleryResult } from '../services/firebase';
+import { DocumentSnapshot } from 'firebase/firestore';
+import { Sketch, AgeGroup, ArtStyle } from '../types';
+import { Heart, AlertTriangle, Globe, User, ExternalLink, Bookmark, ArrowLeft, Facebook, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { GalleryModal } from './GalleryModal';
 import { BIBLE_BOOKS, LITURGICAL_TAGS } from '../constants';
 import { FilterBar, SortOption } from './FilterBar';
@@ -59,6 +60,11 @@ export const Gallery: React.FC<GalleryProps> = ({ userId, publicProfileId, onBac
   const [selectedSketch, setSelectedSketch] = useState<Sketch | null>(null);
   const [profileData, setProfileData] = useState<{ name: string, photo: string } | null>(null);
 
+  // New state for cursor-based pagination (Community tab)
+  const [cursor, setCursor] = useState<DocumentSnapshot | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
   // Generate SEO content
   const seoContent = useMemo(() => {
     if (publicProfileId && profileData) {
@@ -81,11 +87,15 @@ export const Gallery: React.FC<GalleryProps> = ({ userId, publicProfileId, onBac
     setActiveStyleFilter('All');
     setActiveSort('newest');
     setCurrentPage(1);
+    setCursor(null);
+    setHasMore(false);
   }, [activeTab, publicProfileId]);
 
   // Reset pagination when filter changes
   useEffect(() => {
     setCurrentPage(1);
+    setCursor(null);
+    setHasMore(false);
   }, [activeBookFilter, activeTagFilter, activeAgeFilter, activeStyleFilter, activeSort]);
 
   // Sync URL params with tag filter
@@ -132,7 +142,9 @@ export const Gallery: React.FC<GalleryProps> = ({ userId, publicProfileId, onBac
       setLoading(true);
       setError(null);
       setIndexErrorLink(null);
-      setImages([]); 
+      setImages([]);
+      setCursor(null);
+      setHasMore(false);
       
       try {
         let data: any[] = [];
@@ -153,8 +165,18 @@ export const Gallery: React.FC<GalleryProps> = ({ userId, publicProfileId, onBac
           }
           data = await getSavedSketches(userId);
         } else {
-          // Community Gallery - Pass userId to exclude own images
-          data = await getPublicGallery(userId);
+          // Community Gallery - Use server-side filtered query
+          const result = await getFilteredPublicGallery({
+            book: activeBookFilter !== 'All' ? activeBookFilter : undefined,
+            ageGroup: activeAgeFilter !== 'All' ? activeAgeFilter : undefined,
+            artStyle: activeStyleFilter !== 'All' ? activeStyleFilter : undefined,
+            tag: activeTagFilter !== 'All' ? activeTagFilter : undefined,
+            pageSize: 50
+          });
+          
+          data = result.sketches;
+          setCursor(result.nextCursor);
+          setHasMore(result.hasMore);
         }
         
         setImages(data as unknown as Sketch[]);
@@ -201,10 +223,18 @@ export const Gallery: React.FC<GalleryProps> = ({ userId, publicProfileId, onBac
     };
 
     fetchGallery();
-  }, [userId, activeTab, publicProfileId]);
+  }, [userId, activeTab, publicProfileId, activeBookFilter, activeTagFilter, activeAgeFilter, activeStyleFilter]);
 
   // --- Derived State: Available Books ---
+  // For Community tab, use static list. For other tabs, derive from fetched data.
   const availableBooks = useMemo(() => {
+    const isCommunityTab = activeTab === 'community' && !publicProfileId;
+    
+    if (isCommunityTab) {
+      return BIBLE_BOOKS; // Static list for Community tab
+    }
+    
+    // Dynamic list for My Gallery, Saved, Profile
     const bookSet = new Set<string>();
     images.forEach(img => {
       if (img.promptData && img.promptData.book) {
@@ -219,10 +249,19 @@ export const Gallery: React.FC<GalleryProps> = ({ userId, publicProfileId, onBac
       if (indexB === -1) return -1;
       return indexA - indexB;
     });
-  }, [images]);
+  }, [images, activeTab, publicProfileId]);
 
   // --- Derived State: Available Tags ---
+  // For Community tab, use static list. For other tabs, derive from fetched data.
   const availableTags = useMemo(() => {
+    const isCommunityTab = activeTab === 'community' && !publicProfileId;
+    
+    if (isCommunityTab) {
+      // Static list for Community tab
+      return LITURGICAL_TAGS.map(t => ({ id: t.id, label: t.label }));
+    }
+    
+    // Dynamic list for My Gallery, Saved, Profile
     const tagCount = new Map<string, number>();
     images.forEach(img => {
       if (img.tags && img.tags.length > 0) {
@@ -238,13 +277,22 @@ export const Gallery: React.FC<GalleryProps> = ({ userId, publicProfileId, onBac
         const tagInfo = LITURGICAL_TAGS.find(t => t.id === tagId);
         return tagInfo ? { id: tagId, label: tagInfo.label } : { id: tagId, label: tagId };
       });
-  }, [images]);
+  }, [images, activeTab, publicProfileId]);
 
   // Helper to normalize age group for display and filtering
   const normalizeAge = (age: string) => age === "Pre-Teen" ? "Teen" : age;
 
   // --- Derived State: Available Age Groups ---
+  // For Community tab, use static list. For other tabs, derive from fetched data.
   const availableAges = useMemo(() => {
+    const isCommunityTab = activeTab === 'community' && !publicProfileId;
+    
+    if (isCommunityTab) {
+      // Static list for Community tab (enum values)
+      return Object.values(AgeGroup);
+    }
+    
+    // Dynamic list for My Gallery, Saved, Profile
     const ageSet = new Set<string>();
     images.forEach(img => {
       if (img.promptData?.age_group) {
@@ -252,10 +300,19 @@ export const Gallery: React.FC<GalleryProps> = ({ userId, publicProfileId, onBac
       }
     });
     return Array.from(ageSet).sort();
-  }, [images]);
+  }, [images, activeTab, publicProfileId]);
 
   // --- Derived State: Available Art Styles ---
+  // For Community tab, use static list. For other tabs, derive from fetched data.
   const availableStyles = useMemo(() => {
+    const isCommunityTab = activeTab === 'community' && !publicProfileId;
+    
+    if (isCommunityTab) {
+      // Static list for Community tab (enum values)
+      return Object.values(ArtStyle);
+    }
+    
+    // Dynamic list for My Gallery, Saved, Profile
     const styleSet = new Set<string>();
     images.forEach(img => {
       if (img.promptData?.art_style) {
@@ -263,29 +320,35 @@ export const Gallery: React.FC<GalleryProps> = ({ userId, publicProfileId, onBac
       }
     });
     return Array.from(styleSet).sort();
-  }, [images]);
+  }, [images, activeTab, publicProfileId]);
 
   // --- Derived State: Filtered Images ---
   const filteredImages = useMemo(() => {
     let result = images;
 
-    if (activeBookFilter !== 'All') {
-      result = result.filter(img => img.promptData?.book === activeBookFilter);
+    // For Community tab, filtering is done server-side, so only apply sort
+    // For other tabs (My Gallery, Saved, Profile), apply full client-side filtering
+    const isCommunityTab = activeTab === 'community' && !publicProfileId;
+    
+    if (!isCommunityTab) {
+      if (activeBookFilter !== 'All') {
+        result = result.filter(img => img.promptData?.book === activeBookFilter);
+      }
+
+      if (activeTagFilter !== 'All') {
+        result = result.filter(img => img.tags && img.tags.includes(activeTagFilter));
+      }
+
+      if (activeAgeFilter !== 'All') {
+        result = result.filter(img => normalizeAge(img.promptData?.age_group || '') === activeAgeFilter);
+      }
+
+      if (activeStyleFilter !== 'All') {
+        result = result.filter(img => img.promptData?.art_style === activeStyleFilter);
+      }
     }
 
-    if (activeTagFilter !== 'All') {
-      result = result.filter(img => img.tags && img.tags.includes(activeTagFilter));
-    }
-
-    if (activeAgeFilter !== 'All') {
-      result = result.filter(img => normalizeAge(img.promptData?.age_group || '') === activeAgeFilter);
-    }
-
-    if (activeStyleFilter !== 'All') {
-      result = result.filter(img => img.promptData?.art_style === activeStyleFilter);
-    }
-
-    // Sort
+    // Sort (always client-side for both tabs)
     if (activeSort === 'newest') {
       result = [...result].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
     } else {
@@ -294,14 +357,20 @@ export const Gallery: React.FC<GalleryProps> = ({ userId, publicProfileId, onBac
     }
 
     return result;
-  }, [images, activeBookFilter, activeTagFilter, activeAgeFilter, activeStyleFilter, activeSort]);
+  }, [images, activeBookFilter, activeTagFilter, activeAgeFilter, activeStyleFilter, activeSort, activeTab, publicProfileId]);
 
   // --- Derived State: Paginated Images ---
-  const totalPages = Math.ceil(filteredImages.length / ITEMS_PER_PAGE);
+  // For Community tab, show all images (pagination is server-side with Load More)
+  // For other tabs, use client-side pagination
+  const isCommunityTab = activeTab === 'community' && !publicProfileId;
+  const totalPages = isCommunityTab ? 1 : Math.ceil(filteredImages.length / ITEMS_PER_PAGE);
   const displayedImages = useMemo(() => {
+    if (isCommunityTab) {
+      return filteredImages; // Show all loaded images for Community tab
+    }
     const start = (currentPage - 1) * ITEMS_PER_PAGE;
     return filteredImages.slice(start, start + ITEMS_PER_PAGE);
-  }, [filteredImages, currentPage]);
+  }, [filteredImages, currentPage, isCommunityTab]);
 
   // Memoize the onTagChange handler to prevent infinite re-renders
   const handleTagChange = useCallback((value: string) => {
@@ -396,6 +465,36 @@ export const Gallery: React.FC<GalleryProps> = ({ userId, publicProfileId, onBac
      } else {
         setSelectedSketch(img);
      }
+  };
+
+  // Load More handler for Community tab cursor pagination
+  const handleLoadMore = async () => {
+    if (!hasMore || isLoadingMore || activeTab !== 'community') return;
+    
+    setIsLoadingMore(true);
+    try {
+      const result = await getFilteredPublicGallery({
+        book: activeBookFilter !== 'All' ? activeBookFilter : undefined,
+        ageGroup: activeAgeFilter !== 'All' ? activeAgeFilter : undefined,
+        artStyle: activeStyleFilter !== 'All' ? activeStyleFilter : undefined,
+        tag: activeTagFilter !== 'All' ? activeTagFilter : undefined,
+        cursor: cursor,
+        pageSize: 50
+      });
+      
+      setImages(prev => [...prev, ...result.sketches]);
+      setCursor(result.nextCursor);
+      setHasMore(result.hasMore);
+    } catch (error: any) {
+      console.error("Failed to load more", error);
+      if (error.code === 'failed-precondition' && error.message.includes('index')) {
+        setError("Database Configuration Required");
+        const linkMatch = error.message.match(/https:\/\/console\.firebase\.google\.com[^\s]*/);
+        if (linkMatch) setIndexErrorLink(linkMatch[0]);
+      }
+    } finally {
+      setIsLoadingMore(false);
+    }
   };
 
   // Only show the Login Prompt if we are explicitly trying to view a private tab while logged out
@@ -616,12 +715,14 @@ export const Gallery: React.FC<GalleryProps> = ({ userId, publicProfileId, onBac
                           <button 
                               onClick={(e) => handleFacebookShare(e, img)}
                               className="flex-1 py-1.5 md:py-2 rounded-md md:rounded-lg bg-blue-50 text-blue-500 hover:bg-blue-100 flex items-center justify-center transition-colors border border-blue-100"
+                              aria-label="Share on Facebook"
                           >
                               <Facebook className="w-3 h-3 md:w-4 md:h-4" />
                           </button>
                           <button 
                               onClick={(e) => handlePinterestShare(e, img)}
                               className="flex-1 py-1.5 md:py-2 rounded-md md:rounded-lg bg-red-50 text-red-600 hover:bg-red-100 flex items-center justify-center transition-colors border border-red-100"
+                              aria-label="Share on Pinterest"
                           >
                               <PinterestIcon className="w-3 h-3 md:w-4 md:h-4" />
                           </button>
@@ -650,12 +751,37 @@ export const Gallery: React.FC<GalleryProps> = ({ userId, publicProfileId, onBac
             })}
           </div>
 
-          {/* Pagination Controls */}
-          {totalPages > 1 && (
+          {/* Pagination Controls - Different UI for Community (Load More) vs other tabs (Page Numbers) */}
+          {activeTab === 'community' && !publicProfileId ? (
+            // Community Tab: Load More Button
+            hasMore && (
+              <div className="flex justify-center mt-10">
+                <button
+                  onClick={handleLoadMore}
+                  disabled={isLoadingMore}
+                  className="flex items-center gap-2 px-8 py-3 bg-white border-2 border-[#7C3AED] text-[#7C3AED] rounded-full font-bold hover:bg-purple-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
+                >
+                  {isLoadingMore ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      Loading...
+                    </>
+                  ) : (
+                    <>
+                      Load More Sketches
+                    </>
+                  )}
+                </button>
+              </div>
+            )
+          ) : (
+            // Other Tabs: Traditional Pagination
+            totalPages > 1 && (
               <div className="flex justify-center items-center gap-6 mt-10">
                  <button 
                     onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                     disabled={currentPage === 1}
+                    aria-label="Previous page"
                     className="p-3 rounded-full bg-white border border-gray-200 text-gray-600 hover:bg-purple-50 hover:text-[#7C3AED] hover:border-purple-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-sm"
                  >
                     <ChevronLeft className="w-5 h-5" />
@@ -668,12 +794,14 @@ export const Gallery: React.FC<GalleryProps> = ({ userId, publicProfileId, onBac
                  <button 
                     onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                     disabled={currentPage === totalPages}
+                    aria-label="Next page"
                     className="p-3 rounded-full bg-white border border-gray-200 text-gray-600 hover:bg-purple-50 hover:text-[#7C3AED] hover:border-purple-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-sm"
                  >
                     <ChevronRight className="w-5 h-5" />
                  </button>
               </div>
-           )}
+            )
+          )}
         </>
       )}
 

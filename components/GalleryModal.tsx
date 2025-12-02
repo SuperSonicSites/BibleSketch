@@ -552,6 +552,7 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
                 onClick={handleFacebookShare}
                 className="flex-1 py-2 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-100 flex items-center justify-center transition-colors"
                 title="Share on Facebook"
+                aria-label="Share on Facebook"
               >
                 <Facebook className="w-5 h-5" />
               </button>
@@ -559,6 +560,7 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
                 onClick={handlePinterestShare}
                 className="flex-1 py-2 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 border border-red-100 flex items-center justify-center transition-colors"
                 title="Pin on Pinterest"
+                aria-label="Share on Pinterest"
               >
                 <PinterestIcon className="w-5 h-5" />
               </button>

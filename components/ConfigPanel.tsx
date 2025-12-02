@@ -46,7 +46,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({ age, setAge, style, se
       {/* Age Slider */}
       <div className="space-y-2 md:space-y-4 pb-6 md:pb-8">
         <div className="flex justify-between items-end mb-1 md:mb-2">
-          <label className="text-xs md:text-sm font-bold text-gray-400 tracking-wide uppercase">Complexity Level</label>
+          <label className="text-xs md:text-sm font-bold text-gray-600 tracking-wide uppercase">Complexity Level</label>
           <span className="text-[#7C3AED] font-display font-bold text-sm md:text-lg bg-purple-100 px-2 md:px-3 py-0.5 md:py-1 rounded-full">
             {age}
           </span>
@@ -68,6 +68,8 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({ age, setAge, style, se
             step="1"
             value={currentStepIndex} 
             onChange={handleSliderChange}
+            aria-label="Complexity Level"
+            aria-valuetext={ageSteps[currentStepIndex]}
             className="absolute w-full h-full opacity-0 cursor-pointer z-20"
           />
 
@@ -82,7 +84,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({ age, setAge, style, se
                 } ${idx === currentStepIndex ? "scale-125 shadow-md" : ""}`}></div>
                 
                 <span className={`absolute top-6 md:top-8 text-[10px] md:text-sm font-medium whitespace-nowrap transition-colors ${
-                  idx === currentStepIndex ? "text-gray-800" : "text-gray-400"
+                  idx === currentStepIndex ? "text-gray-800" : "text-gray-600"
                 }`}>
                   {step}
                 </span>
@@ -95,7 +97,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({ age, setAge, style, se
 
       {/* Art Style Chips */}
       <div className="space-y-2 md:space-y-4 mt-4 md:mt-8">
-        <label className="text-xs md:text-sm font-bold text-gray-400 tracking-wide uppercase">Artistic Style</label>
+        <label className="text-xs md:text-sm font-bold text-gray-600 tracking-wide uppercase">Artistic Style</label>
         <div className="grid grid-cols-2 gap-1.5 md:flex md:flex-wrap md:gap-3">
           {availableStyles.map((s) => (
             <button
@@ -105,7 +107,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({ age, setAge, style, se
                 relative px-2 py-2 md:px-4 md:py-2 rounded-full border-2 font-bold text-xs md:text-sm transition-all duration-200 text-center
                 ${style === s 
                   ? "bg-[#7C3AED] border-[#7C3AED] text-white shadow-sm scale-105" 
-                  : "bg-white border-transparent text-gray-400 hover:bg-gray-50 hover:border-gray-200"}
+                  : "bg-white border-transparent text-gray-600 hover:bg-gray-50 hover:border-gray-200"}
               `}
             >
               {s}

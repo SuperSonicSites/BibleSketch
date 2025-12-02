@@ -16,6 +16,7 @@ import { TagPage } from './components/TagPage';
 import { VerifiedPage } from './components/VerifiedPage';
 import { GlobalSEO } from './components/GlobalSEO';
 import { auth, onAuthStateChanged, logoutUser, onUserProfileChanged, ensureAnonymousSession } from './services/firebase';
+import { capturePinterestClickId, trackPinterestEvent } from './utils/pinterestTracking';
 
 // Wrapper to extract ID from params for the Gallery component
 const PublicProfileGallery = ({ currentUserId, onBack, onAuthorClick }: { currentUserId?: string, onBack: () => void, onAuthorClick: (id: string) => void }) => {
@@ -33,6 +34,16 @@ const PublicProfileGallery = ({ currentUserId, onBack, onAuthorClick }: { curren
 function AppContent() {
   const navigate = useNavigate();
   const location = useLocation();
+  
+  // Scroll to top on route change
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location.pathname]);
+  
+  // Capture Pinterest Click ID (epik) from ad URLs on initial load
+  useEffect(() => {
+    capturePinterestClickId();
+  }, []);
   
   // Auth State
   const [user, setUser] = useState<any | null>(null);
@@ -146,10 +157,11 @@ function AppContent() {
 
       console.log(`Redirecting to Zoho checkout: ${checkoutUrl}`);
       
-      // Track Pinterest initiate checkout event
-      window.pintrk?.('track', 'initiatecheckout', {
+      // Track Pinterest AddToCart event before redirect to Zoho checkout
+      trackPinterestEvent('addtocart', {
         value: price,
-        currency: 'USD'
+        currency: 'USD',
+        product_name: planId === 'premium' ? 'Premium Subscription' : `${planId} Credit Pack`
       });
 
       // Redirect to Zoho Checkout
@@ -256,19 +268,19 @@ function AppContent() {
 
       <footer className="bg-[#FFF7ED] border-t border-purple-50 py-12 mt-12">
         <div className="max-w-7xl mx-auto px-4 text-center">
-           <p className="text-gray-400 text-sm mb-4">
+           <p className="text-gray-600 text-sm mb-4">
              © {new Date().getFullYear()} Bible Sketch. All rights reserved.
            </p>
            <div className="flex justify-center gap-6">
              <button 
                onClick={() => navigate('/terms')}
-               className="text-gray-400 hover:text-[#7C3AED] text-sm font-medium transition-colors"
+               className="text-gray-600 hover:text-[#7C3AED] text-sm font-medium transition-colors"
              >
                Terms of Service
              </button>
              <button 
                onClick={() => navigate('/privacy')}
-               className="text-gray-400 hover:text-[#7C3AED] text-sm font-medium transition-colors"
+               className="text-gray-600 hover:text-[#7C3AED] text-sm font-medium transition-colors"
              >
                Privacy Policy
              </button>

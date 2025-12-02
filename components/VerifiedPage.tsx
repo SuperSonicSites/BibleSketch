@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { trackPinterestEvent } from '../utils/pinterestTracking';
 
 export const VerifiedPage: React.FC = () => {
   const navigate = useNavigate();
@@ -8,7 +9,7 @@ export const VerifiedPage: React.FC = () => {
 
   // Track Pinterest signup event for verified email signups
   useEffect(() => {
-    window.pintrk?.('track', 'signup');
+    trackPinterestEvent('signup');
   }, []);
   
   return (

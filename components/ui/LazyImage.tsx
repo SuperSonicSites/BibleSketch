@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { storage } from '../../services/firebase';
 import { ref, getDownloadURL } from 'firebase/storage';
 
@@ -12,7 +12,9 @@ interface LazyImageProps {
   storagePath?: string;
   // Add data-pin-description prop to allow overriding default behavior
   // This is used by Pinterest's "Save" button logic or when pins are created
-  'data-pin-description'?: string; 
+  'data-pin-description'?: string;
+  // Use eager loading for hero/main images that should load immediately
+  eager?: boolean;
 }
 
 export const LazyImage: React.FC<LazyImageProps> = ({ 
@@ -22,11 +24,21 @@ export const LazyImage: React.FC<LazyImageProps> = ({
   aspectRatio = "aspect-[3/4]",
   thumbnailPath,
   storagePath,
-  'data-pin-description': dataPinDescription
+  'data-pin-description': dataPinDescription,
+  eager = false
 }) => {
   const [currentSrc, setCurrentSrc] = useState<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const imgRef = useRef<HTMLImageElement>(null);
+
+  // Fix for cached images: Check if image is already loaded after render
+  // This handles the race condition where cached images load before React attaches onLoad
+  useEffect(() => {
+    if (currentSrc && imgRef.current?.complete && imgRef.current?.naturalHeight > 0) {
+      setIsLoaded(true);
+    }
+  }, [currentSrc]);
 
   useEffect(() => {
     let isMounted = true;
@@ -118,10 +130,11 @@ export const LazyImage: React.FC<LazyImageProps> = ({
       {/* Image */}
       {currentSrc && (
         <img
+          ref={imgRef}
           src={currentSrc}
           alt={alt}
           data-pin-description={dataPinDescription || alt} // Use passed description or fallback to alt
-          loading="lazy"
+          loading={eager ? "eager" : "lazy"}
           decoding="async"
           onLoad={() => setIsLoaded(true)}
           onError={() => {

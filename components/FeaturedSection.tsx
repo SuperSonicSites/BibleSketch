@@ -3,7 +3,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Sketch } from '../types';
 import { getPublicGallery, blessSketch, getUserBlessedSketchIds, getSavedSketches } from '../services/firebase';
-import { Heart, Facebook, ChevronLeft, ChevronRight, AlertCircle, User } from 'lucide-react';
+import { Heart, Facebook, ChevronLeft, ChevronRight, AlertCircle, User, ArrowRight } from 'lucide-react';
 import { BIBLE_BOOKS, LITURGICAL_TAGS } from '../constants';
 import { FilterBar, SortOption } from './FilterBar';
 import { GalleryModal } from './GalleryModal';
@@ -43,7 +43,7 @@ export const FeaturedSection: React.FC<FeaturedSectionProps> = ({
   const [activeTagFilter, setActiveTagFilter] = useState<string>('All');
   const [activeAgeFilter, setActiveAgeFilter] = useState<string>('All');
   const [activeStyleFilter, setActiveStyleFilter] = useState<string>('All');
-  const [activeSort, setActiveSort] = useState<SortOption>('newest');
+  const [activeSort, setActiveSort] = useState<SortOption>('popular');
   const [blessedIds, setBlessedIds] = useState<Set<string>>(new Set());
   const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(new Set());
 
@@ -401,12 +401,14 @@ export const FeaturedSection: React.FC<FeaturedSectionProps> = ({
                           <button 
                               onClick={(e) => handleFacebookShare(e, sketch)}
                               className="flex-1 py-1.5 md:py-2 rounded-md md:rounded-lg bg-blue-50 text-blue-500 hover:bg-blue-100 flex items-center justify-center transition-colors border border-blue-100"
+                              aria-label="Share on Facebook"
                           >
                               <Facebook className="w-3 h-3 md:w-4 md:h-4" />
                           </button>
                           <button 
                               onClick={(e) => handlePinterestShare(e, sketch)}
                               className="flex-1 py-1.5 md:py-2 rounded-md md:rounded-lg bg-red-50 text-red-600 hover:bg-red-100 flex items-center justify-center transition-colors border border-red-100"
+                              aria-label="Share on Pinterest"
                           >
                               <PinterestIcon className="w-3 h-3 md:w-4 md:h-4" />
                           </button>
@@ -422,6 +424,7 @@ export const FeaturedSection: React.FC<FeaturedSectionProps> = ({
                  <button 
                     onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                     disabled={currentPage === 1}
+                    aria-label="Previous page"
                     className="p-3 rounded-full bg-white border border-gray-200 text-gray-600 hover:bg-purple-50 hover:text-[#7C3AED] hover:border-purple-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-sm"
                  >
                     <ChevronLeft className="w-5 h-5" />
@@ -434,12 +437,26 @@ export const FeaturedSection: React.FC<FeaturedSectionProps> = ({
                  <button 
                     onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                     disabled={currentPage === totalPages}
+                    aria-label="Next page"
                     className="p-3 rounded-full bg-white border border-gray-200 text-gray-600 hover:bg-purple-50 hover:text-[#7C3AED] hover:border-purple-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-sm"
                  >
                     <ChevronRight className="w-5 h-5" />
                  </button>
               </div>
            )}
+
+           {/* CTA to Explore Page */}
+           <div className="text-center mt-10">
+              <Button 
+                 onClick={onNavigateToGallery} 
+                 variant="outline" 
+                 size="lg"
+                 className="gap-2 font-bold"
+              >
+                 Explore All Sketches
+                 <ArrowRight className="w-4 h-4" />
+              </Button>
+           </div>
          </>
       )}
 

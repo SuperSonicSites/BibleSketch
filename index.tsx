@@ -1,5 +1,6 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import ReactDOM from 'react-dom/client';
+import './src/index.css';
 import App from './App';
 
 // Fix: Explicitly define state and props for ErrorBoundary

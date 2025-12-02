@@ -37,6 +37,8 @@ import {
   serverTimestamp,
   increment,
   getDocs,
+  startAfter,
+  DocumentSnapshot,
   connectFirestoreEmulator
 } from "firebase/firestore";
 
@@ -83,17 +85,70 @@ if (location.hostname === "localhost") {
 }
 export type { User };
 
+// --- Helper: Resize Image for Profile ---
+// 96px is 2x the largest display size (44px header) for retina support
+const resizeProfileImage = (file: File, maxSize: number = 96): Promise<Blob> => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    
+    img.onload = () => {
+      // Calculate new dimensions (maintain aspect ratio)
+      let width = img.width;
+      let height = img.height;
+      
+      if (width > height) {
+        if (width > maxSize) {
+          height = Math.round((height * maxSize) / width);
+          width = maxSize;
+        }
+      } else {
+        if (height > maxSize) {
+          width = Math.round((width * maxSize) / height);
+          height = maxSize;
+        }
+      }
+      
+      canvas.width = width;
+      canvas.height = height;
+      
+      // Draw resized image
+      ctx?.drawImage(img, 0, 0, width, height);
+      
+      // Convert to WebP blob (much smaller than PNG/JPEG)
+      canvas.toBlob(
+        (blob) => {
+          if (blob) {
+            resolve(blob);
+          } else {
+            reject(new Error('Failed to create blob'));
+          }
+        },
+        'image/webp',
+        0.85 // Quality 85%
+      );
+    };
+    
+    img.onerror = () => reject(new Error('Failed to load image'));
+    img.src = URL.createObjectURL(file);
+  });
+};
+
 // --- Helper: Upload Profile Image ---
 const uploadProfileImage = async (uid: string, file: File): Promise<{ url: string, storagePath: string }> => {
   try {
+    // Resize image to 96x96 max and convert to WebP (2x retina for 44px display)
+    const resizedBlob = await resizeProfileImage(file);
+    
     // Match Security Rules: match /user_uploads/{uid}/{allPaths=**}
-    const storagePath = `user_uploads/${uid}/profile_${Date.now()}_${file.name}`;
+    const storagePath = `user_uploads/${uid}/profile_${Date.now()}.webp`;
     const storageRef = ref(storage, storagePath);
 
     // Ensure content type is set correctly
-    const metadata = { contentType: file.type || 'image/jpeg' };
+    const metadata = { contentType: 'image/webp' };
 
-    await uploadBytes(storageRef, file, metadata);
+    await uploadBytes(storageRef, resizedBlob, metadata);
     const url = await getDownloadURL(storageRef);
     return { url, storagePath };
   } catch (error) {
@@ -825,6 +880,139 @@ export const getPublicGallery = async (currentUserId?: string) => {
       throw new Error("PERMISSION_DENIED");
     }
     console.error("Error fetching public gallery:", error);
+    throw error;
+  }
+};
+
+// 6a. Get Filtered Public Gallery with Cursor Pagination
+// Used by Explore page for server-side filtering and "Load More" functionality
+export interface FilteredGalleryParams {
+  book?: string;
+  ageGroup?: string;
+  artStyle?: string;
+  tag?: string;
+  cursor?: DocumentSnapshot | null;
+  pageSize?: number;
+}
+
+export interface FilteredGalleryResult {
+  sketches: Sketch[];
+  nextCursor: DocumentSnapshot | null;
+  hasMore: boolean;
+}
+
+export const getFilteredPublicGallery = async (
+  params: FilteredGalleryParams
+): Promise<FilteredGalleryResult> => {
+  const { 
+    book, 
+    ageGroup, 
+    artStyle, 
+    tag,
+    cursor = null, 
+    pageSize = 50
+  } = params;
+
+  try {
+    // Build query constraints
+    const constraints: any[] = [
+      where('isPublic', '==', true),
+      orderBy('createdAt', 'desc'),
+      limit(pageSize + 10) // Fetch extra to compensate for client-side filtering (bookmarks)
+    ];
+
+    // Determine which filter to apply server-side (priority: tag > book > age > style)
+    // Only ONE filter is applied server-side to minimize index requirements
+    if (tag) {
+      constraints.splice(1, 0, where('tags', 'array-contains', tag));
+    } else if (book) {
+      constraints.splice(1, 0, where('promptData.book', '==', book));
+    } else if (ageGroup) {
+      // Handle Teen/Pre-Teen normalization
+      if (ageGroup === 'Teen') {
+        constraints.splice(1, 0, where('promptData.age_group', 'in', ['Teen', 'Pre-Teen']));
+      } else {
+        constraints.splice(1, 0, where('promptData.age_group', '==', ageGroup));
+      }
+    } else if (artStyle) {
+      constraints.splice(1, 0, where('promptData.art_style', '==', artStyle));
+    }
+
+    // Add cursor for pagination
+    if (cursor) {
+      constraints.push(startAfter(cursor));
+    }
+
+    const q = query(collection(db, 'sketches'), ...constraints);
+    const snapshot = await getDocs(q);
+
+    // Process results
+    let sketches = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+      timestamp: doc.data().createdAt?.toMillis?.() || Date.now(),
+      _docSnapshot: doc // Store for cursor
+    })) as (Sketch & { _docSnapshot: DocumentSnapshot })[];
+
+    // Client-side filtering for remaining filters and cleanup
+    sketches = sketches.filter(s => {
+      // Exclude bookmarks
+      if ((s as any).isBookmark) return false;
+      
+      // Apply secondary filters client-side (ones not applied server-side)
+      if (tag) {
+        // Tag was primary, apply others
+        if (book && s.promptData?.book !== book) return false;
+        if (ageGroup) {
+          const normalizedAge = s.promptData?.age_group === 'Pre-Teen' ? 'Teen' : s.promptData?.age_group;
+          if (normalizedAge !== ageGroup) return false;
+        }
+        if (artStyle && s.promptData?.art_style !== artStyle) return false;
+      } else if (book) {
+        // Book was primary
+        if (ageGroup) {
+          const normalizedAge = s.promptData?.age_group === 'Pre-Teen' ? 'Teen' : s.promptData?.age_group;
+          if (normalizedAge !== ageGroup) return false;
+        }
+        if (artStyle && s.promptData?.art_style !== artStyle) return false;
+      } else if (ageGroup) {
+        // Age was primary
+        if (artStyle && s.promptData?.art_style !== artStyle) return false;
+      }
+      // If artStyle was primary or no filters, no additional filtering needed
+      
+      return true;
+    });
+
+    // Trim to requested page size and determine if there's more
+    const hasMore = sketches.length > pageSize;
+    const resultSketches = sketches.slice(0, pageSize);
+    
+    // Get the last document for the next cursor
+    const lastSketch = resultSketches[resultSketches.length - 1];
+    const nextCursor = hasMore && lastSketch ? (lastSketch as any)._docSnapshot : null;
+
+    // Clean up internal property before returning
+    const cleanSketches = resultSketches.map(({ _docSnapshot, ...rest }) => rest) as Sketch[];
+
+    return {
+      sketches: cleanSketches,
+      nextCursor,
+      hasMore
+    };
+
+  } catch (error: any) {
+    // Handle missing index error gracefully
+    if (error.code === 'failed-precondition' && error.message.includes('index')) {
+      console.error('[getFilteredPublicGallery] Missing index:', error.message);
+      throw error; // Re-throw so UI can show index creation link
+    }
+    
+    if (error.code === 'permission-denied') {
+      throw new Error("PERMISSION_DENIED");
+    }
+    
+    console.error("Error fetching filtered gallery:", error);
     throw error;
   }
 };

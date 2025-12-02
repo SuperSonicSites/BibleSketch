@@ -7,6 +7,8 @@ import { ChevronDown, Search } from 'lucide-react';
 interface MadLibsInputProps {
   value: BibleReference;
   onChange: (val: BibleReference) => void;
+  /** When true, hides end verse selector for single verse selection (used by Verse Art) */
+  singleVerseMode?: boolean;
 }
 
 const NumericInput = ({ 
@@ -91,7 +93,7 @@ const NumericInput = ({
   );
 };
 
-export const MadLibsInput: React.FC<MadLibsInputProps> = ({ value, onChange }) => {
+export const MadLibsInput: React.FC<MadLibsInputProps> = ({ value, onChange, singleVerseMode = false }) => {
   const [isBookOpen, setIsBookOpen] = useState(false);
   const [bookSearch, setBookSearch] = useState("");
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -122,7 +124,7 @@ export const MadLibsInput: React.FC<MadLibsInputProps> = ({ value, onChange }) =
              className="w-full text-left px-4 py-3 md:px-6 md:py-4 rounded-xl hover:bg-purple-50/80 transition-all group flex items-center gap-4"
            >
              <div className="flex flex-col">
-               <span className="text-xs md:text-sm font-bold text-gray-400 uppercase tracking-wider">Book</span>
+               <span className="text-xs md:text-sm font-bold text-gray-600 uppercase tracking-wider">Book</span>
                <span className="text-2xl md:text-3xl font-bold text-gray-800 truncate">{value.book}</span>
              </div>
              <ChevronDown className="w-5 h-5 text-gray-400 ml-auto" />
@@ -173,7 +175,7 @@ export const MadLibsInput: React.FC<MadLibsInputProps> = ({ value, onChange }) =
         <div className="flex-grow flex items-center gap-4 px-2 md:px-6">
            {/* Chapter */}
            <div className="flex-1 flex flex-col items-center">
-              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Chapter</span>
+              <span className="text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Chapter</span>
               <NumericInput 
                 className="w-full text-center text-2xl md:text-3xl font-bold text-gray-800 bg-transparent focus:outline-none placeholder-gray-300"
                 placeholder="1"
@@ -186,10 +188,12 @@ export const MadLibsInput: React.FC<MadLibsInputProps> = ({ value, onChange }) =
 
            {/* Verses */}
            <div className="flex-[1.5] flex flex-col items-center">
-              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Verses</span>
+              <span className="text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">
+                {singleVerseMode ? 'Verse' : 'Verses'}
+              </span>
               <div className="flex items-center gap-2 w-full justify-center">
                 <NumericInput 
-                  className="w-16 text-center text-2xl md:text-3xl font-bold text-gray-800 bg-transparent focus:outline-none placeholder-gray-300"
+                  className={`${singleVerseMode ? 'w-full max-w-24' : 'w-16'} text-center text-2xl md:text-3xl font-bold text-gray-800 bg-transparent focus:outline-none placeholder-gray-300`}
                   placeholder="1"
                   value={value.startVerse}
                   onChange={(val) => {
@@ -197,16 +201,20 @@ export const MadLibsInput: React.FC<MadLibsInputProps> = ({ value, onChange }) =
                     onChange({ ...value, startVerse: newStart });
                   }}
                 />
-                <span className="text-gray-300 font-medium">-</span>
-                <NumericInput 
-                  className="w-16 text-center text-2xl md:text-3xl font-bold text-gray-800 bg-transparent focus:outline-none placeholder-gray-300"
-                  placeholder="#"
-                  value={value.endVerse}
-                  allowEmpty={true}
-                  onChange={(val) => {
-                    onChange({ ...value, endVerse: val });
-                  }}
-                />
+                {!singleVerseMode && (
+                  <>
+                    <span className="text-gray-300 font-medium">-</span>
+                    <NumericInput 
+                      className="w-16 text-center text-2xl md:text-3xl font-bold text-gray-800 bg-transparent focus:outline-none placeholder-gray-300"
+                      placeholder="#"
+                      value={value.endVerse}
+                      allowEmpty={true}
+                      onChange={(val) => {
+                        onChange({ ...value, endVerse: val });
+                      }}
+                    />
+                  </>
+                )}
               </div>
            </div>
         </div>

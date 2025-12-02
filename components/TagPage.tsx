@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
-import { getPublicGallery, blessSketch, getUserBlessedSketchIds } from '../services/firebase';
-import { Sketch } from '../types';
-import { Heart, ArrowLeft, Facebook, ChevronLeft, ChevronRight, Tag, Loader2 } from 'lucide-react';
+import { getFilteredPublicGallery, blessSketch, getUserBlessedSketchIds } from '../services/firebase';
+import { DocumentSnapshot } from 'firebase/firestore';
+import { Sketch, AgeGroup, ArtStyle } from '../types';
+import { Heart, ArrowLeft, Facebook, Tag, Loader2 } from 'lucide-react';
 import { LITURGICAL_TAGS, BIBLE_BOOKS } from '../constants';
 import { FilterBar, SortOption } from './FilterBar';
 import { getSketchUrl } from '../utils/urlHelpers';
@@ -33,11 +34,17 @@ export const TagPage: React.FC<TagPageProps> = ({ userId, onRequireAuth, onAutho
   const [sketches, setSketches] = useState<Sketch[]>([]);
   const [loading, setLoading] = useState(true);
   const [blessedIds, setBlessedIds] = useState<Set<string>>(new Set());
-  const [currentPage, setCurrentPage] = useState(1);
   const [activeBookFilter, setActiveBookFilter] = useState<string>('All');
   const [activeAgeFilter, setActiveAgeFilter] = useState<string>('All');
   const [activeStyleFilter, setActiveStyleFilter] = useState<string>('All');
   const [activeSort, setActiveSort] = useState<SortOption>('popular');
+
+  // Cursor-based pagination state
+  const [cursor, setCursor] = useState<DocumentSnapshot | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [indexErrorLink, setIndexErrorLink] = useState<string | null>(null);
 
   // Get tag info
   const tagInfo = useMemo(() => {
@@ -61,17 +68,29 @@ export const TagPage: React.FC<TagPageProps> = ({ userId, onRequireAuth, onAutho
     };
   }, [tagInfo, sketches.length]);
 
-  // Load sketches
+  // Load sketches with server-side tag filtering
   useEffect(() => {
     const loadSketches = async () => {
       setLoading(true);
+      setError(null);
+      setIndexErrorLink(null);
+      setSketches([]);
+      setCursor(null);
+      setHasMore(false);
+      
       try {
-        const allSketches = await getPublicGallery(undefined);
-        // Filter by tag
-        const taggedSketches = (allSketches as Sketch[]).filter(
-          s => s.tags && s.tags.includes(tagId || '')
-        );
-        setSketches(taggedSketches);
+        // Use server-side tag filtering
+        const result = await getFilteredPublicGallery({
+          tag: tagId,
+          book: activeBookFilter !== 'All' ? activeBookFilter : undefined,
+          ageGroup: activeAgeFilter !== 'All' ? activeAgeFilter : undefined,
+          artStyle: activeStyleFilter !== 'All' ? activeStyleFilter : undefined,
+          pageSize: 50
+        });
+        
+        setSketches(result.sketches);
+        setCursor(result.nextCursor);
+        setHasMore(result.hasMore);
 
         // Load blessings
         const localBlessings = new Set<string>();
@@ -87,90 +106,66 @@ export const TagPage: React.FC<TagPageProps> = ({ userId, onRequireAuth, onAutho
           dbBlessings.forEach(id => localBlessings.add(id));
         }
         setBlessedIds(localBlessings);
-      } catch (error) {
-        console.error("Failed to load tag page", error);
+      } catch (err: any) {
+        console.error("Failed to load tag page", err);
+        if (err.code === 'failed-precondition' && err.message.includes('index')) {
+          setError("Database Configuration Required");
+          const linkMatch = err.message.match(/https:\/\/console\.firebase\.google\.com[^\s]*/);
+          if (linkMatch) setIndexErrorLink(linkMatch[0]);
+        } else {
+          setError("Failed to load sketches. Please try again.");
+        }
       } finally {
         setLoading(false);
       }
     };
 
-    loadSketches();
-  }, [tagId, userId]);
+    if (tagId) {
+      loadSketches();
+    }
+  }, [tagId, userId, activeBookFilter, activeAgeFilter, activeStyleFilter]);
 
-  // Reset page when filter changes
+  // Reset pagination when filter or tag changes
   useEffect(() => {
-    setCurrentPage(1);
+    setCursor(null);
+    setHasMore(false);
   }, [activeBookFilter, activeAgeFilter, activeStyleFilter, activeSort, tagId]);
 
-  // Available books
+  // Available books - use static list for consistent dropdown options
   const availableBooks = useMemo(() => {
-    const bookSet = new Set<string>();
-    sketches.forEach(s => {
-      if (s.promptData?.book) bookSet.add(s.promptData.book);
-    });
-    return Array.from(bookSet).sort((a, b) => {
-      const indexA = BIBLE_BOOKS.indexOf(a);
-      const indexB = BIBLE_BOOKS.indexOf(b);
-      if (indexA === -1) return 1;
-      if (indexB === -1) return -1;
-      return indexA - indexB;
-    });
-  }, [sketches]);
+    return BIBLE_BOOKS;
+  }, []);
 
   // Helper to normalize age group
   const normalizeAge = (age: string) => age === "Pre-Teen" ? "Teen" : age;
 
-  // Available age groups
+  // Available age groups - use static list for consistent dropdown options
   const availableAges = useMemo(() => {
-    const ageSet = new Set<string>();
-    sketches.forEach(s => {
-      if (s.promptData?.age_group) ageSet.add(normalizeAge(s.promptData.age_group));
-    });
-    return Array.from(ageSet).sort();
-  }, [sketches]);
+    return Object.values(AgeGroup);
+  }, []);
 
-  // Available art styles
+  // Available art styles - use static list for consistent dropdown options
   const availableStyles = useMemo(() => {
-    const styleSet = new Set<string>();
-    sketches.forEach(s => {
-      if (s.promptData?.art_style) styleSet.add(s.promptData.art_style);
-    });
-    return Array.from(styleSet).sort();
-  }, [sketches]);
+    return Object.values(ArtStyle);
+  }, []);
 
-  // Filtered sketches
+  // Filtered sketches - filtering is now server-side, only apply sort client-side
   const filteredSketches = useMemo(() => {
-    let result = sketches;
+    let result = [...sketches];
 
-    if (activeBookFilter !== 'All') {
-      result = result.filter(s => s.promptData?.book === activeBookFilter);
-    }
-
-    if (activeAgeFilter !== 'All') {
-      result = result.filter(s => normalizeAge(s.promptData?.age_group || '') === activeAgeFilter);
-    }
-
-    if (activeStyleFilter !== 'All') {
-      result = result.filter(s => s.promptData?.art_style === activeStyleFilter);
-    }
-
-    // Sort
+    // Sort (always client-side)
     if (activeSort === 'newest') {
-      result = [...result].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+      result.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
     } else {
       // popular - sort by blessCount
-      result = [...result].sort((a, b) => (b.blessCount || 0) - (a.blessCount || 0));
+      result.sort((a, b) => (b.blessCount || 0) - (a.blessCount || 0));
     }
 
     return result;
-  }, [sketches, activeBookFilter, activeAgeFilter, activeStyleFilter, activeSort]);
+  }, [sketches, activeSort]);
 
-  // Pagination
-  const totalPages = Math.ceil(filteredSketches.length / ITEMS_PER_PAGE);
-  const displayedSketches = useMemo(() => {
-    const start = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredSketches.slice(start, start + ITEMS_PER_PAGE);
-  }, [filteredSketches, currentPage]);
+  // Show all loaded images (pagination is server-side with Load More)
+  const displayedSketches = filteredSketches;
 
   const handleBless = (sketchId: string, e?: React.MouseEvent) => {
     if (e) {
@@ -218,6 +213,36 @@ export const TagPage: React.FC<TagPageProps> = ({ userId, onRequireAuth, onAutho
     const { url, description } = generateShareData(sketch, 'pinterest');
     const shareUrl = `https://pinterest.com/pin/create/button/?url=${encodeURIComponent(url)}&media=${encodeURIComponent(sketch.imageUrl)}&description=${encodeURIComponent(description)}`;
     openSharePopup(shareUrl);
+  };
+
+  // Load More handler for cursor pagination
+  const handleLoadMore = async () => {
+    if (!hasMore || isLoadingMore || !tagId) return;
+    
+    setIsLoadingMore(true);
+    try {
+      const result = await getFilteredPublicGallery({
+        tag: tagId,
+        book: activeBookFilter !== 'All' ? activeBookFilter : undefined,
+        ageGroup: activeAgeFilter !== 'All' ? activeAgeFilter : undefined,
+        artStyle: activeStyleFilter !== 'All' ? activeStyleFilter : undefined,
+        cursor: cursor,
+        pageSize: 50
+      });
+      
+      setSketches(prev => [...prev, ...result.sketches]);
+      setCursor(result.nextCursor);
+      setHasMore(result.hasMore);
+    } catch (err: any) {
+      console.error("Failed to load more", err);
+      if (err.code === 'failed-precondition' && err.message.includes('index')) {
+        setError("Database Configuration Required");
+        const linkMatch = err.message.match(/https:\/\/console\.firebase\.google\.com[^\s]*/);
+        if (linkMatch) setIndexErrorLink(linkMatch[0]);
+      }
+    } finally {
+      setIsLoadingMore(false);
+    }
   };
 
   if (!tagInfo) {
@@ -296,6 +321,22 @@ export const TagPage: React.FC<TagPageProps> = ({ userId, onRequireAuth, onAutho
         <div className="flex justify-center py-20">
           <Loader2 className="w-12 h-12 text-purple-200 animate-spin" />
         </div>
+      ) : error ? (
+        <div className="text-center py-20 bg-red-50 rounded-3xl border border-red-100 p-8 max-w-2xl mx-auto">
+          <Tag className="w-12 h-12 text-red-400 mx-auto mb-4" />
+          <h3 className="text-red-800 font-bold text-lg mb-2">Could not load sketches</h3>
+          <p className="text-red-600 text-sm mb-6">{error}</p>
+          {indexErrorLink && (
+            <a 
+              href={indexErrorLink} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 bg-red-600 text-white px-6 py-3 rounded-xl text-sm font-bold hover:bg-red-700 transition-colors"
+            >
+              Create Required Index in Firebase
+            </a>
+          )}
+        </div>
       ) : filteredSketches.length === 0 ? (
         <div className="text-center py-20 bg-white rounded-3xl border border-dashed border-gray-200">
           <Tag className="w-12 h-12 text-gray-300 mx-auto mb-4" />
@@ -357,12 +398,14 @@ export const TagPage: React.FC<TagPageProps> = ({ userId, onRequireAuth, onAutho
                     <button
                       onClick={(e) => handleFacebookShare(e, sketch)}
                       className="flex-1 py-2 rounded-lg bg-blue-50 text-blue-500 hover:bg-blue-100 flex items-center justify-center transition-colors border border-blue-100"
+                      aria-label="Share on Facebook"
                     >
                       <Facebook className="w-4 h-4" />
                     </button>
                     <button
                       onClick={(e) => handlePinterestShare(e, sketch)}
                       className="flex-1 py-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 flex items-center justify-center transition-colors border border-red-100"
+                      aria-label="Share on Pinterest"
                     >
                       <PinterestIcon className="w-4 h-4" />
                     </button>
@@ -372,27 +415,24 @@ export const TagPage: React.FC<TagPageProps> = ({ userId, onRequireAuth, onAutho
             ))}
           </div>
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex justify-center items-center gap-6 mt-10">
+          {/* Load More Button */}
+          {hasMore && (
+            <div className="flex justify-center mt-10">
               <button
-                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-                className="p-3 rounded-full bg-white border border-gray-200 text-gray-600 hover:bg-purple-50 hover:text-[#7C3AED] hover:border-purple-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-sm"
+                onClick={handleLoadMore}
+                disabled={isLoadingMore}
+                className="flex items-center gap-2 px-8 py-3 bg-white border-2 border-[#7C3AED] text-[#7C3AED] rounded-full font-bold hover:bg-purple-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
               >
-                <ChevronLeft className="w-5 h-5" />
-              </button>
-
-              <div className="text-sm font-bold text-gray-500">
-                Page <span className="text-[#7C3AED]">{currentPage}</span> of {totalPages}
-              </div>
-
-              <button
-                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages}
-                className="p-3 rounded-full bg-white border border-gray-200 text-gray-600 hover:bg-purple-50 hover:text-[#7C3AED] hover:border-purple-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-sm"
-              >
-                <ChevronRight className="w-5 h-5" />
+                {isLoadingMore ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Loading...
+                  </>
+                ) : (
+                  <>
+                    Load More Sketches
+                  </>
+                )}
               </button>
             </div>
           )}

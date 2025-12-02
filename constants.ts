@@ -1,5 +1,5 @@
 
-import { AgeGroup, ArtStyle } from './types';
+import { AgeGroup, ArtStyle, FontStyle } from './types';
 
 // ==========================================
 // 0. APP CONFIGURATION
@@ -188,3 +188,108 @@ export const CRITICAL_NEGATIVES = [
   "face of god", "modern", "anachronism",
   "bad anatomy", "extra limbs", "giant figure"
 ].join(", ");
+
+// ==========================================
+// 8. BIBLE VERSE COLORING - FONT STYLES
+// ==========================================
+export const FONT_STYLE_LOGIC: Record<FontStyle, string> = {
+  [FontStyle.ELEGANT_SCRIPT]: "Elegant calligraphy script with flowing letters and decorative flourishes. Sophisticated swashes and ornamental curves. DOUBLE OUTLINE letters with white interior. Surrounded by delicate floral elements, graceful vines, and botanical decorations.",
+  [FontStyle.MODERN_BRUSH]: "Contemporary brush lettering with varied stroke weights. Trendy hand-lettered style mixing cursive and print. DOUBLE OUTLINE hollow letters. Botanical illustrations, geometric patterns, and modern florals as decoration.",
+  [FontStyle.PLAYFUL]: "Whimsical hand-drawn BUBBLE LETTERS with playful, chunky shapes. Fun, bouncy character with white interior space. Decorated with stars, hearts, simple flowers, clouds, and cheerful doodle elements.",
+  [FontStyle.CLASSIC_SERIF]: "Traditional serif typography with elegant proportions. Timeless book-style HOLLOW lettering with decorative serifs. Framed with ornate borders, classical scrollwork, and decorative corner flourishes."
+};
+
+// ==========================================
+// 9. BIBLE VERSE COLORING - LAYOUT RULES
+// ==========================================
+// Layout selection based on verse word count
+export const VERSE_LAYOUT_RULES = {
+  // 1-5 words: THE EMBLEM
+  EMBLEM: {
+    maxWords: 5,
+    description: "Text contained inside a central decorative shape (circle, heart, shield, banner). The shape is the hero element. Background outside the shape is empty or simple pattern. Text is large and bold.",
+    prompt: "Place the verse text inside a central decorative shape like a circle, heart, shield, or banner. The shape should be ornate with detailed borders. Keep background simple outside the main shape."
+  },
+  // 6-15 words: THE STACK
+  STACK: {
+    maxWords: 15,
+    description: "Vertical hierarchy layout. KEYWORDS (nouns, verbs) are rendered 2x larger. Connector words (and, the, of, in, to) are 0.5x size in scripted style. Fills the page top-to-bottom.",
+    prompt: "Arrange text in vertical stacked layout. Make important words (nouns, verbs) TWICE as large. Make connector words (the, and, of, in, to, for) half-size in a different script style. Fill the page from top to bottom with decorative elements between lines."
+  },
+  // 15-29 words: THE SCROLL
+  SCROLL: {
+    maxWords: 29,
+    description: "Text block placed inside a parchment scroll graphic OR illuminated manuscript border. Center area remains white for text legibility. Ornate border frames the entire page.",
+    prompt: "Place the verse text inside an ornate parchment scroll or illuminated manuscript border. The text area should be white/empty for legibility. Add detailed decorative borders with floral motifs, vines, or geometric patterns around the edges."
+  },
+  // 30+ words: BLOCKED
+  MAX_WORDS: 30
+};
+
+// ==========================================
+// 10. BIBLE VERSE COLORING - NEGATIVES
+// ==========================================
+// Different from GOLDEN_NEGATIVES - ALLOWS text but blocks solid fills
+export const VERSE_NEGATIVES = [
+  // Color negatives (same as scene)
+  "color", "colored", "colorful", "red", "blue", "green", "yellow", "pink", "purple", "orange", "brown", "gold", "silver", "rainbow",
+  
+  // Shading negatives (same as scene)
+  "shading", "grayscale", "gradient", "grey", "shadows", "3d render", "photo", "realistic texture",
+  
+  // CRITICAL: Anti-solid-text (text must be HOLLOW/OUTLINE)
+  "solid filled letters", "filled text", "solid black text", "silhouette text", "black filled typography",
+  "solid black letters", "filled in letters", "opaque text", "dark text fill",
+  
+  // Layout problems
+  "text off canvas", "text cut off", "text running off edge", "no margins",
+  "decorations behind text", "overlapping decorations on text", "text obscured",
+  "tiny text", "small font", "illegible text", "blurry text",
+  
+  // General quality
+  "watermark", "signature", "copyright", "misspelled", "typo",
+  "broken lines", "gaps in outlines", "incomplete shapes"
+].join(", ");
+
+// ==========================================
+// 11. BIBLE VERSE COLORING - REFERENCE IMAGES
+// ==========================================
+export const VERSE_REFERENCE_MAP: Record<FontStyle, string | string[]> = {
+  [FontStyle.ELEGANT_SCRIPT]: `${BASE_PATH}verse-elegant.jpg`,
+  [FontStyle.MODERN_BRUSH]: `${BASE_PATH}verse-modern.jpg`,
+  [FontStyle.PLAYFUL]: `${BASE_PATH}verse-playful.jpg`,
+  [FontStyle.CLASSIC_SERIF]: `${BASE_PATH}verse-classic.jpg`
+};
+
+// ==========================================
+// 12. BIBLE VERSE COLORING - TYPOGRAPHY RULES
+// ==========================================
+export const VERSE_TYPOGRAPHY_RULES = `
+CRITICAL TYPOGRAPHY RULES FOR BIBLE VERSE COLORING:
+
+1. **HOLLOW TEXT ONLY (MANDATORY)**
+   - ALL letters must be OUTLINE/HOLLOW style with WHITE INTERIOR
+   - Use "Double Outline" or "Bubble Letter" technique
+   - NEVER use solid black filled letters - they cannot be colored and waste ink
+   - The white space inside each letter is where users will color
+
+2. **TEXT HIERARCHY**
+   - KEYWORDS (nouns, verbs, names) = LARGE, prominent
+   - Connector words (the, and, of, in, to, for, a) = smaller, scripted
+   - Bible reference = small, positioned at bottom or corner
+
+3. **LAYOUT REQUIREMENTS**
+   - Text must have MARGINS - never run off canvas edges
+   - Decorative elements go AROUND text, never BEHIND or OVERLAPPING
+   - Minimum "24pt equivalent" sizing - text must be large enough to color
+   - All shapes must be CLOSED PATHS for bucket-fill coloring
+
+4. **BACKGROUND**
+   - PURE WHITE background only
+   - NO grey washes, NO gradients, NO textures behind text
+
+5. **DECORATIVE ELEMENTS**
+   - Florals, vines, geometric patterns SURROUNDING the text
+   - All decorations must also be OUTLINE only (hollow, colorable)
+   - Decorations should complement, not compete with, the text
+`;

@@ -1,9 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { X, User as UserIcon, Mail, Trash2, Save, AlertTriangle, Loader2, Crown, Coins, Image as ImageIcon, Clock, Plus, Minus, Receipt, Download } from 'lucide-react';
+import { X, User as UserIcon, Mail, Trash2, Save, AlertTriangle, Loader2, Crown, Coins, Image as ImageIcon, Receipt, Download } from 'lucide-react';
 import { Button } from './ui/Button';
-import { updateUserProfile, deleteUserAccount, getUserDocument, getPurchaseHistory, User } from '../services/firebase';
-import { CreditTransaction } from '../types';
+import { updateUserProfile, deleteUserAccount, getUserDocument, User } from '../services/firebase';
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -13,8 +12,6 @@ interface ProfileModalProps {
 }
 
 export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, user, onUserUpdate }) => {
-  const [activeTab, setActiveTab] = useState<'profile' | 'history'>('profile');
-
   // Profile State
   const [name, setName] = useState('');
   const [photoName, setPhotoName] = useState('');
@@ -22,10 +19,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, use
   const [credits, setCredits] = useState<number>(0);
   const [downloads, setDownloads] = useState<number>(0);
   const [isPremium, setIsPremium] = useState<boolean>(false);
-
-  // History State
-  const [history, setHistory] = useState<CreditTransaction[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
 
   const [isFetching, setIsFetching] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
@@ -62,13 +55,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, use
         .finally(() => {
           setIsFetching(false);
         });
-
-      // Load Purchase History immediately as well
-      setHistoryLoading(true);
-      getPurchaseHistory(user.uid).then(data => {
-        setHistory(data as any);
-        setHistoryLoading(false);
-      });
     }
   }, [isOpen, user]);
 
@@ -129,22 +115,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, use
 
         <div className="p-6 border-b border-gray-100">
           <h2 className="font-display text-2xl font-bold text-[#1F2937]">Account</h2>
-
-          {/* Tabs */}
-          <div className="flex gap-4 mt-4">
-            <button
-              onClick={() => setActiveTab('profile')}
-              className={`pb-2 text-sm font-bold border-b-2 transition-colors ${activeTab === 'profile' ? 'text-[#7C3AED] border-[#7C3AED]' : 'text-gray-400 border-transparent hover:text-gray-600'}`}
-            >
-              Profile Settings
-            </button>
-            <button
-              onClick={() => setActiveTab('history')}
-              className={`pb-2 text-sm font-bold border-b-2 transition-colors ${activeTab === 'history' ? 'text-[#7C3AED] border-[#7C3AED]' : 'text-gray-400 border-transparent hover:text-gray-600'}`}
-            >
-              Purchase History
-            </button>
-          </div>
         </div>
 
         <div className="p-6 overflow-y-auto flex-1">
@@ -165,8 +135,19 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, use
             <div className="py-12 flex justify-center text-[#7C3AED]">
               <Loader2 className="w-8 h-8 animate-spin" />
             </div>
-          ) : activeTab === 'profile' ? (
+          ) : (
             <form onSubmit={handleUpdate} className="space-y-4">
+
+              {/* Receipt Portal Link */}
+              <a
+                href="https://billing.zohosecure.ca/portal/biblesketch"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-3 text-gray-600 hover:bg-gray-50 rounded-xl transition-colors flex items-center justify-center gap-2 text-sm font-bold border border-gray-200 mb-6"
+              >
+                <Receipt className="w-4 h-4" />
+                Receipt Portal
+              </a>
 
               {/* Account Stats */}
               <div className="space-y-4 mb-6">
@@ -270,15 +251,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, use
 
                 <button
                   type="button"
-                  className="w-full py-3 text-gray-600 hover:bg-gray-50 rounded-xl transition-colors flex items-center justify-center gap-2 text-sm font-bold border border-gray-200"
-                  onClick={(e) => e.preventDefault()}
-                >
-                  <Receipt className="w-4 h-4" />
-                  Receipt Portal
-                </button>
-
-                <button
-                  type="button"
                   onClick={handleDelete}
                   disabled={isFetching || isLoading}
                   className="w-full py-3 text-red-500 hover:bg-red-50 rounded-xl transition-colors flex items-center justify-center gap-2 text-sm font-bold disabled:opacity-50"
@@ -288,36 +260,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, use
                 </button>
               </div>
             </form>
-          ) : (
-            <div className="space-y-2">
-              {historyLoading ? (
-                <div className="py-10 flex justify-center text-gray-300">
-                  <Loader2 className="w-6 h-6 animate-spin" />
-                </div>
-              ) : history.length === 0 ? (
-                <div className="text-center py-10 text-gray-400">
-                  <Clock className="w-12 h-12 mx-auto mb-2 opacity-20" />
-                  <p>No history yet.</p>
-                </div>
-              ) : (
-                history.map(tx => (
-                  <div key={tx.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
-                    <div className="flex items-start gap-3">
-                      <div className={`mt-1 p-1.5 rounded-full ${tx.amount > 0 ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                        {tx.amount > 0 ? <Plus className="w-3 h-3" /> : <Minus className="w-3 h-3" />}
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold text-gray-800">{tx.description}</p>
-                        <p className="text-xs text-gray-400">{new Date(tx.timestamp).toLocaleDateString()} • {new Date(tx.timestamp).toLocaleTimeString()}</p>
-                      </div>
-                    </div>
-                    <span className={`font-bold text-sm ${tx.amount > 0 ? 'text-green-600' : 'text-red-500'}`}>
-                      {tx.amount > 0 ? '+' : ''}{tx.amount}
-                    </span>
-                  </div>
-                ))
-              )}
-            </div>
           )}
         </div>
       </div>

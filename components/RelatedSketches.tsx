@@ -72,7 +72,7 @@ export const RelatedSketches: React.FC<RelatedSketchesProps> = ({
     <section ref={sectionRef} className="mt-16 mb-8">
       {/* SEO-optimized H2 heading */}
       <h2 className="font-display text-2xl md:text-3xl font-bold text-gray-800 mb-6 px-4 md:px-0">
-        More {displayAge} Coloring Pages
+        More Bible Coloring Pages For {displayAge}
       </h2>
       
       {/* Skeleton Loading State */}

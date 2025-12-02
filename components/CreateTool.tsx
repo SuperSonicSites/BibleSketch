@@ -81,9 +81,6 @@ export const CreateTool: React.FC<CreateToolProps> = ({
         await deductCredits(user.uid, 1, `Generated: ${reference.book} ${reference.chapter}`);
 
         setGeneratedImage(imageUrl);
-
-        // Track Pinterest custom design creation event
-        window.pintrk?.('track', 'custom', { event_name: 'DesignCreation' });
       } catch (error: any) {
         console.error("Generation Error:", error);
         const msg = (error.message || String(error)).toLowerCase();
@@ -190,7 +187,7 @@ export const CreateTool: React.FC<CreateToolProps> = ({
 
               {/* Popular Verses Quick-Select */}
               <div className="flex flex-wrap justify-center gap-1.5 md:gap-2 mt-3 md:mt-4 text-[10px] md:text-xs relative z-10">
-                <span className="text-gray-400 mr-1">Try:</span>
+                <span className="text-gray-600 mr-1">Try:</span>
                 <button 
                   onClick={() => setReference({ book: "Psalms", chapter: 23, startVerse: 1, endVerse: 6 })}
                   className="px-2 py-0.5 md:px-2.5 md:py-1 bg-purple-50 hover:bg-purple-100 text-[#7C3AED] rounded-full transition-colors font-medium border border-purple-100"
@@ -251,7 +248,7 @@ export const CreateTool: React.FC<CreateToolProps> = ({
                     )}
                   </Button>
                 </div>
-                <p className="text-[10px] md:text-xs text-gray-400 mt-1">
+                <p className="text-[10px] md:text-xs text-gray-600 mt-1">
                   Uses 1 credit • <span className="text-gray-500">Takes ~60 seconds</span>
                 </p>
               </div>

@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { X, Mail, Lock, User, Image as ImageIcon, AlertCircle, CheckCircle2, ArrowRight, KeyRound, ChevronLeft } from 'lucide-react';
 import { Button } from './ui/Button';
 import { registerUser, loginUser, loginWithGoogle, sendPasswordReset } from '../services/firebase';
+import { trackPinterestEvent } from '../utils/pinterestTracking';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -38,7 +39,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialVi
       await loginWithGoogle();
       // Track Pinterest signup event for Google signups only (not logins)
       if (view === 'signup') {
-        window.pintrk?.('track', 'signup');
+        trackPinterestEvent('signup');
       }
       onClose();
     } catch (err: any) {

@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { Check, Zap, Crown, Sparkles, HelpCircle, ArrowLeft, PartyPopper } from 'lucide-react';
 import { Button } from './ui/Button';
+import { trackPinterestEvent } from '../utils/pinterestTracking';
 
 interface PricingPageProps {
   onBack: () => void;
@@ -23,12 +24,15 @@ export const PricingPage: React.FC<PricingPageProps> = ({ onBack, onSelectPlan, 
 
     const isSubscription = searchParams.get('subscription') === 'success';
     const purchasedPack = searchParams.get('purchase');
+    // Zoho passes %SubscriptionID% as order_id for conversion deduplication
+    const orderId = searchParams.get('order_id');
 
     if (isSubscription) {
-      // Track Pinterest checkout event for Premium
-      window.pintrk?.('track', 'checkout', {
+      // Track Pinterest checkout event for Premium with order_id for deduplication
+      trackPinterestEvent('checkout', {
         value: 4.99,
-        currency: 'USD'
+        currency: 'USD',
+        order_id: orderId || `premium_${Date.now()}`
       });
       setSuccessMessage({
         title: 'Welcome to Premium! 🎉',
@@ -39,10 +43,11 @@ export const PricingPage: React.FC<PricingPageProps> = ({ onBack, onSelectPlan, 
       const timer = setTimeout(() => setShowSuccess(false), 8000);
       return () => clearTimeout(timer);
     } else if (purchasedPack && packPrices[purchasedPack]) {
-      // Track Pinterest checkout event for credit pack
-      window.pintrk?.('track', 'checkout', {
+      // Track Pinterest checkout event for credit pack with order_id for deduplication
+      trackPinterestEvent('checkout', {
         value: packPrices[purchasedPack],
-        currency: 'USD'
+        currency: 'USD',
+        order_id: orderId || `pack_${purchasedPack}_${Date.now()}`
       });
       setSuccessMessage({
         title: 'Credits Added! 🎉',
@@ -111,8 +116,8 @@ export const PricingPage: React.FC<PricingPageProps> = ({ onBack, onSelectPlan, 
       a: "Yes! Once you generate an image, you own the rights to print it as many times as you need for your class or ministry."
     },
     {
-      q: "Why no subscription?",
-      a: "We know church life is seasonal. We don't want to charge you for months when you aren't teaching. Pay only for what you use."
+      q: "Should I subscribe or buy a credit pack?",
+      a: "If you teach regularly (weekly Sunday School, homeschool), Premium gives you the best value with unlimited downloads and 10 monthly credits. If you only need images occasionally (VBS, special events), credit packs let you pay once and use whenever you're ready."
     }
   ];
 
@@ -120,13 +125,13 @@ export const PricingPage: React.FC<PricingPageProps> = ({ onBack, onSelectPlan, 
     <>
       <Helmet>
         <title>Pricing - Affordable Bible Coloring Page Credits | Bible Sketch</title>
-        <meta name="description" content="Get credits to create custom Bible coloring pages. No subscriptions - pay only for what you use. Perfect for Sunday School teachers, homeschool families, and church ministries. Plans start at $4.99." />
+        <meta name="description" content="Get credits to create custom Bible coloring pages. Subscribe monthly or pay once — your credits never expire. Perfect for Sunday School teachers, homeschool families, and church ministries. Plans start at $4.99." />
         <meta property="og:title" content="Pricing - Affordable Bible Coloring Page Credits | Bible Sketch" />
-        <meta property="og:description" content="Get credits to create custom Bible coloring pages. No subscriptions - pay only for what you use. Perfect for Sunday School teachers, homeschool families, and church ministries." />
+        <meta property="og:description" content="Get credits to create custom Bible coloring pages. Subscribe monthly or pay once — your credits never expire. Perfect for Sunday School teachers, homeschool families, and church ministries." />
         <meta property="og:type" content="website" />
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content="Pricing - Affordable Bible Coloring Page Credits | Bible Sketch" />
-        <meta name="twitter:description" content="Get credits to create custom Bible coloring pages. No subscriptions - pay only for what you use." />
+        <meta name="twitter:description" content="Get credits to create custom Bible coloring pages. Subscribe monthly or pay once — your credits never expire." />
       </Helmet>
 
       <div className="max-w-7xl mx-auto px-4 py-12 md:py-20 animate-in fade-in duration-500">
@@ -153,11 +158,11 @@ export const PricingPage: React.FC<PricingPageProps> = ({ onBack, onSelectPlan, 
               </div>
               <div>
                 <h3 className="font-bold text-purple-800">You're a Premium Member!</h3>
-                <p className="text-purple-600 text-sm">Enjoy unlimited downloads and monthly credits.</p>
+                <p className="text-purple-600 text-sm">Enjoy unlimited downloads & prints.</p>
               </div>
             </div>
             <a 
-              href="https://billing.zohosecure.ca/portal/biblesketch/login"
+              href="https://billing.zohosecure.ca/portal/biblesketch"
               target="_blank"
               rel="noopener noreferrer"
               className="text-purple-600 hover:text-purple-800 font-medium text-sm underline whitespace-nowrap"
@@ -181,11 +186,11 @@ export const PricingPage: React.FC<PricingPageProps> = ({ onBack, onSelectPlan, 
       {/* Header */}
       <div className="text-center mb-16 md:mb-24">
         <h1 className="font-display text-4xl md:text-5xl font-bold text-[#1F2937] mb-6">
-          Simple, Flexible Pricing.
+          Pricing That Fits Your Needs
         </h1>
         <p className="text-lg md:text-xl text-gray-500 max-w-2xl mx-auto leading-relaxed">
-          No subscriptions. No expiring credits. <br className="hidden md:block" />
-          Just buy what you need for your lesson or devotional.
+          Subscribe monthly or buy credits once — either way,<br className="hidden md:block" />
+          your credits never expire.
         </p>
       </div>
 
@@ -311,7 +316,7 @@ export const PricingPage: React.FC<PricingPageProps> = ({ onBack, onSelectPlan, 
                   {tier.credits} Credits
                 </span>
                 <span className="text-xs font-semibold text-amber-700 bg-amber-50 px-2 py-1 rounded-md border border-amber-200">
-                  + {tier.credits} Bonus Prints ✨
+                  + {tier.credits} Free Prints ✨
                 </span>
               </div>
               <span className="text-xs text-gray-400 mt-1 block">

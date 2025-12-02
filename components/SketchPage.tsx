@@ -433,12 +433,13 @@ export const SketchPage: React.FC<SketchPageProps> = ({ user, onRequireAuth }) =
               {/* Visual Protection Container */}
               <div className="relative bg-white shadow-2xl w-full max-w-lg aspect-[3/4] group select-none">
 
-                {/* Image Layer Replaced with LazyImage */}
+                {/* Image Layer - Use eager loading for main hero image */}
                 <LazyImage
                   src={sketch.imageUrl}
                   alt={`${sketch.promptData?.book || 'Bible'} Coloring Page`}
                   thumbnailPath={sketch.thumbnailPath}
                   storagePath={sketch.storagePath}
+                  eager={true}
                   className="w-full h-full relative z-0 bg-white"
                   aspectRatio="" // Parent handles aspect ratio
                   data-pin-description={pinterestDescription}
@@ -604,6 +605,7 @@ export const SketchPage: React.FC<SketchPageProps> = ({ user, onRequireAuth }) =
                   <button
                     onClick={() => handleShare('facebook')}
                     className="flex-1 py-3 rounded-xl border border-blue-100 bg-blue-50 text-blue-600 hover:bg-blue-100 hover:border-blue-200 flex items-center justify-center transition-colors gap-2 font-bold text-sm"
+                    aria-label="Share on Facebook"
                   >
                     <Facebook className="w-5 h-5" />
                     <span className="hidden sm:inline">Facebook</span>
@@ -611,6 +613,7 @@ export const SketchPage: React.FC<SketchPageProps> = ({ user, onRequireAuth }) =
                   <button
                     onClick={() => handleShare('pinterest')}
                     className="flex-1 py-3 rounded-xl border border-red-100 bg-red-50 text-red-600 hover:bg-red-100 hover:border-red-200 flex items-center justify-center transition-colors gap-2 font-bold text-sm"
+                    aria-label="Share on Pinterest"
                   >
                     <PinterestIcon className="w-5 h-5" />
                     <span className="hidden sm:inline">Pinterest</span>

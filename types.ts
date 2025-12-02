@@ -16,6 +16,17 @@ export enum ArtStyle {
   DOODLE = "Doodles"
 }
 
+// Font styles for Bible Verse coloring pages
+export enum FontStyle {
+  ELEGANT_SCRIPT = "Elegant Script",
+  MODERN_BRUSH = "Modern Brush",
+  PLAYFUL = "Playful",
+  CLASSIC_SERIF = "Classic Serif"
+}
+
+// Sketch type discriminator
+export type SketchType = 'scene' | 'verse';
+
 export interface BibleReference {
   book: string;
   chapter: number;
@@ -42,6 +53,10 @@ export interface Sketch {
   imageUrl: string;
   storagePath: string;
   thumbnailPath?: string; // New field for optimized loading
+  
+  // Sketch type: 'scene' (default/legacy) or 'verse' (typography-focused)
+  type?: SketchType;
+  
   // Matches Firestore Schema
   promptData: {
     book: string;
@@ -50,8 +65,13 @@ export interface Sketch {
     start_verse: number; 
     end_verse?: number; 
     
-    age_group: string;
-    art_style: string;
+    // Scene-specific fields
+    age_group?: string;
+    art_style?: string;
+    
+    // Verse-specific fields
+    font_style?: string;
+    
     aspect_ratio: string;
   };
   isPublic: boolean;
@@ -79,6 +99,10 @@ export interface CreditTransaction {
 // Pinterest Tag type declaration
 declare global {
   interface Window {
-    pintrk?: (action: string, event: string, data?: Record<string, any>) => void;
+    pintrk?: (
+      action: 'load' | 'page' | 'track',
+      eventOrTagId?: string,
+      data?: Record<string, any>
+    ) => void;
   }
 }

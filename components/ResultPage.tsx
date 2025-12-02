@@ -1,14 +1,12 @@
 
 import React, { useState } from 'react';
-import { Printer, Download, ArrowLeft, Wand2, Save, AlertCircle, Eraser, Type, BookOpen } from 'lucide-react';
+import { ArrowLeft, Wand2, Save, AlertCircle, Eraser, Type, BookOpen } from 'lucide-react';
 import { Button } from './ui/Button';
 import { AgeGroup, ArtStyle, BibleReference } from '../types';
 import { SaveModal } from './SaveModal';
-import { PremiumModal } from './PremiumModal';
 import { CelebrationEffect } from './CelebrationEffect';
 import { editColoringPage } from '../services/gemini';
-import { deductCredits, auth, canDownload, deductDownload } from '../services/firebase';
-import { embedLogoOnImage } from '../utils/imageProcessing';
+import { deductCredits, auth } from '../services/firebase';
 
 interface ResultPageProps {
   imageUrl: string;
@@ -79,7 +77,6 @@ export const ResultPage: React.FC<ResultPageProps> = ({
   const [currentImage, setCurrentImage] = useState(initialImageUrl);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [isProcessingAction, setIsProcessingAction] = useState(false);
   const [showCelebration, setShowCelebration] = useState(true);
 
   // Edit State
@@ -91,91 +88,6 @@ export const ResultPage: React.FC<ResultPageProps> = ({
   // Text Overlay State
   // Stores the image state BEFORE text was added, to allow toggling off.
   const [preOverlayImage, setPreOverlayImage] = useState<string | null>(null);
-
-  // Premium Modal State
-  const [showPremiumModal, setShowPremiumModal] = useState(false);
-  const [downloadsRemaining, setDownloadsRemaining] = useState(0);
-
-  const handlePrint = async () => {
-    if (!currentUser) {
-      onRequireAuth(() => handlePrint());
-      return;
-    }
-
-    // Check download quota
-    const quota = await canDownload(currentUser.uid);
-    if (!quota.allowed) {
-      setDownloadsRemaining(quota.remaining);
-      setShowPremiumModal(true);
-      return;
-    }
-
-    setIsProcessingAction(true);
-    try {
-      // Process image before printing (CORS check)
-      const brandedImage = await embedLogoOnImage(currentImage);
-
-      const printWindow = window.open('', '_blank');
-      if (printWindow) {
-        const html = `
-          <html>
-            <head><title>Print Sketch</title></head>
-            <body style="margin:0; display:flex; justify-content:center; align-items:center; height:100vh;">
-              <img 
-                src="${brandedImage}" 
-                style="max-height:95vh; max-width:95vw;" 
-                onload="window.print();"
-              />
-            </body>
-          </html>
-        `;
-        printWindow.document.write(html);
-        printWindow.document.close();
-
-        // Deduct from quota (skipped for premium users)
-        await deductDownload(currentUser.uid);
-      }
-    } catch (e) {
-      console.error("Print failed", e);
-    } finally {
-      setIsProcessingAction(false);
-    }
-  };
-
-  const handleDownload = async () => {
-    if (!currentUser) {
-      onRequireAuth(() => handleDownload());
-      return;
-    }
-
-    // Check download quota
-    const quota = await canDownload(currentUser.uid);
-    if (!quota.allowed) {
-      setDownloadsRemaining(quota.remaining);
-      setShowPremiumModal(true);
-      return;
-    }
-
-    setIsProcessingAction(true);
-    try {
-      // Process image before downloading (CORS check)
-      const brandedImage = await embedLogoOnImage(currentImage);
-
-      const link = document.createElement('a');
-      link.href = brandedImage;
-      link.download = `bible-sketch-${reference.book}-${reference.chapter}.png`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      // Deduct from quota (skipped for premium users)
-      await deductDownload(currentUser.uid);
-    } catch (e) {
-      console.error("Download failed", e);
-    } finally {
-      setIsProcessingAction(false);
-    }
-  };
 
   const handleEdit = async () => {
     if (!editPrompt.trim()) return;
@@ -296,7 +208,7 @@ export const ResultPage: React.FC<ResultPageProps> = ({
         <div className="p-2 bg-white rounded-full shadow-sm group-hover:shadow-md border border-gray-100 transition-all">
           <ArrowLeft className="w-5 h-5" />
         </div>
-        <span>Create New</span>
+        <span>Try another scripture</span>
       </button>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -345,11 +257,11 @@ export const ResultPage: React.FC<ResultPageProps> = ({
                 </button>
               </div>
 
-              {(isProcessingEdit || isProcessingAction) && (
+              {isProcessingEdit && (
                 <div className="absolute inset-0 bg-white/80 flex flex-col items-center justify-center backdrop-blur-sm z-10">
                   <Wand2 className="w-12 h-12 text-[#7C3AED] animate-pulse mb-4" />
                   <p className="font-display font-bold text-[#7C3AED] text-xl">
-                    {isProcessingAction ? 'Preparing file...' : 'Refining creation...'}
+                    Refining creation...
                   </p>
                 </div>
               )}
@@ -375,26 +287,6 @@ export const ResultPage: React.FC<ResultPageProps> = ({
                 variant="primary"
                 size="lg"
                 className="w-full gap-2 shadow-lg shadow-purple-100"
-                onClick={handlePrint}
-                isLoading={isProcessingAction}
-              >
-                <Printer className="w-5 h-5" />
-                Print PDF
-              </Button>
-
-              <Button
-                variant="outline"
-                className="w-full gap-2"
-                onClick={handleDownload}
-                isLoading={isProcessingAction}
-              >
-                <Download className="w-5 h-5" />
-                Download Image
-              </Button>
-
-              <Button
-                variant="secondary"
-                className="w-full gap-2 bg-green-50 text-green-700 hover:bg-green-100 border-green-100"
                 onClick={() => {
                   if (!auth.currentUser) {
                     onRequireAuth(() => setShowSaveModal(true));
@@ -404,7 +296,7 @@ export const ResultPage: React.FC<ResultPageProps> = ({
                 }}
               >
                 <Save className="w-5 h-5" />
-                Save to Gallery
+                Save to Collection
               </Button>
             </div>
           </div>
@@ -414,7 +306,7 @@ export const ResultPage: React.FC<ResultPageProps> = ({
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2 text-[#7C3AED] font-bold">
                 <Wand2 className="w-5 h-5" />
-                <span>Refine Creation</span>
+                <span>Modify</span>
               </div>
               <span className="text-xs font-bold bg-white text-gray-500 px-2 py-1 rounded-md border border-purple-100">
                 1 Credit
@@ -473,12 +365,6 @@ export const ResultPage: React.FC<ResultPageProps> = ({
         onClose={() => setShowSaveModal(false)}
         onConfirm={handleSaveConfirm}
         isSaving={isSaving}
-      />
-
-      <PremiumModal
-        isOpen={showPremiumModal}
-        onClose={() => setShowPremiumModal(false)}
-        remainingDownloads={downloadsRemaining}
       />
     </div>
     </>
