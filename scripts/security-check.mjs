@@ -15,7 +15,7 @@ import {
   getFirestore, connectFirestoreEmulator, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, addDoc,
   collection, serverTimestamp, arrayUnion, increment,
 } from 'firebase/firestore';
-import { getStorage, connectStorageEmulator, ref, uploadString, listAll, getBytes } from 'firebase/storage';
+import { getStorage, connectStorageEmulator, ref, uploadString, listAll, getBytes, getDownloadURL } from 'firebase/storage';
 import { getFunctions, connectFunctionsEmulator, httpsCallable } from 'firebase/functions';
 
 const PROJECT = 'biblesketch-5104c';
@@ -362,6 +362,61 @@ await step('thin pages are noindexed; real ones are not', async () => {
   assert.match(await aliceProfile.text(), /<h1>.*Bible Coloring Pages<\/h1>/);
   assert.equal((await get('/tags/pentecost')).headers.get('x-robots-tag'), 'noindex', 'tag with no public sketches');
   assert.equal((await get('/tags/advent')).headers.get('x-robots-tag'), null, 'tag with a public sketch');
+});
+
+// ---------------------------------------------------------------- head tags, structured data, images
+const ldBlocks = (html) => [...html.matchAll(/<script type="application\/ld\+json"( data-rh="true")?>(.*?)<\/script>/gs)]
+  .map((m) => ({ rh: Boolean(m[1]), data: JSON.parse(m[2]) }));
+
+await step('sketch JSON-LD: no made-up rating, real author, breadcrumb kept server-only', async () => {
+  // bob blessed the sketch above, which used to add aggregateRating 5/5
+  const html = await (await fetch(`${HOSTING}/coloring-page/x/${sketchId}`)).text();
+  const blocks = ldBlocks(html);
+  assert.ok(!blocks.some((b) => JSON.stringify(b.data).includes('aggregateRating')));
+  const work = blocks.find((b) => b.data['@type'] === 'CreativeWork');
+  assert.ok(work.rh, 'CreativeWork carries data-rh so the client copy replaces it');
+  assert.equal(work.data.author.name, (await userDoc(alice)).get('displayName'));
+  assert.match(work.data.author.url, new RegExp(`/profile/${alice.uid}$`));
+  const crumbs = blocks.find((b) => b.data['@type'] === 'BreadcrumbList');
+  assert.ok(crumbs && !crumbs.rh, 'breadcrumb must not carry data-rh (Helmet would delete it)');
+  assert.match(html, /<meta name="twitter:card" content="summary_large_image" \/>/);
+});
+
+await step('sketch hero is the tokened thumbnail the client requests, related cards lazy-load', async () => {
+  const original = `user_uploads/${alice.uid}/sketches/hero-${run}.png`;
+  const thumb = original.replace('.png', '_400x533.png');
+  for (const p of [original, thumb]) {
+    await allowed(uploadString(ref(alice.storage, p), 'iVBORw0KGgo=', 'base64', { contentType: 'image/png' }), `upload ${p}`);
+  }
+  const heroId = `${sketchId}-hero`;
+  await allowed(setDoc(doc(alice.db, 'sketches', heroId), {
+    userId: alice.uid, isPublic: false, blessCount: 0, isBookmark: false, type: 'scene',
+    imageUrl: 'https://firebasestorage.googleapis.com/v0/b/x/o/full.png', storagePath: original, thumbnailPath: '',
+    createdAt: serverTimestamp(), promptData: { book: 'Ruth', chapter: 2, start_verse: 17, age_group: 'Teen', art_style: 'Classic' },
+  }), 'create');
+  await allowed(updateDoc(doc(alice.db, 'sketches', heroId), { isPublic: true }), 'publish');
+  const token = new URL(await getDownloadURL(ref(bob.storage, thumb))).searchParams.get('token');
+  const html = await (await fetch(`${HOSTING}/coloring-page/ruth-2-17/${heroId}`)).text();
+  const hero = html.match(/<img src="([^"]+)"[^>]*fetchpriority="high"/);
+  assert.ok(hero, 'hero img with fetchpriority');
+  assert.ok(hero[1].includes(encodeURIComponent(thumb)) && hero[1].includes(`token=${token}`), `hero src ${hero[1]}`);
+  assert.ok(!/<img [^>]*full\.png[^>]*fetchpriority/.test(html), 'hero is not the full-size original');
+  assert.ok(html.includes('og:image" content="https://firebasestorage.googleapis.com/v0/b/x/o/full.png"'), 'og:image stays full size');
+  for (const img of html.match(/<li [^>]*>\s*<a [^>]*>\s*<article[^>]*>\s*<img [^>]*>/g) || []) assert.match(img, /loading="lazy"/);
+});
+
+await step('blog post: cover is high priority, BlogPosting replaced by the client, one-day CDN cache', async () => {
+  const res = await get('/blog/joshua-jericho-coloring-pages');
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get('cache-control'), /s-maxage=86400/);
+  const html = await res.text();
+  assert.match(html, /<img src="[^"]*joshua-jericho-coloring-pages\.webp"[^>]*fetchpriority="high"/);
+  const blocks = ldBlocks(html);
+  assert.ok(blocks.find((b) => b.data['@type'] === 'BlogPosting').rh);
+  assert.ok(!blocks.find((b) => b.data['@type'] === 'BreadcrumbList').rh);
+  assert.ok(ldBlocks(await (await get('/tags/advent')).text()).some((b) => b.data['@type'] === 'BreadcrumbList' && !b.rh));
+  assert.match((await get('/about')).headers.get('cache-control'), /s-maxage=86400/);
+  assert.match(await (await get('/pricing')).text(), /<meta name="twitter:card" content="summary" \/>/, 'square logo card');
 });
 
 // ---------------------------------------------------------------- storage

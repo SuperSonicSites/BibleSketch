@@ -42,6 +42,25 @@ const getThumbnailUrl = (thumbnailPath, imageUrl) => {
     return imageUrl;
 };
 
+const BUCKET = 'biblesketch-5104c.firebasestorage.app';
+// Same prediction the client's saveSketch/LazyImage make: <original>_400x533.<ext>
+const thumbPathOf = (s) => s.thumbnailPath || (s.storagePath && s.storagePath.replace(/(\.[^./]+)$/, '_400x533$1'));
+// The exact URL the client's getDownloadURL() builds (first token), so the browser reuses the download.
+// Falls back when the object or its token is missing (e.g. the thumbnail isn't generated yet).
+const storageUrl = async (path, fallback) => {
+    if (!path) return fallback;
+    try {
+        const [meta] = await admin.storage().bucket(BUCKET).file(path).getMetadata();
+        const token = meta.metadata?.firebaseStorageDownloadTokens?.split(',')[0];
+        return token
+            ? `https://firebasestorage.googleapis.com/v0/b/${BUCKET}/o/${encodeURIComponent(path)}?alt=media&token=${encodeURIComponent(token)}`
+            : fallback;
+    } catch (e) {
+        console.warn('[storageUrl]', path, e.code || e.message);
+        return fallback;
+    }
+};
+
 // --- HELPER: Extract Sketch IDs from Markdown ---
 const extractSketchIds = (markdown) => {
     if (!markdown) return [];
@@ -885,7 +904,7 @@ exports.homeRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (
 // ---------------------------------------------------------
 // 3. SKETCH PAGE SEO RENDERER (Server-Side Meta Tags for Individual Sketches)
 // ---------------------------------------------------------
-exports.sketchRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (req, res) => {
+exports.sketchRender = onRequest({ timeoutSeconds: 60, memory: "256MiB", minInstances: 1 }, async (req, res) => {
   if (redirectToCanonical(req, res)) return;
   const host = 'biblesketch.app';
   const protocol = 'https';
@@ -964,8 +983,7 @@ exports.sketchRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async
       console.warn("[sketchRender] Could not fetch author name:", error);
     }
 
-    // Schema.org JSON-LD Construction
-    const blessCount = data.blessCount || 0;
+    // Schema.org JSON-LD Construction (no aggregateRating: blesses aren't ratings)
     const keywords = data.tags ? data.tags.join(', ') : "Bible, Coloring Page, Christian Art";
     const genre = data.promptData?.art_style || "Religious Art";
     const datePublished = data.createdAt && data.createdAt.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString();
@@ -981,30 +999,34 @@ exports.sketchRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async
       "datePublished": datePublished,
       "keywords": keywords,
       "genre": genre,
-      "aggregateRating": blessCount > 0 ? {
-        "@type": "AggregateRating",
-        "ratingValue": "5",
-        "ratingCount": blessCount,
-        "bestRating": "5",
-        "worstRating": "1"
-      } : undefined,
       "author": {
         "@type": "Person",
-        "name": "Bible Sketch User",
-        "url": `${baseUrl}/profile/${data.userId}`
+        "name": authorName,
+        "url": `${baseUrl}/profile/${encodeURIComponent(data.userId || '')}`
       },
       "creator": {
         "@type": "Person",
-        "name": "Bible Sketch User",
-        "url": `${baseUrl}/profile/${data.userId}`
+        "name": authorName,
+        "url": `${baseUrl}/profile/${encodeURIComponent(data.userId || '')}`
       },
       "copyrightHolder": {
         "@type": "Person",
-        "name": "Bible Sketch User"
+        "name": authorName
       }
     };
 
-    const schemaScript = `<script type="application/ld+json">${jsonLd(schemaData)}</script>`;
+    // data-rh: the client's SketchSEO emits its own CreativeWork, so Helmet replaces this one after JS.
+    // The breadcrumb is server-only (the client has none), so it must NOT carry data-rh.
+    const schemaScript = `<script type="application/ld+json" data-rh="true">${jsonLd(schemaData)}</script>
+    <script type="application/ld+json">${jsonLd({
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        { "@type": "ListItem", "position": 1, "name": "Home", "item": `${baseUrl}/` },
+        { "@type": "ListItem", "position": 2, "name": "Gallery", "item": `${baseUrl}/gallery` },
+        { "@type": "ListItem", "position": 3, "name": `${book} ${chapter}${verseRange} Coloring Page`, "item": canonicalUrl },
+      ],
+    })}</script>`;
 
     let html = await getIndexHtml(baseUrl);
 
@@ -1028,6 +1050,7 @@ exports.sketchRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async
     <meta property="og:type" content="article" />
     <meta property="og:url" content="${escapeHtml(canonicalUrl)}" />
     <meta property="og:site_name" content="Bible Sketch" />
+    <meta name="twitter:card" content="summary_large_image" />
     `;
 
     // Inject before </head>
@@ -1124,18 +1147,25 @@ exports.sketchRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async
       console.warn("[sketchRender] Error fetching related sketches:", error);
       // Continue without related sketches
     }
-    
+
+    // Hero = the ~100 KB thumbnail the client shows too (not the uncached full-size original); og:image,
+    // JSON-LD and the Pinterest link keep the full-size image.
+    const [heroUrl, ...relatedThumbUrls] = await Promise.all([
+      storageUrl(thumbPathOf(data), imageUrl),
+      ...relatedSketches.map(s => storageUrl(thumbPathOf(s), getThumbnailUrl(s.thumbnailPath, s.imageUrl))),
+    ]);
+
     // Generate related sketches HTML
     let relatedSketchesHtml = '';
     if (relatedSketches.length > 0) {
-      const sectionTitle = sketchType === 'verse' 
+      const sectionTitle = sketchType === 'verse'
         ? 'More Bible Verse Art'
         : `More Bible Coloring Pages For ${ageGroup}`;
-      
-      const relatedItems = relatedSketches.map(sketch => {
+
+      const relatedItems = relatedSketches.map((sketch, i) => {
         const relatedSlug = generateSketchSlug(sketch);
         const relatedUrl = `${baseUrl}/coloring-page/${relatedSlug}/${encodeURIComponent(sketch.id)}`;
-        const thumbnailUrl = getThumbnailUrl(sketch.thumbnailPath, sketch.imageUrl);
+        const thumbnailUrl = relatedThumbUrls[i];
         const relatedBook = sketch.promptData?.book || "Bible";
         const relatedChapter = sketch.promptData?.chapter || "";
         const relatedVerse = sketch.promptData?.start_verse || "";
@@ -1148,7 +1178,7 @@ exports.sketchRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async
           <li style="flex-shrink:0;width:calc(50% - 8px);margin-bottom:16px;">
             <a href="${escapeHtml(relatedUrl)}" style="display:block;text-decoration:none;color:inherit;">
               <article style="background:white;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,0.1);border:1px solid #f3f4f6;overflow:hidden;transition:all 0.3s;">
-                <img src="${escapeHtml(thumbnailUrl)}" alt="${escapeHtml(relatedAlt)}" style="width:100%;aspect-ratio:3/4;object-fit:contain;background:#f9fafb;padding:8px;transition:transform 0.5s;" />
+                <img src="${escapeHtml(thumbnailUrl)}" alt="${escapeHtml(relatedAlt)}" width="398" height="533" loading="lazy" decoding="async" style="width:100%;height:auto;aspect-ratio:3/4;object-fit:contain;background:#f9fafb;padding:8px;transition:transform 0.5s;" />
                 <div style="padding:12px;">
                   <h3 style="font-weight:700;font-size:0.875rem;color:#1f2937;margin:0 0 4px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
                     ${escapeHtml(relatedBook)} ${escapeHtml(relatedChapter)}:${escapeHtml(String(relatedVerse))}
@@ -1202,7 +1232,7 @@ exports.sketchRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async
     <!-- Image Column -->
     <div style="background:white;border-radius:24px;box-shadow:0 20px 25px -5px rgba(0,0,0,0.1);border:1px solid #f3f4f6;padding:24px;background-color:#e5e5e5;display:flex;align-items:center;justify-content:center;">
       <div style="position:relative;background:white;box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);width:100%;max-width:500px;aspect-ratio:3/4;">
-        <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(`${book} ${chapter}${verseRange} Coloring Page`)}" style="width:100%;height:100%;object-fit:contain;background:white;" />
+        <img src="${escapeHtml(heroUrl)}" alt="${escapeHtml(`${book} ${chapter}${verseRange} Coloring Page`)}" width="398" height="533" fetchpriority="high" style="width:100%;height:100%;object-fit:contain;background:white;" />
       </div>
     </div>
     
@@ -1542,9 +1572,7 @@ exports.blogRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (
       "description": description,
       "image": {
         "@type": "ImageObject",
-        "url": imageUrl,
-        "width": 1200,
-        "height": 630
+        "url": imageUrl
       },
       "datePublished": datePublished,
       "dateModified": post.lastmod || datePublished,
@@ -1567,7 +1595,18 @@ exports.blogRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (
       "url": canonicalUrl
     };
 
-    const schemaScript = `<script type="application/ld+json">${jsonLd(schemaData)}</script>`;
+    // data-rh: the client's blog post emits its own BlogPosting, so Helmet replaces this one after JS.
+    // The breadcrumb is server-only (the client has none), so it must NOT carry data-rh.
+    const schemaScript = `<script type="application/ld+json" data-rh="true">${jsonLd(schemaData)}</script>
+    <script type="application/ld+json">${jsonLd({
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        { "@type": "ListItem", "position": 1, "name": "Home", "item": `${baseUrl}/` },
+        { "@type": "ListItem", "position": 2, "name": "Blog", "item": `${baseUrl}/blog` },
+        { "@type": "ListItem", "position": 3, "name": post.title, "item": canonicalUrl },
+      ],
+    })}</script>`;
 
     let html = await getIndexHtml(baseUrl);
 
@@ -1646,6 +1685,10 @@ exports.blogRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (
       }
     }
 
+    // Same tokened thumbnail URLs the client requests, so embeds are downloaded once
+    const embedUrls = new Map(await Promise.all([...sketchMap].map(async ([id, s]) =>
+      [id, await storageUrl(thumbPathOf(s), getThumbnailUrl(s.thumbnailPath, s.imageUrl))])));
+
     // Replace sketch placeholders with image tags before markdown conversion
     let processedBody = post.body || '';
     if (sketchMap.size > 0) {
@@ -1661,7 +1704,7 @@ exports.blogRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (
         const sketchUrl = `${baseUrl}/coloring-page/${slug}/${sketchId}`;
         
         // Get image URL (prefer thumbnail)
-        let imageUrl = getThumbnailUrl(sketch.thumbnailPath, sketch.imageUrl);
+        let imageUrl = embedUrls.get(sketchId);
         
         // Ensure image URL is absolute (required for Pinterest crawling)
         if (imageUrl && !imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {
@@ -1680,7 +1723,7 @@ exports.blogRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (
         const altText = `${book} ${chapter}:${verseText} Coloring Page`;
         
         // Return image tag wrapped in link (Pinterest crawlable)
-        return `<figure style="margin:24px 0;"><a href="${escapeHtml(sketchUrl)}"><img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(altText)}" width="400" height="533" style="max-width:100%;height:auto;border-radius:8px;" /></a></figure>`;
+        return `<figure style="margin:24px 0;"><a href="${escapeHtml(sketchUrl)}"><img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(altText)}" width="400" height="533" loading="lazy" decoding="async" style="max-width:100%;height:auto;border-radius:8px;" /></a></figure>`;
       });
     } else {
       // Remove placeholders if no sketches found
@@ -1695,7 +1738,7 @@ exports.blogRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (
 <article style="max-width:720px;margin:0 auto;padding:40px 20px;font-family:system-ui,-apple-system,sans-serif;">
   <h1 style="font-size:2rem;font-weight:700;color:#1f2937;margin-bottom:8px;">${escapeHtml(post.title)}</h1>
   <p style="color:#6b7280;font-size:0.875rem;margin-bottom:24px;">By ${escapeHtml(author)} · ${datePublished}</p>
-  ${imageUrl !== `${baseUrl}/logo.png` ? `<figure style="margin:0 0 24px 0;"><img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(post.title)}" width="1200" height="630" style="max-width:100%;height:auto;border-radius:12px;" /></figure>` : ''}
+  ${imageUrl !== `${baseUrl}/logo.png` ? `<figure style="margin:0 0 24px 0;"><img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(post.title)}" width="1200" height="630" fetchpriority="high" style="max-width:100%;height:auto;border-radius:12px;" /></figure>` : ''}
   <div style="color:#374151;line-height:1.75;">
     ${articleBodyHtml}
   </div>
@@ -1704,7 +1747,8 @@ exports.blogRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (
     // Inject body content into <div id="root">
     html = html.replace('<div id="root"></div>', () => `<div id="root">${blogSeoContent}</div>`);
 
-    res.set('Cache-Control', 'public, max-age=3600, s-maxage=7200');
+    // Static content: cache a day at the CDN (a no-op Hosting release purges it after an edit)
+    res.set('Cache-Control', 'public, max-age=3600, s-maxage=86400');
     res.status(200).send(html);
 
   } catch (error) {
@@ -1807,7 +1851,7 @@ exports.galleryRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, asyn
     <meta property="og:url" content="${baseUrl}/gallery" />
     <meta property="og:site_name" content="Bible Sketch" />
     <meta property="og:image" content="${baseUrl}/logo.png" />
-    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content="${escapeHtml(title)}" />
     <meta name="twitter:description" content="${escapeHtml(description)}" />
     <meta name="twitter:image" content="${baseUrl}/logo.png" />`;
@@ -1980,7 +2024,7 @@ exports.verseRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async 
     <meta property="og:url" content="${baseUrl}/bible-verse-coloring" />
     <meta property="og:site_name" content="Bible Sketch" />
     <meta property="og:image" content="${baseUrl}/logo.png" />
-    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content="${escapeHtml(title)}" />
     <meta name="twitter:description" content="${escapeHtml(description)}" />
     <meta name="twitter:image" content="${baseUrl}/logo.png" />`;
@@ -2178,10 +2222,19 @@ exports.tagRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (r
     <meta property="og:url" content="${canonicalUrl}" />
     <meta property="og:site_name" content="Bible Sketch" />
     <meta property="og:image" content="${baseUrl}/logo.png" />
-    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content="${escapeHtml(title)}" />
     <meta name="twitter:description" content="${escapeHtml(description)}" />
-    <meta name="twitter:image" content="${baseUrl}/logo.png" />`;
+    <meta name="twitter:image" content="${baseUrl}/logo.png" />
+    <script type="application/ld+json">${jsonLd({
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        { "@type": "ListItem", "position": 1, "name": "Home", "item": `${baseUrl}/` },
+        { "@type": "ListItem", "position": 2, "name": "Gallery", "item": `${baseUrl}/gallery` },
+        { "@type": "ListItem", "position": 3, "name": h1, "item": canonicalUrl },
+      ],
+    })}</script>`;
     
     // Script to remove SSR content immediately (before React loads)
     // This ensures React mounts into empty #root, preventing hydration conflicts
@@ -2281,7 +2334,7 @@ exports.blogListingRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, 
     <meta property="og:url" content="${baseUrl}/blog" />
     <meta property="og:site_name" content="Bible Sketch" />
     <meta property="og:image" content="${baseUrl}/logo.png" />
-    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content="Blog - Bible Sketch" />
     <meta name="twitter:description" content="${escapeHtml(description)}" />
     <meta name="twitter:image" content="${baseUrl}/logo.png" />`;
@@ -2327,7 +2380,7 @@ exports.blogListingRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, 
       console.error("[blogListingRender] Could not find <div id=\"root\"> in HTML template");
     }
     
-    res.set('Cache-Control', 'public, max-age=3600, s-maxage=7200');
+    res.set('Cache-Control', 'public, max-age=3600, s-maxage=86400');
     res.status(200).send(html);
     
   } catch (error) {
@@ -2365,7 +2418,7 @@ exports.pricingRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, asyn
     <meta property="og:url" content="${baseUrl}/pricing" />
     <meta property="og:site_name" content="Bible Sketch" />
     <meta property="og:image" content="${baseUrl}/logo.png" />
-    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content="${escapeHtml(title)}" />
     <meta name="twitter:description" content="${escapeHtml(description)}" />
     <meta name="twitter:image" content="${baseUrl}/logo.png" />`;
@@ -2493,7 +2546,7 @@ exports.pricingRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, asyn
       console.error("[pricingRender] Could not find <div id=\"root\"> in HTML template");
     }
     
-    res.set('Cache-Control', 'public, max-age=3600, s-maxage=7200');
+    res.set('Cache-Control', 'public, max-age=3600, s-maxage=86400');
     res.status(200).send(html);
     
   } catch (error) {
@@ -2592,7 +2645,7 @@ exports.aboutRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async 
     <meta property="og:locale" content="en_US" />
     <meta property="og:image" content="${baseUrl}/logo.png" />
     <meta property="og:image:alt" content="Bible Sketch Logo" />
-    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content="About Bible Sketch - Our Story & Mission" />
     <meta name="twitter:description" content="${escapeHtml(description)}" />
     <meta name="twitter:url" content="${baseUrl}/about" />
@@ -2754,7 +2807,7 @@ exports.aboutRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async 
       console.error("[aboutRender] Could not find <div id=\"root\"> in HTML template");
     }
     
-    res.set('Cache-Control', 'public, max-age=3600, s-maxage=7200');
+    res.set('Cache-Control', 'public, max-age=3600, s-maxage=86400');
     res.status(200).send(html);
     
   } catch (error) {
@@ -2999,7 +3052,7 @@ exports.privacyRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, asyn
       console.error("[privacyRender] Could not find <div id=\"root\"> in HTML template");
     }
     
-    res.set('Cache-Control', 'public, max-age=3600, s-maxage=7200');
+    res.set('Cache-Control', 'public, max-age=3600, s-maxage=86400');
     res.status(200).send(html);
     
   } catch (error) {
@@ -3188,7 +3241,7 @@ exports.termsRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async 
       console.error("[termsRender] Could not find <div id=\"root\"> in HTML template");
     }
     
-    res.set('Cache-Control', 'public, max-age=3600, s-maxage=7200');
+    res.set('Cache-Control', 'public, max-age=3600, s-maxage=86400');
     res.status(200).send(html);
     
   } catch (error) {
@@ -3213,7 +3266,7 @@ exports.verifiedRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, asy
     // Email-verification landing page: real title, never indexed
     const html = (await getIndexHtml(baseUrl)).replace(/<title>.*?<\/title>/i, '<title>Email Verified | Bible Sketch</title>');
     res.set('X-Robots-Tag', 'noindex');
-    res.set('Cache-Control', 'public, max-age=3600, s-maxage=7200');
+    res.set('Cache-Control', 'public, max-age=3600, s-maxage=86400');
     res.status(200).send(html);
   } catch (error) {
     console.error("[verifiedRender] Error:", error);
