@@ -58,6 +58,50 @@
         "function": "profileRender"
       },
       {
+        "source": "/blog",
+        "function": "blogListingRender"
+      },
+      {
+        "source": "/blog/**",
+        "function": "blogRender"
+      },
+      {
+        "source": "/gallery",
+        "function": "galleryRender"
+      },
+      {
+        "source": "/",
+        "function": "homeRender"
+      },
+      {
+        "source": "/bible-verse-coloring",
+        "function": "verseRender"
+      },
+      {
+        "source": "/pricing",
+        "function": "pricingRender"
+      },
+      {
+        "source": "/about",
+        "function": "aboutRender"
+      },
+      {
+        "source": "/privacy",
+        "function": "privacyRender"
+      },
+      {
+        "source": "/terms",
+        "function": "termsRender"
+      },
+      {
+        "source": "/tags/**",
+        "function": "tagRender"
+      },
+      {
+        "source": "/verified",
+        "function": "verifiedRender"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }

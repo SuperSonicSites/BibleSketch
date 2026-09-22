@@ -24,14 +24,196 @@ const generateSketchSlug = (data) => {
     return slug.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
 };
 
+// --- HELPER: Get Thumbnail URL from Storage Path ---
+const getThumbnailUrl = (thumbnailPath, imageUrl) => {
+    if (!thumbnailPath) return imageUrl;
+    
+    // If thumbnailPath ends with _400x533.png, construct Firebase Storage URL
+    if (thumbnailPath.includes('_400x533')) {
+        const bucket = 'biblesketch-5104c.firebasestorage.app';
+        // Encode the path for URL
+        const encodedPath = encodeURIComponent(thumbnailPath);
+        return `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodedPath}?alt=media`;
+    }
+    
+    // Fallback to imageUrl if thumbnailPath doesn't match expected format
+    return imageUrl;
+};
+
+// --- HELPER: Extract Sketch IDs from Markdown ---
+const extractSketchIds = (markdown) => {
+    if (!markdown) return [];
+    const regex = /<<sketch="([^"]+)">>/g;
+    const ids = [];
+    let match;
+    while ((match = regex.exec(markdown)) !== null) {
+        ids.push(match[1]);
+    }
+    return [...new Set(ids)]; // Remove duplicates
+};
+
+// --- HELPER: Escape HTML ---
+const escapeHtml = (str) => {
+    if (str === null || str === undefined) return '';
+    // Convert to string if not already
+    const strValue = String(str);
+    return strValue
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+};
+
+
+// --- HELPER: Convert Markdown to HTML for SSR ---
+const markdownToHtml = (markdown) => {
+    if (!markdown) return '';
+    
+    let html = markdown;
+    
+    // Remove sketch embeds (<<sketch="id">>)
+    html = html.replace(/<<sketch="[^"]+">>/g, '');
+    
+    // Remove CTA placeholders (<<CTA>>)
+    html = html.replace(/<<CTA>>/g, '');
+    
+    // Remove horizontal rules (---)
+    html = html.replace(/^---+$/gm, '');
+    
+    // Convert tables first (before other processing)
+    html = html.replace(/\|(.+)\|\n\|[:\s\-|]+\|\n((?:\|.+\|\n?)+)/g, (match, header, rows) => {
+        const headerCells = header.split('|').filter(c => c.trim()).map(c => c.trim());
+        const rowLines = rows.trim().split('\n').filter(r => r.trim());
+        const tableRows = rowLines.map(row => {
+            const cells = row.split('|').filter(c => c.trim()).map(c => c.trim());
+            return '<tr>' + cells.map(cell => `<td style="padding:8px 12px;border:1px solid #e5e7eb;">${cell}</td>`).join('') + '</tr>';
+        }).join('');
+        return '<table style="width:100%;border-collapse:collapse;margin:24px 0;"><thead><tr>' + 
+               headerCells.map(h => `<th style="padding:12px;border:1px solid #e5e7eb;background:#f9fafb;font-weight:600;text-align:left;">${h}</th>`).join('') + 
+               '</tr></thead><tbody>' + tableRows + '</tbody></table>';
+    });
+    
+    // Convert headers (## -> <h2>, ### -> <h3>, etc.)
+    html = html.replace(/^#### (.*)$/gm, '<h4 style="font-size:1rem;font-weight:600;color:#374151;margin-top:24px;margin-bottom:12px;">$1</h4>');
+    html = html.replace(/^### (.*)$/gm, '<h3 style="font-size:1.25rem;font-weight:600;color:#374151;margin-top:32px;margin-bottom:16px;">$1</h3>');
+    html = html.replace(/^## (.*)$/gm, '<h2 style="font-size:1.5rem;font-weight:600;color:#374151;margin-top:40px;margin-bottom:20px;">$1</h2>');
+    
+    // Convert bold (**text** -> <strong>)
+    html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    
+    // Convert italic (*text* -> <em>)
+    // Note: Bold already converted, so remaining * are italic
+    html = html.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+    
+    // Convert links ([text](url) -> <a>)
+    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" style="color:#7c3aed;text-decoration:none;">$1</a>');
+    
+    // Process line by line for lists and paragraphs
+    const lines = html.split('\n');
+    const processed = [];
+    let inUnorderedList = false;
+    let inOrderedList = false;
+    let listItems = [];
+    
+    lines.forEach((line) => {
+        const trimmed = line.trim();
+        
+        // Check for unordered list item
+        const ulMatch = trimmed.match(/^[\*\-\+] (.+)$/);
+        if (ulMatch) {
+            if (!inUnorderedList) {
+                if (inOrderedList) {
+                    processed.push('</ol>');
+                    inOrderedList = false;
+                }
+                inUnorderedList = true;
+                listItems = [];
+            }
+            listItems.push(ulMatch[1]);
+            return;
+        }
+        
+        // Check for ordered list item
+        const olMatch = trimmed.match(/^\d+\. (.+)$/);
+        if (olMatch) {
+            if (!inOrderedList) {
+                if (inUnorderedList) {
+                    processed.push('<ul style="list-style:disc;padding-left:24px;margin:16px 0;">');
+                    listItems.forEach(item => processed.push(`<li style="margin-bottom:8px;">${item}</li>`));
+                    processed.push('</ul>');
+                    inUnorderedList = false;
+                }
+                inOrderedList = true;
+                listItems = [];
+            }
+            listItems.push(olMatch[1]);
+            return;
+        }
+        
+        // Close any open list
+        if (inUnorderedList && listItems.length > 0) {
+            processed.push('<ul style="list-style:disc;padding-left:24px;margin:16px 0;">');
+            listItems.forEach(item => processed.push(`<li style="margin-bottom:8px;">${item}</li>`));
+            processed.push('</ul>');
+            listItems = [];
+            inUnorderedList = false;
+        }
+        if (inOrderedList && listItems.length > 0) {
+            processed.push('<ol style="list-style:decimal;padding-left:24px;margin:16px 0;">');
+            listItems.forEach(item => processed.push(`<li style="margin-bottom:8px;">${item}</li>`));
+            processed.push('</ol>');
+            listItems = [];
+            inOrderedList = false;
+        }
+        
+        // Process regular lines
+        if (trimmed && !trimmed.startsWith('<')) {
+            processed.push(`<p style="color:#374151;line-height:1.75;margin-bottom:16px;">${trimmed}</p>`);
+        } else if (trimmed) {
+            processed.push(trimmed);
+        }
+    });
+    
+    // Close any remaining lists
+    if (inUnorderedList && listItems.length > 0) {
+        processed.push('<ul style="list-style:disc;padding-left:24px;margin:16px 0;">');
+        listItems.forEach(item => processed.push(`<li style="margin-bottom:8px;">${item}</li>`));
+        processed.push('</ul>');
+    }
+    if (inOrderedList && listItems.length > 0) {
+        processed.push('<ol style="list-style:decimal;padding-left:24px;margin:16px 0;">');
+        listItems.forEach(item => processed.push(`<li style="margin-bottom:8px;">${item}</li>`));
+        processed.push('</ol>');
+    }
+    
+    return processed.join('\n');
+};
+
 // --- HELPER: Constants (Mirrored from Frontend) ---
 const AGE_GROUPS = ["Toddler", "Young Child", "Teen", "Adult"];
 const ART_STYLES = ["Sunday School", "Stained Glass", "Iconography", "Comic", "Classic", "Doodles"];
 
-// Liturgical tags for static sitemap generation
+// Liturgical tags for static sitemap generation and SSR
 const LITURGICAL_TAGS = [
-  'advent', 'christmas', 'lent', 'holy-week', 'easter', 'pentecost',
-  'creation', 'the-fall', 'exile', 'resurrection'
+  // Liturgical Seasons
+  { id: 'advent', label: 'Advent', category: 'season' },
+  { id: 'christmas', label: 'Christmas', category: 'season' },
+  { id: 'epiphany', label: 'Epiphany', category: 'season' },
+  { id: 'lent', label: 'Lent', category: 'season' },
+  { id: 'holy-week', label: 'Holy Week', category: 'season' },
+  { id: 'easter', label: 'Easter', category: 'season' },
+  { id: 'pentecost', label: 'Pentecost', category: 'season' },
+  { id: 'ordinary-time', label: 'Ordinary Time', category: 'season' },
+
+  // Themes
+  { id: 'creation', label: 'Creation', category: 'theme' },
+  { id: 'the-fall', label: 'The Fall', category: 'theme' },
+  { id: 'exile', label: 'Exile', category: 'theme' },
+  { id: 'prophets', label: 'Prophets', category: 'theme' },
+  { id: 'miracles', label: 'Miracles', category: 'theme' },
+  { id: 'parables', label: 'Parables', category: 'theme' },
+  { id: 'resurrection', label: 'Resurrection', category: 'theme' },
 ];
 
 exports.generateContent = onCall({ 
@@ -179,7 +361,7 @@ exports.generateContent = onCall({
 // 1. SITEMAP GENERATOR (Dynamic + Deduplicated + Segmented)
 // ---------------------------------------------------------
 exports.sitemap = onRequest(async (req, res) => {
-  const host = 'BibleSketch.app';
+  const host = 'biblesketch.app';
   const protocol = 'https';
   const baseUrl = `${protocol}://${host}`;
   
@@ -200,6 +382,9 @@ exports.sitemap = onRequest(async (req, res) => {
       // 2. "Tags" Sitemap (NEW)
       sitemaps.push(`${baseUrl}/sitemap.xml?type=tags`);
 
+      // 2.5 "Blog" Sitemap (Blog posts)
+      sitemaps.push(`${baseUrl}/sitemap.xml?type=blog`);
+
       // 3. "Profiles" Sitemap (Public user galleries)
       sitemaps.push(`${baseUrl}/sitemap.xml?type=profiles`);
 
@@ -216,6 +401,13 @@ exports.sitemap = onRequest(async (req, res) => {
            const key = `${group.age.toLowerCase().replace(/ /g, '-')}-${style.toLowerCase().replace(/ /g, '-')}`;
            sitemaps.push(`${baseUrl}/sitemap.xml?type=${key}`);
         });
+      });
+
+      // 5. Generate Verse Art Sitemaps (by font style)
+      const VERSE_FONT_STYLES = ["Elegant Script", "Modern Brush", "Playful", "Classic Serif"];
+      VERSE_FONT_STYLES.forEach(fontStyle => {
+        const key = `verses-${fontStyle.toLowerCase().replace(/ /g, '-')}`;
+        sitemaps.push(`${baseUrl}/sitemap.xml?type=${key}`);
       });
 
       let xml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -240,14 +432,59 @@ exports.sitemap = onRequest(async (req, res) => {
         let xml = `<?xml version="1.0" encoding="UTF-8"?>
         <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`;
 
-        LITURGICAL_TAGS.forEach(tagId => {
+        LITURGICAL_TAGS.forEach(tag => {
             xml += `
             <url>
-                <loc>${baseUrl}/tags/${tagId}</loc>
+                <loc>${baseUrl}/tags/${tag.id}</loc>
                 <changefreq>weekly</changefreq>
                 <priority>0.9</priority>
             </url>`;
         });
+
+        xml += `</urlset>`;
+        res.set("Content-Type", "application/xml");
+        return res.status(200).send(xml);
+    }
+
+    // --- B.5 BLOG SITEMAP (Blog Posts) ---
+    if (type === 'blog') {
+        let xml = `<?xml version="1.0" encoding="UTF-8"?>
+        <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`;
+
+        // Add blog index page
+        xml += `
+        <url>
+            <loc>${baseUrl}/blog</loc>
+            <changefreq>weekly</changefreq>
+            <priority>0.9</priority>
+        </url>`;
+
+        // Read blog posts metadata
+        try {
+            const blogPostsPath = path.join(__dirname, 'blog-posts.json');
+            let blogPosts = [];
+            
+            if (fs.existsSync(blogPostsPath)) {
+                const blogPostsData = fs.readFileSync(blogPostsPath, 'utf-8');
+                blogPosts = JSON.parse(blogPostsData);
+            } else {
+                console.warn('blog-posts.json not found, blog sitemap will only include index page');
+            }
+
+            // Add each blog post
+            blogPosts.forEach(post => {
+                xml += `
+        <url>
+            <loc>${baseUrl}/blog/${post.slug}</loc>
+            <lastmod>${post.lastmod}</lastmod>
+            <changefreq>monthly</changefreq>
+            <priority>0.8</priority>
+        </url>`;
+            });
+        } catch (error) {
+            console.error('Error reading blog posts:', error);
+            // Continue with just the index page if there's an error
+        }
 
         xml += `</urlset>`;
         res.set("Content-Type", "application/xml");
@@ -313,6 +550,23 @@ exports.sitemap = onRequest(async (req, res) => {
          if (found) break;
        }
 
+       // Check for verse font style sitemaps
+       if (!found && type.startsWith('verses-')) {
+         const VERSE_FONT_STYLES = ["Elegant Script", "Modern Brush", "Playful", "Classic Serif"];
+         for (const fontStyle of VERSE_FONT_STYLES) {
+           const key = `verses-${fontStyle.toLowerCase().replace(/ /g, '-')}`;
+           if (key === type) {
+             query = query
+               .where("type", "==", "verse")
+               .where("promptData.font_style", "==", fontStyle)
+               .orderBy("createdAt", "desc")
+               .limit(5000);
+             found = true;
+             break;
+           }
+         }
+       }
+
        if (!found) {
          return res.status(404).send("Sitemap topic not found");
        }
@@ -326,7 +580,7 @@ exports.sitemap = onRequest(async (req, res) => {
 
     // Add Static Routes (Only in 'recent' to avoid duplicates)
     if (type === 'recent') {
-        const staticRoutes = ["/", "/gallery", "/pricing", "/terms"];
+        const staticRoutes = ["/", "/gallery", "/blog", "/about", "/pricing", "/terms"];
         staticRoutes.forEach(route => {
             xml += `
             <url>
@@ -424,7 +678,7 @@ async function getIndexHtml(baseUrl) {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
       
-      const response = await fetch("https://BibleSketch.app/index.html", { signal: controller.signal });
+      const response = await fetch("https://biblesketch.app/index.html", { signal: controller.signal });
       clearTimeout(timeoutId);
 
       if (!response.ok) throw new Error("Fallback fetch failed");
@@ -437,8 +691,166 @@ async function getIndexHtml(baseUrl) {
   }
 }
 
+// ---------------------------------------------------------
+// 2. HOMEPAGE SSR RENDERER (Minimal SSR for SEO - Hidden from Users)
+// ---------------------------------------------------------
+exports.homeRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (req, res) => {
+  const host = 'biblesketch.app';
+  const protocol = 'https';
+  const baseUrl = `${protocol}://${host}`;
+  const userAgent = req.headers['user-agent'] || 'Unknown';
+  
+  console.log(`[homeRender] Called - Path: ${req.path} | Method: ${req.method} | UA: ${userAgent}`);
+  
+  const serveDefault = async () => {
+    const html = await getIndexHtml(baseUrl);
+    res.send(html);
+  };
+
+  try {
+    // Query top 10-15 public sketches (not bookmarks, not verse type)
+    let sketches = [];
+    try {
+      const query = admin.firestore()
+        .collection("sketches")
+        .where("isPublic", "==", true)
+        .orderBy("createdAt", "desc")
+        .limit(50);
+      
+      const snapshot = await query.get();
+      sketches = snapshot.docs
+        .map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }))
+        .filter(s => !s.isBookmark && s.type !== 'verse')
+        .sort((a, b) => {
+          const blessDiff = (b.blessCount || 0) - (a.blessCount || 0);
+          if (blessDiff !== 0) return blessDiff;
+          const aTime = a.createdAt?.toMillis?.() || 0;
+          const bTime = b.createdAt?.toMillis?.() || 0;
+          return bTime - aTime;
+        })
+        .slice(0, 15); // Top 15
+    } catch (error) {
+      console.warn("[homeRender] Error fetching sketches:", error);
+      // Continue with empty sketches array
+    }
+    
+    // Generate ordered list of links
+    const linkItems = [];
+    
+    // Static key pages
+    linkItems.push(`<li><a href="${baseUrl}/gallery">Browse Gallery</a></li>`);
+    linkItems.push(`<li><a href="${baseUrl}/bible-verse-coloring">Create Verse Art</a></li>`);
+    linkItems.push(`<li><a href="${baseUrl}/blog">Read Blog</a></li>`);
+    linkItems.push(`<li><a href="${baseUrl}/pricing">View Pricing</a></li>`);
+    
+    // Top sketches
+    sketches.forEach(sketch => {
+      const slug = generateSketchSlug(sketch);
+      const sketchUrl = `${baseUrl}/coloring-page/${slug}/${sketch.id}`;
+      const book = sketch.promptData?.book || "Bible";
+      const chapter = sketch.promptData?.chapter || "";
+      const startVerse = sketch.promptData?.start_verse || "";
+      const endVerse = sketch.promptData?.end_verse;
+      const verseText = endVerse && endVerse > startVerse 
+        ? `${startVerse}-${endVerse}` 
+        : String(startVerse);
+      const linkText = `${book} ${chapter}:${verseText} Coloring Page`;
+      
+      linkItems.push(`<li><a href="${sketchUrl}">${escapeHtml(linkText)}</a></li>`);
+    });
+    
+    // Generate minimal SSR content
+    const homeSeoContent = `
+      <h1>Create Faith-Filled Coloring Pages</h1>
+      <p>Turn any bible verse into a custom, print-ready coloring page in seconds.</p>
+      <ol>
+        ${linkItems.join('\n        ')}
+      </ol>`;
+    
+    // Get HTML template
+    let html = await getIndexHtml(baseUrl);
+    
+    // Set meta tags
+    const title = "Create Faith-Filled Coloring Pages | Bible Sketch";
+    const description = "Turn any bible verse into a custom, print-ready coloring page in seconds. AI-powered Bible coloring pages for Sunday School, VBS, and personal devotion.";
+    
+    html = html.replace(/<title>.*?<\/title>/i, `<title>${title}</title>`);
+    
+    const metaTags = `
+    <meta name="description" content="${escapeHtml(description)}" />
+    <link rel="canonical" href="${baseUrl}/" />
+    <meta property="og:title" content="${escapeHtml(title)}" />
+    <meta property="og:description" content="${escapeHtml(description)}" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="${baseUrl}/" />
+    <meta property="og:site_name" content="Bible Sketch" />
+    <meta property="og:image" content="${baseUrl}/og.png" />
+    <meta property="og:image:alt" content="${escapeHtml(title)}" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:type" content="image/png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${escapeHtml(title)}" />
+    <meta name="twitter:description" content="${escapeHtml(description)}" />
+    <meta name="twitter:image" content="${baseUrl}/og.png" />`;
+    
+    // Script to remove SSR content immediately (before React loads)
+    // This ensures React mounts into empty #root, preventing hydration conflicts
+    // Crawlers see SSR content in HTML source, users see React content
+    const removeSSRScript = `
+    <script>
+      // Remove SSR content immediately (synchronous, before React bundle loads)
+      (function() {
+        var root = document.getElementById('root');
+        if (root) {
+          root.innerHTML = '';
+        }
+      })();
+    </script>`;
+    
+    // Inject meta tags before </head>
+    if (html.includes('</head>')) {
+      html = html.replace('</head>', `${metaTags}\n</head>`);
+    } else {
+      html += metaTags;
+    }
+    
+    // Inject body content into <div id="root"> followed by removal script
+    if (html.includes('<div id="root">')) {
+      // Replace self-closing tag
+      html = html.replace(/<div id="root"><\/div>/g, `<div id="root">${homeSeoContent}${removeSSRScript}</div>`);
+      // If still not replaced, replace opening tag
+      if (!html.includes(homeSeoContent)) {
+        html = html.replace(/<div id="root">/g, `<div id="root">${homeSeoContent}${removeSSRScript}`);
+      }
+      
+      // Verify injection succeeded
+      if (!html.includes(homeSeoContent)) {
+        console.error("[homeRender] Failed to inject SEO content into HTML");
+      } else {
+        console.log(`[homeRender] Successfully injected SEO content with ${sketches.length} sketches`);
+      }
+    } else {
+      console.error("[homeRender] Could not find <div id=\"root\"> in HTML template");
+    }
+    
+    res.set('Cache-Control', 'public, max-age=3600, s-maxage=7200');
+    res.status(200).send(html);
+    
+  } catch (error) {
+    console.error("[homeRender] Error:", error);
+    serveDefault();
+  }
+});
+
+// ---------------------------------------------------------
+// 3. SKETCH PAGE SEO RENDERER (Server-Side Meta Tags for Individual Sketches)
+// ---------------------------------------------------------
 exports.sketchRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (req, res) => {
-  const host = 'BibleSketch.app';
+  const host = 'biblesketch.app';
   const protocol = 'https';
   const baseUrl = `${protocol}://${host}`;
   const userAgent = req.headers['user-agent'] || 'Unknown';
@@ -469,12 +881,21 @@ exports.sketchRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async
     }
 
     const data = doc.data();
+    
+    // Check if sketch is public
+    if (data.isPublic !== true) {
+      console.log(`[sketchRender] Sketch ${sketchId} is not public.`);
+      return serveDefault();
+    }
+    
     const book = data.promptData?.book || "Bible";
     const chapter = data.promptData?.chapter || "Story";
     const startVerse = data.promptData?.start_verse;
     const endVerse = data.promptData?.end_verse;
     const ageGroup = data.promptData?.age_group || "All Ages";
     const style = data.promptData?.art_style || "Coloring Page";
+    const sketchType = data.type || 'scene';
+    const fontStyle = data.promptData?.font_style;
 
     let verseRange = "";
     if (startVerse) {
@@ -490,6 +911,22 @@ exports.sketchRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async
 
     const slug = generateSketchSlug(data);
     const canonicalUrl = `${baseUrl}/coloring-page/${slug}/${sketchId}`;
+    
+    // Fetch author name
+    let authorName = "A Bible Sketch User";
+    try {
+      if (data.userId) {
+        const userDoc = await admin.firestore().collection("users").doc(data.userId).get();
+        if (userDoc.exists) {
+          const userData = userDoc.data();
+          if (userData && userData.displayName) {
+            authorName = userData.displayName;
+          }
+        }
+      }
+    } catch (error) {
+      console.warn("[sketchRender] Could not fetch author name:", error);
+    }
 
     // Schema.org JSON-LD Construction
     const blessCount = data.blessCount || 0;
@@ -565,6 +1002,253 @@ exports.sketchRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async
       html += metaTags + schemaScript;
     }
 
+    // Query related sketches
+    let relatedSketches = [];
+    try {
+      let relatedQuery;
+      
+      if (sketchType === 'verse') {
+        // Verse-specific query - try with font_style first, fallback to simpler query
+        try {
+          if (fontStyle) {
+            relatedQuery = admin.firestore()
+              .collection("sketches")
+              .where("isPublic", "==", true)
+              .where("type", "==", "verse")
+              .where("promptData.font_style", "==", fontStyle)
+              .orderBy("createdAt", "desc")
+              .limit(9);
+            
+            const relatedSnapshot = await relatedQuery.get();
+            relatedSketches = relatedSnapshot.docs
+              .map(doc => ({
+                id: doc.id,
+                ...doc.data()
+              }))
+              .filter(s => s.id !== sketchId && !s.isBookmark && s.type === 'verse')
+              .slice(0, 8);
+          } else {
+            // Try query with type filter
+            relatedQuery = admin.firestore()
+              .collection("sketches")
+              .where("isPublic", "==", true)
+              .where("type", "==", "verse")
+              .orderBy("createdAt", "desc")
+              .limit(9);
+            
+            const relatedSnapshot = await relatedQuery.get();
+            relatedSketches = relatedSnapshot.docs
+              .map(doc => ({
+                id: doc.id,
+                ...doc.data()
+              }))
+              .filter(s => s.id !== sketchId && !s.isBookmark && s.type === 'verse')
+              .slice(0, 8);
+          }
+        } catch (verseError) {
+          // Fallback: use simpler query without type filter (client-side will filter)
+          console.warn("[sketchRender] Verse query with type filter failed, trying fallback:", verseError);
+          relatedQuery = admin.firestore()
+            .collection("sketches")
+            .where("isPublic", "==", true)
+            .orderBy("createdAt", "desc")
+            .limit(20);
+          
+          const relatedSnapshot = await relatedQuery.get();
+          relatedSketches = relatedSnapshot.docs
+            .map(doc => ({
+              id: doc.id,
+              ...doc.data()
+            }))
+            .filter(s => s.id !== sketchId && !s.isBookmark && s.type === 'verse')
+            .slice(0, 8);
+        }
+      } else {
+        // Scene-specific query: require age_group and art_style (has index)
+        if (ageGroup && style) {
+          relatedQuery = admin.firestore()
+            .collection("sketches")
+            .where("isPublic", "==", true)
+            .where("promptData.age_group", "==", ageGroup)
+            .where("promptData.art_style", "==", style)
+            .orderBy("createdAt", "desc")
+            .limit(9);
+          
+          const relatedSnapshot = await relatedQuery.get();
+          relatedSketches = relatedSnapshot.docs
+            .map(doc => ({
+              id: doc.id,
+              ...doc.data()
+            }))
+            .filter(s => s.id !== sketchId && !s.isBookmark)
+            .slice(0, 8);
+        }
+      }
+    } catch (error) {
+      console.warn("[sketchRender] Error fetching related sketches:", error);
+      // Continue without related sketches
+    }
+    
+    // Generate related sketches HTML
+    let relatedSketchesHtml = '';
+    if (relatedSketches.length > 0) {
+      const sectionTitle = sketchType === 'verse' 
+        ? 'More Bible Verse Art'
+        : `More Bible Coloring Pages For ${ageGroup}`;
+      
+      const relatedItems = relatedSketches.map(sketch => {
+        const relatedSlug = generateSketchSlug(sketch);
+        const relatedUrl = `${baseUrl}/coloring-page/${relatedSlug}/${sketch.id}`;
+        const thumbnailUrl = getThumbnailUrl(sketch.thumbnailPath, sketch.imageUrl);
+        const relatedBook = sketch.promptData?.book || "Bible";
+        const relatedChapter = sketch.promptData?.chapter || "";
+        const relatedVerse = sketch.promptData?.start_verse || "";
+        const relatedStyle = sketchType === 'verse' 
+          ? (sketch.promptData?.font_style || 'Verse Art')
+          : (sketch.promptData?.art_style || 'Coloring Page');
+        const relatedAlt = `${relatedBook} ${relatedChapter}:${relatedVerse} Coloring Page`;
+        
+        return `
+          <li style="flex-shrink:0;width:calc(50% - 8px);margin-bottom:16px;">
+            <a href="${relatedUrl}" style="display:block;text-decoration:none;color:inherit;">
+              <article style="background:white;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,0.1);border:1px solid #f3f4f6;overflow:hidden;transition:all 0.3s;">
+                <img src="${thumbnailUrl}" alt="${escapeHtml(relatedAlt)}" style="width:100%;aspect-ratio:3/4;object-fit:contain;background:#f9fafb;padding:8px;transition:transform 0.5s;" />
+                <div style="padding:12px;">
+                  <h3 style="font-weight:700;font-size:0.875rem;color:#1f2937;margin:0 0 4px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                    ${escapeHtml(relatedBook)} ${escapeHtml(relatedChapter)}:${escapeHtml(String(relatedVerse))}
+                  </h3>
+                  <p style="font-size:0.75rem;color:#6b7280;margin:0;">
+                    ${escapeHtml(relatedStyle)}
+                  </p>
+                </div>
+              </article>
+            </a>
+          </li>`;
+      }).join('');
+      
+      relatedSketchesHtml = `
+        <section style="margin-top:64px;padding-top:32px;border-top:1px solid #e5e7eb;">
+          <h2 style="font-size:1.5rem;font-weight:600;color:#374151;margin-bottom:24px;">
+            ${escapeHtml(sectionTitle)}
+          </h2>
+          <ul style="list-style:none;padding:0;margin:0;display:flex;flex-wrap:wrap;gap:16px;">
+            ${relatedItems}
+          </ul>
+        </section>`;
+    }
+    
+    // Generate main sketch content HTML (non-logged-in version)
+    const tagsHtml = data.tags && data.tags.length > 0
+      ? `<div style="margin-bottom:24px;">
+          <div style="display:flex;align-items:center;gap:8px;font-size:0.75rem;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;">
+            <span>Tags</span>
+          </div>
+          <div style="display:flex;flex-wrap:gap:8px;">
+            ${data.tags.map(tag => `<span style="background:#f3f4f6;color:#374151;padding:4px 12px;border-radius:9999px;font-size:0.75rem;font-weight:600;">${escapeHtml(tag)}</span>`).join('')}
+          </div>
+        </div>`
+      : '';
+    
+    const datePublishedFormatted = data.createdAt && data.createdAt.toDate 
+      ? data.createdAt.toDate().toLocaleDateString()
+      : new Date().toLocaleDateString();
+    
+    const sketchSeoContent = `
+<article style="max-width:1200px;margin:0 auto;padding:40px 20px;font-family:system-ui,-apple-system,sans-serif;">
+  <div style="margin-bottom:32px;">
+    <a href="${baseUrl}/gallery" style="display:inline-flex;align-items:center;gap:8px;color:#6b7280;font-weight:700;text-decoration:none;margin-bottom:32px;">
+      <div style="padding:4px;background:white;border-radius:9999px;border:1px solid #e5e7eb;">←</div>
+      Back to Gallery
+    </a>
+  </div>
+  
+  <div style="display:grid;grid-template-columns:1fr;gap:48px;margin-bottom:48px;">
+    <!-- Image Column -->
+    <div style="background:white;border-radius:24px;box-shadow:0 20px 25px -5px rgba(0,0,0,0.1);border:1px solid #f3f4f6;padding:24px;background-color:#e5e5e5;display:flex;align-items:center;justify-content:center;">
+      <div style="position:relative;background:white;box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);width:100%;max-width:500px;aspect-ratio:3/4;">
+        <img src="${imageUrl}" alt="${escapeHtml(`${book} ${chapter}${verseRange} Coloring Page`)}" style="width:100%;height:100%;object-fit:contain;background:white;" />
+      </div>
+    </div>
+    
+    <!-- Details Column -->
+    <div style="display:flex;flex-direction:column;">
+      <div style="background:white;border-radius:24px;padding:32px;border:1px solid #f3f4f6;box-shadow:0 1px 3px rgba(0,0,0,0.1);flex:1;">
+        <h1 style="font-size:2rem;font-weight:700;color:#1f2937;margin:0 0 4px 0;">
+          ${escapeHtml(book)} ${escapeHtml(chapter)}${verseRange} Coloring Page
+        </h1>
+        <p style="font-size:1rem;color:#6b7280;margin:0 0 16px 0;">
+          ${sketchType === 'verse' 
+            ? `${escapeHtml(fontStyle || 'Elegant Script')} verse art coloring page`
+            : `Free printable Bible coloring sheet for ${escapeHtml(ageGroup)}s`}
+        </p>
+        
+        <div style="display:flex;flex-wrap:gap:12px;font-size:0.875rem;color:#6b7280;margin-bottom:16px;">
+          <span style="background:#f3f4f6;color:#7c3aed;padding:4px 12px;border-radius:9999px;font-weight:700;font-size:0.75rem;text-transform:uppercase;">
+            ${sketchType === 'verse' ? escapeHtml(fontStyle || 'Verse Art') : escapeHtml(ageGroup)}
+          </span>
+          <span style="display:flex;align-items:center;gap:4px;">
+            Created by 
+            <a href="${baseUrl}/profile/${data.userId}" style="font-weight:700;color:#7c3aed;text-decoration:none;">${escapeHtml(authorName)}</a>
+          </span>
+          <span style="color:#d1d5db;">•</span>
+          <span>${datePublishedFormatted}</span>
+        </div>
+        
+        ${tagsHtml}
+        
+        <!-- Guest Signup CTA -->
+        <div style="background:#7c3aed;border-radius:16px;padding:24px;margin-bottom:24px;color:white;">
+          <h2 style="font-size:1.25rem;font-weight:700;margin:0 0 12px 0;">Unlock This Coloring Page</h2>
+          <p style="color:#c4b5fd;font-size:0.875rem;margin:0 0 16px 0;">
+            Create a free account to print, download, and save coloring pages.
+          </p>
+          <a href="${baseUrl}" style="display:block;background:#fbbf24;color:#1f2937;font-weight:700;padding:12px;border-radius:12px;text-align:center;text-decoration:none;">
+            Create Free Account
+          </a>
+        </div>
+        
+        <!-- Share Buttons -->
+        <div style="padding-top:24px;border-top:1px solid #e5e7eb;">
+          <p style="font-size:0.75rem;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 12px 0;">Share this sketch</p>
+          <div style="display:flex;gap:12px;">
+            <a href="https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(canonicalUrl)}" target="_blank" style="flex:1;padding:12px;border-radius:12px;border:1px solid #dbeafe;background:#eff6ff;color:#2563eb;text-align:center;text-decoration:none;font-weight:700;font-size:0.875rem;">
+              Facebook
+            </a>
+            <a href="https://pinterest.com/pin/create/button/?url=${encodeURIComponent(canonicalUrl)}&media=${encodeURIComponent(imageUrl)}" target="_blank" style="flex:1;padding:12px;border-radius:12px;border:1px solid #fecaca;background:#fef2f2;color:#dc2626;text-align:center;text-decoration:none;font-weight:700;font-size:0.875rem;">
+              Pinterest
+            </a>
+            <button onclick="navigator.clipboard.writeText('${canonicalUrl}');alert('Link copied!');" style="flex:1;padding:12px;border-radius:12px;border:1px solid #e5e7eb;background:white;color:#374151;font-weight:700;font-size:0.875rem;cursor:pointer;">
+              Copy Link
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  ${relatedSketchesHtml}
+</article>`;
+    
+    // Inject body content into <div id="root">
+    // Use regex to handle both self-closing and open tags reliably
+    if (html.includes('<div id="root">')) {
+      // Replace self-closing tag
+      html = html.replace(/<div id="root"><\/div>/g, `<div id="root">${sketchSeoContent}</div>`);
+      // If still not replaced, replace opening tag (handles case with whitespace or content)
+      if (!html.includes(sketchSeoContent)) {
+        html = html.replace(/<div id="root">/g, `<div id="root">${sketchSeoContent}`);
+      }
+      
+      // Verify injection succeeded
+      if (!html.includes(sketchSeoContent)) {
+        console.error("[sketchRender] Failed to inject SEO content into HTML");
+      } else {
+        console.log(`[sketchRender] Successfully injected SEO content for sketch ${sketchId}`);
+      }
+    } else {
+      console.error("[sketchRender] Could not find <div id=\"root\"> in HTML template");
+    }
+
     res.set('Cache-Control', 'public, max-age=3600, s-maxage=7200');
     res.status(200).send(html);
 
@@ -578,7 +1262,7 @@ exports.sketchRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async
 // 3. PROFILE PAGE SEO RENDERER (Server-Side Schema for Profiles)
 // ---------------------------------------------------------
 exports.profileRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (req, res) => {
-  const host = 'BibleSketch.app';
+  const host = 'biblesketch.app';
   const protocol = 'https';
   const baseUrl = `${protocol}://${host}`;
   const userAgent = req.headers['user-agent'] || 'Unknown';
@@ -739,7 +1423,1797 @@ exports.profileRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, asyn
 });
 
 // ---------------------------------------------------------
-// 4. ZOHO BILLING WEBHOOK HANDLER
+// 4. BLOG PAGE SEO RENDERER (Server-Side Meta Tags for Blog Posts)
+// ---------------------------------------------------------
+exports.blogRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (req, res) => {
+  const host = 'biblesketch.app';
+  const protocol = 'https';
+  const baseUrl = `${protocol}://${host}`;
+  const userAgent = req.headers['user-agent'] || 'Unknown';
+
+  // Extract slug from /blog/:slug
+  const pathSegments = req.path.split('/').filter(p => p.length > 0);
+  // Expected: ["blog", "slug"] or just ["blog"]
+  const slug = pathSegments.length >= 2 ? pathSegments[1] : null;
+
+  console.log(`[blogRender] Path: ${req.path} | Slug: ${slug} | UA: ${userAgent}`);
+
+  const serveDefault = async () => {
+    const html = await getIndexHtml(baseUrl);
+    res.send(html);
+  };
+
+  // If no slug, serve default (blog listing page)
+  if (!slug) {
+    console.log("[blogRender] No slug found, serving default.");
+    return serveDefault();
+  }
+
+  try {
+    // Read blog posts metadata from JSON file
+    const blogPostsPath = path.join(__dirname, 'blog-posts.json');
+    let blogPosts = [];
+    
+    if (fs.existsSync(blogPostsPath)) {
+      const blogPostsData = fs.readFileSync(blogPostsPath, 'utf-8');
+      blogPosts = JSON.parse(blogPostsData);
+    } else {
+      console.warn('[blogRender] blog-posts.json not found');
+      return serveDefault();
+    }
+
+    // Find the blog post by slug
+    const post = blogPosts.find(p => p.slug === slug);
+
+    if (!post || !post.title) {
+      console.log(`[blogRender] Blog post "${slug}" not found.`);
+      return serveDefault();
+    }
+
+    const title = `${post.title} - Bible Sketch Blog`;
+    const description = post.excerpt || '';
+    const imageUrl = post.coverImage 
+      ? `${baseUrl}${post.coverImage}` 
+      : `${baseUrl}/logo.png`;
+    const canonicalUrl = `${baseUrl}/blog/${slug}`;
+    const datePublished = post.date || new Date().toISOString();
+    const author = post.author || 'Bible Sketch Team';
+
+    // Schema.org JSON-LD
+    const schemaData = {
+      "@context": "https://schema.org",
+      "@type": "BlogPosting",
+      "headline": post.title,
+      "description": description,
+      "image": {
+        "@type": "ImageObject",
+        "url": imageUrl,
+        "width": 1200,
+        "height": 630
+      },
+      "datePublished": datePublished,
+      "dateModified": post.lastmod || datePublished,
+      "author": {
+        "@type": "Person",
+        "name": author
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Bible Sketch",
+        "logo": {
+          "@type": "ImageObject",
+          "url": `${baseUrl}/logo.png`
+        }
+      },
+      "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": canonicalUrl
+      },
+      "url": canonicalUrl
+    };
+
+    const schemaScript = `<script type="application/ld+json">${JSON.stringify(schemaData)}</script>`;
+
+    let html = await getIndexHtml(baseUrl);
+
+    // Replace Title
+    html = html.replace(/<title>.*?<\/title>/i, `<title>${title}</title>`);
+
+    // Escape HTML entities for meta tags
+    const escapeHtml = (str) => {
+      if (!str) return '';
+      return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    };
+
+    // Prepare Meta Tags
+    const metaTags = `
+    <meta name="description" content="${escapeHtml(description)}" />
+    <link rel="canonical" href="${canonicalUrl}" />
+    
+    <!-- Open Graph -->
+    <meta property="og:title" content="${escapeHtml(post.title)}" />
+    <meta property="og:description" content="${escapeHtml(description)}" />
+    <meta property="og:image" content="${imageUrl}" />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="${canonicalUrl}" />
+    <meta property="og:site_name" content="Bible Sketch" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="article:published_time" content="${datePublished}" />
+    <meta property="article:author" content="${escapeHtml(author)}" />
+    
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${escapeHtml(post.title)}" />
+    <meta name="twitter:description" content="${escapeHtml(description)}" />
+    <meta name="twitter:image" content="${imageUrl}" />
+    `;
+
+    // Inject before </head>
+    if (html.includes('</head>')) {
+      html = html.replace('</head>', `${metaTags}\n${schemaScript}\n</head>`);
+    } else {
+      html += metaTags + schemaScript;
+    }
+
+    // Extract sketch IDs from markdown body and fetch sketches
+    let sketchMap = new Map(); // Map of sketchId -> sketch data
+    if (post.body) {
+      const sketchIds = extractSketchIds(post.body);
+      if (sketchIds.length > 0) {
+        console.log(`[blogRender] Found ${sketchIds.length} sketch IDs: ${sketchIds.join(', ')}`);
+        
+        // Batch fetch sketches from Firestore
+        try {
+          const sketchPromises = sketchIds.map(async (id) => {
+            try {
+              const sketchDoc = await admin.firestore().collection("sketches").doc(id).get();
+              if (sketchDoc.exists && sketchDoc.data()) {
+                const sketchData = sketchDoc.data();
+                // Only include public sketches
+                if (sketchData.isPublic && !sketchData.isBookmark) {
+                  return { id, data: { id, ...sketchData } };
+                }
+              }
+              return null;
+            } catch (error) {
+              console.warn(`[blogRender] Error fetching sketch ${id}:`, error);
+              return null;
+            }
+          });
+          
+          const sketchResults = await Promise.all(sketchPromises);
+          sketchResults.forEach(result => {
+            if (result) {
+              sketchMap.set(result.id, result.data);
+            }
+          });
+          
+          console.log(`[blogRender] Successfully fetched ${sketchMap.size} sketches`);
+        } catch (error) {
+          console.error("[blogRender] Error batch fetching sketches:", error);
+          // Continue without sketches rather than failing
+        }
+      }
+    }
+
+    // Replace sketch placeholders with image tags before markdown conversion
+    let processedBody = post.body || '';
+    if (sketchMap.size > 0) {
+      processedBody = processedBody.replace(/<<sketch="([^"]+)">>/g, (match, sketchId) => {
+        const sketch = sketchMap.get(sketchId);
+        if (!sketch) {
+          console.warn(`[blogRender] Sketch ${sketchId} not found or not public, removing placeholder`);
+          return ''; // Remove placeholder if sketch not found
+        }
+        
+        // Generate sketch URL
+        const slug = generateSketchSlug(sketch);
+        const sketchUrl = `${baseUrl}/coloring-page/${slug}/${sketchId}`;
+        
+        // Get image URL (prefer thumbnail)
+        let imageUrl = getThumbnailUrl(sketch.thumbnailPath, sketch.imageUrl);
+        
+        // Ensure image URL is absolute (required for Pinterest crawling)
+        if (imageUrl && !imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {
+          // If relative URL, construct absolute URL
+          imageUrl = imageUrl.startsWith('/') ? `${baseUrl}${imageUrl}` : `${baseUrl}/${imageUrl}`;
+        }
+        
+        // Generate alt text
+        const book = sketch.promptData?.book || "Bible";
+        const chapter = sketch.promptData?.chapter || "";
+        const startVerse = sketch.promptData?.start_verse || "";
+        const endVerse = sketch.promptData?.end_verse;
+        const verseText = endVerse && endVerse > startVerse 
+          ? `${startVerse}-${endVerse}` 
+          : String(startVerse);
+        const altText = `${book} ${chapter}:${verseText} Coloring Page`;
+        
+        // Return image tag wrapped in link (Pinterest crawlable)
+        return `<figure style="margin:24px 0;"><a href="${sketchUrl}"><img src="${imageUrl}" alt="${escapeHtml(altText)}" width="400" height="533" style="max-width:100%;height:auto;border-radius:8px;" /></a></figure>`;
+      });
+    } else {
+      // Remove placeholders if no sketches found
+      processedBody = processedBody.replace(/<<sketch="[^"]+">>/g, '');
+    }
+
+    // Convert markdown body to HTML (after replacing sketch placeholders)
+    const articleBodyHtml = processedBody ? markdownToHtml(processedBody) : '';
+    
+    // SEO body content (visible to Google, replaced by React on hydration)
+    const blogSeoContent = `
+<article style="max-width:720px;margin:0 auto;padding:40px 20px;font-family:system-ui,-apple-system,sans-serif;">
+  <h1 style="font-size:2rem;font-weight:700;color:#1f2937;margin-bottom:8px;">${escapeHtml(post.title)}</h1>
+  <p style="color:#6b7280;font-size:0.875rem;margin-bottom:24px;">By ${escapeHtml(author)} · ${datePublished}</p>
+  ${imageUrl !== `${baseUrl}/logo.png` ? `<figure style="margin:0 0 24px 0;"><img src="${imageUrl}" alt="${escapeHtml(post.title)}" width="1200" height="630" style="max-width:100%;height:auto;border-radius:12px;" /></figure>` : ''}
+  <div style="color:#374151;line-height:1.75;">
+    ${articleBodyHtml}
+  </div>
+</article>`;
+
+    // Inject body content into <div id="root">
+    html = html.replace('<div id="root"></div>', `<div id="root">${blogSeoContent}</div>`);
+
+    res.set('Cache-Control', 'public, max-age=3600, s-maxage=7200');
+    res.status(200).send(html);
+
+  } catch (error) {
+    console.error("[blogRender] Error:", error);
+    serveDefault();
+  }
+});
+
+// ---------------------------------------------------------
+// 5. GALLERY PAGE SSR RENDERER (Minimal SSR for SEO - Hidden from Users)
+// ---------------------------------------------------------
+exports.galleryRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (req, res) => {
+  const host = 'biblesketch.app';
+  const protocol = 'https';
+  const baseUrl = `${protocol}://${host}`;
+  const userAgent = req.headers['user-agent'] || 'Unknown';
+  
+  console.log(`[galleryRender] Called - Path: ${req.path} | Method: ${req.method} | UA: ${userAgent}`);
+  
+  const serveDefault = async () => {
+    const html = await getIndexHtml(baseUrl);
+    res.send(html);
+  };
+
+  try {
+    // Query all public sketches (both scene and verse types, not bookmarks)
+    let sketches = [];
+    try {
+      const query = admin.firestore()
+        .collection("sketches")
+        .where("isPublic", "==", true)
+        .orderBy("createdAt", "desc")
+        .limit(50);
+      
+      const snapshot = await query.get();
+      sketches = snapshot.docs
+        .map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }))
+        .filter(s => !s.isBookmark)
+        .sort((a, b) => {
+          const blessDiff = (b.blessCount || 0) - (a.blessCount || 0);
+          if (blessDiff !== 0) return blessDiff;
+          const aTime = a.createdAt?.toMillis?.() || 0;
+          const bTime = b.createdAt?.toMillis?.() || 0;
+          return bTime - aTime;
+        })
+        .slice(0, 30); // Top 30
+    } catch (error) {
+      console.warn("[galleryRender] Error fetching sketches:", error);
+      // Continue with empty sketches array
+    }
+    
+    // Generate ordered list of links
+    const linkItems = [];
+    
+    // Static key pages
+    linkItems.push(`<li><a href="${baseUrl}/">Create Scene Art</a></li>`);
+    linkItems.push(`<li><a href="${baseUrl}/bible-verse-coloring">Create Verse Art</a></li>`);
+    linkItems.push(`<li><a href="${baseUrl}/blog">Read Blog</a></li>`);
+    linkItems.push(`<li><a href="${baseUrl}/pricing">View Pricing</a></li>`);
+    
+    // Top sketches (both scene and verse types)
+    sketches.forEach(sketch => {
+      const slug = generateSketchSlug(sketch);
+      const sketchUrl = `${baseUrl}/coloring-page/${slug}/${sketch.id}`;
+      const book = sketch.promptData?.book || "Bible";
+      const chapter = sketch.promptData?.chapter || "";
+      const startVerse = sketch.promptData?.start_verse || "";
+      const endVerse = sketch.promptData?.end_verse;
+      const verseText = endVerse && endVerse > startVerse 
+        ? `${startVerse}-${endVerse}` 
+        : String(startVerse);
+      const sketchType = sketch.type === 'verse' ? 'Verse Art' : 'Coloring Page';
+      const linkText = `${book} ${chapter}:${verseText} ${sketchType}`;
+      
+      linkItems.push(`<li><a href="${sketchUrl}">${escapeHtml(linkText)}</a></li>`);
+    });
+    
+    // Generate minimal SSR content
+    const gallerySeoContent = `
+      <h1>Bible Coloring Pages Gallery</h1>
+      <p>Browse thousands of free printable Bible coloring pages. Discover coloring sheets for every Bible book, age group, and art style. Perfect for Sunday School, VBS, homeschool, and family devotionals.</p>
+      <ol>
+        ${linkItems.join('\n        ')}
+      </ol>`;
+    
+    // Get HTML template
+    let html = await getIndexHtml(baseUrl);
+    
+    // Set meta tags
+    const title = "Bible Coloring Pages Gallery - Free Printable Christian Coloring Sheets | Bible Sketch";
+    const description = "Browse thousands of free printable Bible coloring pages. Discover coloring sheets for every Bible book, age group, and art style. Perfect for Sunday School, VBS, homeschool, and family devotionals.";
+    
+    html = html.replace(/<title>.*?<\/title>/i, `<title>${title}</title>`);
+    
+    const metaTags = `
+    <meta name="description" content="${escapeHtml(description)}" />
+    <link rel="canonical" href="${baseUrl}/gallery" />
+    <meta property="og:title" content="${escapeHtml(title)}" />
+    <meta property="og:description" content="${escapeHtml(description)}" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="${baseUrl}/gallery" />
+    <meta property="og:site_name" content="Bible Sketch" />
+    <meta property="og:image" content="${baseUrl}/logo.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${escapeHtml(title)}" />
+    <meta name="twitter:description" content="${escapeHtml(description)}" />
+    <meta name="twitter:image" content="${baseUrl}/logo.png" />`;
+    
+    // Script to remove SSR content immediately (before React loads)
+    // This ensures React mounts into empty #root, preventing hydration conflicts
+    // Crawlers see SSR content in HTML source, users see React content
+    const removeSSRScript = `
+    <script>
+      // Remove SSR content immediately (synchronous, before React bundle loads)
+      (function() {
+        var root = document.getElementById('root');
+        if (root) {
+          root.innerHTML = '';
+        }
+      })();
+    </script>`;
+    
+    // Inject meta tags before </head>
+    if (html.includes('</head>')) {
+      html = html.replace('</head>', `${metaTags}\n</head>`);
+    } else {
+      html += metaTags;
+    }
+    
+    // Inject body content into <div id="root"> followed by removal script
+    if (html.includes('<div id="root">')) {
+      // Replace self-closing tag
+      html = html.replace(/<div id="root"><\/div>/g, `<div id="root">${gallerySeoContent}${removeSSRScript}</div>`);
+      // If still not replaced, replace opening tag
+      if (!html.includes(gallerySeoContent)) {
+        html = html.replace(/<div id="root">/g, `<div id="root">${gallerySeoContent}${removeSSRScript}`);
+      }
+      
+      // Verify injection succeeded
+      if (!html.includes(gallerySeoContent)) {
+        console.error("[galleryRender] Failed to inject SEO content into HTML");
+      } else {
+        console.log(`[galleryRender] Successfully injected SEO content with ${sketches.length} sketches`);
+      }
+    } else {
+      console.error("[galleryRender] Could not find <div id=\"root\"> in HTML template");
+    }
+    
+    res.set('Cache-Control', 'public, max-age=3600, s-maxage=7200');
+    res.status(200).send(html);
+    
+  } catch (error) {
+    console.error("[galleryRender] Error:", error);
+    serveDefault();
+  }
+});
+
+// ---------------------------------------------------------
+// 6. VERSE ART PAGE SSR RENDERER (Minimal SSR for SEO - Hidden from Users)
+// ---------------------------------------------------------
+exports.verseRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (req, res) => {
+  const host = 'biblesketch.app';
+  const protocol = 'https';
+  const baseUrl = `${protocol}://${host}`;
+  const userAgent = req.headers['user-agent'] || 'Unknown';
+  
+  console.log(`[verseRender] Called - Path: ${req.path} | Method: ${req.method} | UA: ${userAgent}`);
+  
+  const serveDefault = async () => {
+    const html = await getIndexHtml(baseUrl);
+    res.send(html);
+  };
+
+  try {
+    // Query top 10-15 public verse sketches (type === 'verse')
+    let sketches = [];
+    try {
+      const query = admin.firestore()
+        .collection("sketches")
+        .where("isPublic", "==", true)
+        .where("type", "==", "verse")
+        .orderBy("createdAt", "desc")
+        .limit(50);
+      
+      const snapshot = await query.get();
+      sketches = snapshot.docs
+        .map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }))
+        .filter(s => !s.isBookmark)
+        .sort((a, b) => {
+          const blessDiff = (b.blessCount || 0) - (a.blessCount || 0);
+          if (blessDiff !== 0) return blessDiff;
+          const aTime = a.createdAt?.toMillis?.() || 0;
+          const bTime = b.createdAt?.toMillis?.() || 0;
+          return bTime - aTime;
+        })
+        .slice(0, 15); // Top 15
+    } catch (error) {
+      console.warn("[verseRender] Error fetching sketches:", error);
+      // Fallback: try without type filter if index doesn't exist
+      try {
+        const fallbackQuery = admin.firestore()
+          .collection("sketches")
+          .where("isPublic", "==", true)
+          .orderBy("createdAt", "desc")
+          .limit(50);
+        
+        const fallbackSnapshot = await fallbackQuery.get();
+        sketches = fallbackSnapshot.docs
+          .map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }))
+          .filter(s => !s.isBookmark && s.type === 'verse')
+          .sort((a, b) => {
+            const blessDiff = (b.blessCount || 0) - (a.blessCount || 0);
+            if (blessDiff !== 0) return blessDiff;
+            const aTime = a.createdAt?.toMillis?.() || 0;
+            const bTime = b.createdAt?.toMillis?.() || 0;
+            return bTime - aTime;
+          })
+          .slice(0, 15);
+      } catch (fallbackError) {
+        console.warn("[verseRender] Fallback query also failed:", fallbackError);
+        // Continue with empty sketches array
+      }
+    }
+    
+    // Generate ordered list of links
+    const linkItems = [];
+    
+    // Static key pages
+    linkItems.push(`<li><a href="${baseUrl}/">Create Scene Art</a></li>`);
+    linkItems.push(`<li><a href="${baseUrl}/gallery">Browse Gallery</a></li>`);
+    linkItems.push(`<li><a href="${baseUrl}/blog">Read Blog</a></li>`);
+    
+    // Top verse sketches
+    sketches.forEach(sketch => {
+      const slug = generateSketchSlug(sketch);
+      const sketchUrl = `${baseUrl}/coloring-page/${slug}/${sketch.id}`;
+      const book = sketch.promptData?.book || "Bible";
+      const chapter = sketch.promptData?.chapter || "";
+      const startVerse = sketch.promptData?.start_verse || "";
+      const endVerse = sketch.promptData?.end_verse;
+      const verseText = endVerse && endVerse > startVerse 
+        ? `${startVerse}-${endVerse}` 
+        : String(startVerse);
+      const linkText = `${book} ${chapter}:${verseText} Verse Art`;
+      
+      linkItems.push(`<li><a href="${sketchUrl}">${escapeHtml(linkText)}</a></li>`);
+    });
+    
+    // Generate minimal SSR content
+    const verseSeoContent = `
+      <h1>Create Bible Verse Coloring Pages</h1>
+      <p>Turn any Bible verse into beautiful, decorative typography coloring art.</p>
+      <ol>
+        ${linkItems.join('\n        ')}
+      </ol>`;
+    
+    // Get HTML template
+    let html = await getIndexHtml(baseUrl);
+    
+    // Set meta tags
+    const title = "Create Bible Verse Coloring Pages | Bible Sketch";
+    const description = "Turn any Bible verse into beautiful, decorative typography coloring art. Choose from 4 font styles and generate print-ready verse art in 60 seconds.";
+    
+    html = html.replace(/<title>.*?<\/title>/i, `<title>${title}</title>`);
+    
+    const metaTags = `
+    <meta name="description" content="${escapeHtml(description)}" />
+    <link rel="canonical" href="${baseUrl}/bible-verse-coloring" />
+    <meta property="og:title" content="${escapeHtml(title)}" />
+    <meta property="og:description" content="${escapeHtml(description)}" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="${baseUrl}/bible-verse-coloring" />
+    <meta property="og:site_name" content="Bible Sketch" />
+    <meta property="og:image" content="${baseUrl}/logo.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${escapeHtml(title)}" />
+    <meta name="twitter:description" content="${escapeHtml(description)}" />
+    <meta name="twitter:image" content="${baseUrl}/logo.png" />`;
+    
+    // Script to remove SSR content immediately (before React loads)
+    // This ensures React mounts into empty #root, preventing hydration conflicts
+    // Crawlers see SSR content in HTML source, users see React content
+    const removeSSRScript = `
+    <script>
+      // Remove SSR content immediately (synchronous, before React bundle loads)
+      (function() {
+        var root = document.getElementById('root');
+        if (root) {
+          root.innerHTML = '';
+        }
+      })();
+    </script>`;
+    
+    // Inject meta tags before </head>
+    if (html.includes('</head>')) {
+      html = html.replace('</head>', `${metaTags}\n</head>`);
+    } else {
+      html += metaTags;
+    }
+    
+    // Inject body content into <div id="root"> followed by removal script
+    if (html.includes('<div id="root">')) {
+      // Replace self-closing tag
+      html = html.replace(/<div id="root"><\/div>/g, `<div id="root">${verseSeoContent}${removeSSRScript}</div>`);
+      // If still not replaced, replace opening tag
+      if (!html.includes(verseSeoContent)) {
+        html = html.replace(/<div id="root">/g, `<div id="root">${verseSeoContent}${removeSSRScript}`);
+      }
+      
+      // Verify injection succeeded
+      if (!html.includes(verseSeoContent)) {
+        console.error("[verseRender] Failed to inject SEO content into HTML");
+      } else {
+        console.log(`[verseRender] Successfully injected SEO content with ${sketches.length} sketches`);
+      }
+    } else {
+      console.error("[verseRender] Could not find <div id=\"root\"> in HTML template");
+    }
+    
+    res.set('Cache-Control', 'public, max-age=3600, s-maxage=7200');
+    res.status(200).send(html);
+    
+  } catch (error) {
+    console.error("[verseRender] Error:", error);
+    serveDefault();
+  }
+});
+
+// ---------------------------------------------------------
+// 6a. TAG PAGE SSR RENDERER (Minimal SSR for SEO - Hidden from Users)
+// ---------------------------------------------------------
+exports.tagRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (req, res) => {
+  const host = 'biblesketch.app';
+  const protocol = 'https';
+  const baseUrl = `${protocol}://${host}`;
+  const userAgent = req.headers['user-agent'] || 'Unknown';
+  
+  console.log(`[tagRender] Called - Path: ${req.path} | Method: ${req.method} | UA: ${userAgent}`);
+  
+  const serveDefault = async () => {
+    const html = await getIndexHtml(baseUrl);
+    res.send(html);
+  };
+
+  // Extract tagId from path (/tags/:tagId)
+  const pathSegments = req.path.split('/').filter(p => p.length > 0);
+  const tagId = pathSegments.length > 1 && pathSegments[0] === 'tags' ? pathSegments[1] : null;
+
+  if (!tagId) {
+    console.log("[tagRender] No tagId found, serving default.");
+    return serveDefault();
+  }
+
+  // Validate tag exists
+  const tagInfo = LITURGICAL_TAGS.find(t => t.id === tagId);
+  if (!tagInfo) {
+    console.log(`[tagRender] Tag ${tagId} not found, serving default.`);
+    return serveDefault();
+  }
+
+  try {
+    // Query top 10-15 public sketches with this tag
+    let sketches = [];
+    try {
+      const query = admin.firestore()
+        .collection("sketches")
+        .where("isPublic", "==", true)
+        .where("tags", "array-contains", tagId)
+        .orderBy("createdAt", "desc")
+        .limit(50);
+      
+      const snapshot = await query.get();
+      sketches = snapshot.docs
+        .map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }))
+        .filter(s => !s.isBookmark)
+        .sort((a, b) => {
+          const blessDiff = (b.blessCount || 0) - (a.blessCount || 0);
+          if (blessDiff !== 0) return blessDiff;
+          const aTime = a.createdAt?.toMillis?.() || 0;
+          const bTime = b.createdAt?.toMillis?.() || 0;
+          return bTime - aTime;
+        })
+        .slice(0, 15); // Top 15
+    } catch (error) {
+      console.warn("[tagRender] Error fetching sketches:", error);
+      // Fallback: try without tag filter if index doesn't exist
+      try {
+        const fallbackQuery = admin.firestore()
+          .collection("sketches")
+          .where("isPublic", "==", true)
+          .orderBy("createdAt", "desc")
+          .limit(50);
+        
+        const fallbackSnapshot = await fallbackQuery.get();
+        sketches = fallbackSnapshot.docs
+          .map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }))
+          .filter(s => !s.isBookmark && s.tags && s.tags.includes(tagId))
+          .sort((a, b) => {
+            const blessDiff = (b.blessCount || 0) - (a.blessCount || 0);
+            if (blessDiff !== 0) return blessDiff;
+            const aTime = a.createdAt?.toMillis?.() || 0;
+            const bTime = b.createdAt?.toMillis?.() || 0;
+            return bTime - aTime;
+          })
+          .slice(0, 15);
+      } catch (fallbackError) {
+        console.warn("[tagRender] Fallback query also failed:", fallbackError);
+        // Continue with empty sketches array
+      }
+    }
+    
+    // Generate ordered list of links
+    const linkItems = [];
+    
+    // Static key pages
+    linkItems.push(`<li><a href="${baseUrl}/gallery">Browse Gallery</a></li>`);
+    linkItems.push(`<li><a href="${baseUrl}/bible-verse-coloring">Create Verse Art</a></li>`);
+    linkItems.push(`<li><a href="${baseUrl}/blog">Read Blog</a></li>`);
+    
+    // Top tagged sketches
+    sketches.forEach(sketch => {
+      const slug = generateSketchSlug(sketch);
+      const sketchUrl = `${baseUrl}/coloring-page/${slug}/${sketch.id}`;
+      const book = sketch.promptData?.book || "Bible";
+      const chapter = sketch.promptData?.chapter || "";
+      const startVerse = sketch.promptData?.start_verse || "";
+      const endVerse = sketch.promptData?.end_verse;
+      const verseText = endVerse && endVerse > startVerse 
+        ? `${startVerse}-${endVerse}` 
+        : String(startVerse);
+      const linkText = `${book} ${chapter}:${verseText} Coloring Page`;
+      
+      linkItems.push(`<li><a href="${sketchUrl}">${escapeHtml(linkText)}</a></li>`);
+    });
+    
+    // Generate SEO content based on tag category
+    const h1 = `${tagInfo.label} Coloring Pages`;
+    const categoryDescriptions = {
+      season: `Discover beautiful ${tagInfo.label} coloring pages from Bible stories. Perfect for celebrating the ${tagInfo.label} season in Sunday School, VBS, or family devotionals. Free printable Bible coloring sheets.`,
+      theme: `Explore ${tagInfo.label} coloring pages from Scripture. These Biblical coloring sheets feature stories and lessons about ${tagInfo.label.toLowerCase()}. Perfect for Sunday School, homeschool, or personal Bible study.`
+    };
+    
+    const description = categoryDescriptions[tagInfo.category] || `Browse ${tagInfo.label} Bible coloring pages. Free printable Christian coloring sheets.`;
+    const title = `${tagInfo.label} Coloring Pages | Bible Sketch`;
+    const canonicalUrl = `${baseUrl}/tags/${tagId}`;
+    
+    // Generate minimal SSR content
+    const tagSeoContent = `
+      <h1>${escapeHtml(h1)}</h1>
+      <p>${escapeHtml(description)}</p>
+      <ol>
+        ${linkItems.join('\n        ')}
+      </ol>`;
+    
+    // Get HTML template
+    let html = await getIndexHtml(baseUrl);
+    
+    html = html.replace(/<title>.*?<\/title>/i, `<title>${escapeHtml(title)}</title>`);
+    
+    const metaTags = `
+    <meta name="description" content="${escapeHtml(description)}" />
+    <link rel="canonical" href="${canonicalUrl}" />
+    <meta property="og:title" content="${escapeHtml(title)}" />
+    <meta property="og:description" content="${escapeHtml(description)}" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="${canonicalUrl}" />
+    <meta property="og:site_name" content="Bible Sketch" />
+    <meta property="og:image" content="${baseUrl}/logo.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${escapeHtml(title)}" />
+    <meta name="twitter:description" content="${escapeHtml(description)}" />
+    <meta name="twitter:image" content="${baseUrl}/logo.png" />`;
+    
+    // Script to remove SSR content immediately (before React loads)
+    // This ensures React mounts into empty #root, preventing hydration conflicts
+    // Crawlers see SSR content in HTML source, users see React content
+    const removeSSRScript = `
+    <script>
+      // Remove SSR content immediately (synchronous, before React bundle loads)
+      (function() {
+        var root = document.getElementById('root');
+        if (root) {
+          root.innerHTML = '';
+        }
+      })();
+    </script>`;
+    
+    // Inject meta tags before </head>
+    if (html.includes('</head>')) {
+      html = html.replace('</head>', `${metaTags}\n</head>`);
+    } else {
+      html += metaTags;
+    }
+    
+    // Inject body content into <div id="root"> followed by removal script
+    if (html.includes('<div id="root">')) {
+      // Replace self-closing tag
+      html = html.replace(/<div id="root"><\/div>/g, `<div id="root">${tagSeoContent}${removeSSRScript}</div>`);
+      // If still not replaced, replace opening tag
+      if (!html.includes(tagSeoContent)) {
+        html = html.replace(/<div id="root">/g, `<div id="root">${tagSeoContent}${removeSSRScript}`);
+      }
+      
+      // Verify injection succeeded
+      if (!html.includes(tagSeoContent)) {
+        console.error("[tagRender] Failed to inject SEO content into HTML");
+      } else {
+        console.log(`[tagRender] Successfully injected SEO content with ${sketches.length} sketches for tag ${tagId}`);
+      }
+    } else {
+      console.error("[tagRender] Could not find <div id=\"root\"> in HTML template");
+    }
+    
+    res.set('Cache-Control', 'public, max-age=3600, s-maxage=7200');
+    res.status(200).send(html);
+    
+  } catch (error) {
+    console.error("[tagRender] Error:", error);
+    serveDefault();
+  }
+});
+
+// ---------------------------------------------------------
+// 6b. BLOG LISTING PAGE SSR RENDERER (List of Blog Posts)
+// ---------------------------------------------------------
+exports.blogListingRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (req, res) => {
+  const host = 'biblesketch.app';
+  const protocol = 'https';
+  const baseUrl = `${protocol}://${host}`;
+  const userAgent = req.headers['user-agent'] || 'Unknown';
+  
+  console.log(`[blogListingRender] Called - Path: ${req.path} | Method: ${req.method} | UA: ${userAgent}`);
+  
+  const serveDefault = async () => {
+    const html = await getIndexHtml(baseUrl);
+    res.send(html);
+  };
+
+  try {
+    // Read blog posts metadata from JSON file
+    const blogPostsPath = path.join(__dirname, 'blog-posts.json');
+    let blogPosts = [];
+    
+    if (fs.existsSync(blogPostsPath)) {
+      const blogPostsData = fs.readFileSync(blogPostsPath, 'utf-8');
+      blogPosts = JSON.parse(blogPostsData);
+      // Sort by date descending (newest first)
+      blogPosts.sort((a, b) => {
+        const dateA = new Date(a.date || 0).getTime();
+        const dateB = new Date(b.date || 0).getTime();
+        return dateB - dateA;
+      });
+    } else {
+      console.warn('[blogListingRender] blog-posts.json not found');
+    }
+    
+    let html = await getIndexHtml(baseUrl);
+    
+    const title = "Blog - Bible Sketch";
+    const description = "Latest updates, tutorials, and news from Bible Sketch.";
+    
+    html = html.replace(/<title>.*?<\/title>/i, `<title>${title}</title>`);
+    
+    const metaTags = `
+    <meta name="description" content="${escapeHtml(description)}" />
+    <link rel="canonical" href="${baseUrl}/blog" />
+    <meta property="og:title" content="Blog - Bible Sketch" />
+    <meta property="og:description" content="${escapeHtml(description)}" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="${baseUrl}/blog" />
+    <meta property="og:site_name" content="Bible Sketch" />
+    <meta property="og:image" content="${baseUrl}/logo.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Blog - Bible Sketch" />
+    <meta name="twitter:description" content="${escapeHtml(description)}" />
+    <meta name="twitter:image" content="${baseUrl}/logo.png" />`;
+    
+    // Generate list of blog posts
+    const blogListItems = blogPosts.map(post => {
+      const blogUrl = `${baseUrl}/blog/${post.slug}`;
+      return `<h2><a href="${blogUrl}">${escapeHtml(post.title || 'Untitled')}</a></h2>`;
+    }).join('\n    ');
+    
+    const blogListingContent = `
+  <h1>blog</h1>
+  ${blogListItems}`;
+    
+    const removeSSRScript = `
+    <script>
+      (function() {
+        var root = document.getElementById('root');
+        if (root) {
+          root.innerHTML = '';
+        }
+      })();
+    </script>`;
+    
+    if (html.includes('</head>')) {
+      html = html.replace('</head>', `${metaTags}\n</head>`);
+    } else {
+      html += metaTags;
+    }
+    
+    if (html.includes('<div id="root">')) {
+      html = html.replace(/<div id="root"><\/div>/g, `<div id="root">${blogListingContent}${removeSSRScript}</div>`);
+      if (!html.includes(blogListingContent)) {
+        html = html.replace(/<div id="root">/g, `<div id="root">${blogListingContent}${removeSSRScript}`);
+      }
+      
+      if (!html.includes(blogListingContent)) {
+        console.error("[blogListingRender] Failed to inject SEO content into HTML");
+      } else {
+        console.log(`[blogListingRender] Successfully injected SEO content with ${blogPosts.length} blog posts`);
+      }
+    } else {
+      console.error("[blogListingRender] Could not find <div id=\"root\"> in HTML template");
+    }
+    
+    res.set('Cache-Control', 'public, max-age=3600, s-maxage=7200');
+    res.status(200).send(html);
+    
+  } catch (error) {
+    console.error("[blogListingRender] Error:", error);
+    serveDefault();
+  }
+});
+
+// ---------------------------------------------------------
+// 7. PRICING PAGE SSR RENDERER (Full Content for SEO)
+// ---------------------------------------------------------
+exports.pricingRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (req, res) => {
+  const host = 'biblesketch.app';
+  const protocol = 'https';
+  const baseUrl = `${protocol}://${host}`;
+  const userAgent = req.headers['user-agent'] || 'Unknown';
+  
+  console.log(`[pricingRender] Called - Path: ${req.path} | Method: ${req.method} | UA: ${userAgent}`);
+  
+  const serveDefault = async () => {
+    const html = await getIndexHtml(baseUrl);
+    res.send(html);
+  };
+
+  try {
+    let html = await getIndexHtml(baseUrl);
+    
+    const title = "Pricing - Affordable Bible Coloring Page Credits | Bible Sketch";
+    const description = "Get credits to create custom Bible coloring pages. Subscribe monthly or pay once — your credits never expire. Perfect for Sunday School teachers, homeschool families, and church ministries. Plans start at $4.99.";
+    
+    html = html.replace(/<title>.*?<\/title>/i, `<title>${title}</title>`);
+    
+    const metaTags = `
+    <meta name="description" content="${escapeHtml(description)}" />
+    <link rel="canonical" href="${baseUrl}/pricing" />
+    <meta property="og:title" content="${escapeHtml(title)}" />
+    <meta property="og:description" content="${escapeHtml(description)}" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="${baseUrl}/pricing" />
+    <meta property="og:site_name" content="Bible Sketch" />
+    <meta property="og:image" content="${baseUrl}/logo.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${escapeHtml(title)}" />
+    <meta name="twitter:description" content="${escapeHtml(description)}" />
+    <meta name="twitter:image" content="${baseUrl}/logo.png" />`;
+    
+    // Full pricing content HTML
+    const pricingContent = `
+<article style="max-width:1200px;margin:0 auto;padding:40px 20px;font-family:system-ui,-apple-system,sans-serif;">
+  <h1 style="font-size:2.5rem;font-weight:700;color:#1f2937;margin-bottom:24px;text-align:center;">Pricing That Fits Your Needs</h1>
+  <p style="font-size:1.125rem;color:#6b7280;text-align:center;margin-bottom:48px;max-width:42rem;margin-left:auto;margin-right:auto;line-height:1.75;">
+    Subscribe monthly or buy credits once — either way, your credits never expire.
+  </p>
+
+  <section style="margin-bottom:48px;">
+    <h2 style="font-size:1.875rem;font-weight:700;color:#1f2937;margin-bottom:16px;">Premium Plan</h2>
+    <p style="color:#6b7280;margin-bottom:16px;">For dedicated teachers & ministries</p>
+    <p style="font-size:2.25rem;font-weight:700;color:#1f2937;margin-bottom:16px;">$4.99 <span style="font-size:1rem;font-weight:500;color:#6b7280;">/ month</span></p>
+    <ul style="list-style:none;padding:0;margin:16px 0;">
+      <li style="margin-bottom:8px;color:#374151;">✓ Unlimited Downloads & Prints</li>
+      <li style="margin-bottom:8px;color:#374151;">✓ 10 Credits Per Month Included</li>
+      <li style="margin-bottom:8px;color:#374151;">✓ High-Res PDF Download</li>
+      <li style="margin-bottom:8px;color:#374151;">✓ No Watermark</li>
+    </ul>
+    <p style="color:#6b7280;font-size:0.875rem;margin-top:16px;">Cancel anytime</p>
+  </section>
+
+  <section style="margin-bottom:48px;">
+    <h2 style="font-size:1.5rem;font-weight:700;color:#1f2937;margin-bottom:24px;text-align:center;">Or Pay As You Go</h2>
+    
+    <div style="margin-bottom:32px;">
+      <h3 style="font-size:1.5rem;font-weight:700;color:#1f2937;margin-bottom:8px;">The Spark</h3>
+      <p style="color:#6b7280;font-style:italic;margin-bottom:8px;">For a single lesson series</p>
+      <p style="font-size:2rem;font-weight:700;color:#1f2937;margin-bottom:8px;">$4.99 <span style="font-size:0.875rem;font-weight:500;color:#6b7280;">/ one-time</span></p>
+      <p style="color:#374151;margin-bottom:16px;">20 Credits (+ 20 Free Prints)</p>
+      <p style="color:#6b7280;font-size:0.875rem;margin-bottom:16px;">($0.25 / image)</p>
+      <ul style="list-style:none;padding:0;margin:16px 0;">
+        <li style="margin-bottom:8px;color:#374151;">✓ High-Res PDF Download</li>
+        <li style="margin-bottom:8px;color:#374151;">✓ No Watermark</li>
+        <li style="margin-bottom:8px;color:#374151;">✓ Private Mode</li>
+        <li style="margin-bottom:8px;color:#374151;">✓ Commercial Rights</li>
+      </ul>
+    </div>
+
+    <div style="margin-bottom:32px;">
+      <h3 style="font-size:1.5rem;font-weight:700;color:#1f2937;margin-bottom:8px;">The Torch</h3>
+      <p style="color:#6b7280;font-style:italic;margin-bottom:8px;">For families & devotionals</p>
+      <p style="font-size:2rem;font-weight:700;color:#1f2937;margin-bottom:8px;">$14.99 <span style="font-size:0.875rem;font-weight:500;color:#6b7280;">/ one-time</span></p>
+      <p style="color:#374151;margin-bottom:16px;">80 Credits (+ 80 Free Prints)</p>
+      <p style="color:#6b7280;font-size:0.875rem;margin-bottom:16px;">($0.19 / image) - Save 25% instantly</p>
+      <ul style="list-style:none;padding:0;margin:16px 0;">
+        <li style="margin-bottom:8px;color:#374151;">✓ High-Res PDF Download</li>
+        <li style="margin-bottom:8px;color:#374151;">✓ No Watermark</li>
+        <li style="margin-bottom:8px;color:#374151;">✓ Private Mode</li>
+        <li style="margin-bottom:8px;color:#374151;">✓ Commercial Rights</li>
+      </ul>
+    </div>
+
+    <div style="margin-bottom:32px;">
+      <h3 style="font-size:1.5rem;font-weight:700;color:#1f2937;margin-bottom:8px;">The Beacon</h3>
+      <p style="color:#6b7280;font-style:italic;margin-bottom:8px;">For Ministry Directors</p>
+      <p style="font-size:2rem;font-weight:700;color:#1f2937;margin-bottom:8px;">$29.99 <span style="font-size:0.875rem;font-weight:500;color:#6b7280;">/ one-time</span></p>
+      <p style="color:#374151;margin-bottom:16px;">200 Credits (+ 200 Free Prints)</p>
+      <p style="color:#6b7280;font-size:0.875rem;margin-bottom:16px;">($0.15 / image) - Save 40% instantly</p>
+      <ul style="list-style:none;padding:0;margin:16px 0;">
+        <li style="margin-bottom:8px;color:#374151;">✓ High-Res PDF Download</li>
+        <li style="margin-bottom:8px;color:#374151;">✓ No Watermark</li>
+        <li style="margin-bottom:8px;color:#374151;">✓ Private Mode</li>
+        <li style="margin-bottom:8px;color:#374151;">✓ Commercial Rights</li>
+      </ul>
+    </div>
+  </section>
+
+  <section style="margin-top:48px;padding:32px;background:#f9fafb;border-radius:24px;">
+    <h2 style="font-size:1.5rem;font-weight:700;color:#1f2937;margin-bottom:24px;text-align:center;">Frequently Asked Questions</h2>
+    
+    <div style="margin-bottom:24px;padding-bottom:24px;border-bottom:1px solid #e5e7eb;">
+      <h3 style="font-weight:700;color:#1f2937;margin-bottom:8px;">Do these credits expire?</h3>
+      <p style="color:#374151;line-height:1.75;">No! Your purchased credits never expire. You can buy a pack today and use it next year for Easter.</p>
+    </div>
+
+
+    <div style="margin-bottom:24px;padding-bottom:24px;border-bottom:1px solid #e5e7eb;">
+      <h3 style="font-weight:700;color:#1f2937;margin-bottom:8px;">Can I print these for my whole Sunday School class?</h3>
+      <p style="color:#374151;line-height:1.75;">Yes! Once you generate an image, you own the rights to print it as many times as you need for your class or ministry.</p>
+    </div>
+
+    <div style="margin-bottom:24px;">
+      <h3 style="font-weight:700;color:#1f2937;margin-bottom:8px;">Should I subscribe or buy a credit pack?</h3>
+      <p style="color:#374151;line-height:1.75;">If you teach regularly (weekly Sunday School, homeschool), Premium gives you the best value with unlimited downloads and 10 monthly credits. If you only need images occasionally (VBS, special events), credit packs let you pay once and use whenever you're ready.</p>
+    </div>
+  </section>
+
+  <p style="text-align:center;color:#9ca3af;font-size:0.875rem;margin-top:48px;">
+    Payments are securely processed. Need help? Contact support@biblesketch.com
+  </p>
+</article>`;
+    
+    const removeSSRScript = `
+    <script>
+      (function() {
+        var root = document.getElementById('root');
+        if (root) {
+          root.innerHTML = '';
+        }
+      })();
+    </script>`;
+    
+    if (html.includes('</head>')) {
+      html = html.replace('</head>', `${metaTags}\n</head>`);
+    } else {
+      html += metaTags;
+    }
+    
+    if (html.includes('<div id="root">')) {
+      html = html.replace(/<div id="root"><\/div>/g, `<div id="root">${pricingContent}${removeSSRScript}</div>`);
+      if (!html.includes(pricingContent)) {
+        html = html.replace(/<div id="root">/g, `<div id="root">${pricingContent}${removeSSRScript}`);
+      }
+      
+      if (!html.includes(pricingContent)) {
+        console.error("[pricingRender] Failed to inject SEO content into HTML");
+      } else {
+        console.log("[pricingRender] Successfully injected SEO content");
+      }
+    } else {
+      console.error("[pricingRender] Could not find <div id=\"root\"> in HTML template");
+    }
+    
+    res.set('Cache-Control', 'public, max-age=3600, s-maxage=7200');
+    res.status(200).send(html);
+    
+  } catch (error) {
+    console.error("[pricingRender] Error:", error);
+    serveDefault();
+  }
+});
+
+// ---------------------------------------------------------
+// 8. ABOUT PAGE SSR RENDERER (Full Content for SEO)
+// ---------------------------------------------------------
+exports.aboutRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (req, res) => {
+  const host = 'biblesketch.app';
+  const protocol = 'https';
+  const baseUrl = `${protocol}://${host}`;
+  const userAgent = req.headers['user-agent'] || 'Unknown';
+  
+  console.log(`[aboutRender] Called - Path: ${req.path} | Method: ${req.method} | UA: ${userAgent}`);
+  
+  const serveDefault = async () => {
+    const html = await getIndexHtml(baseUrl);
+    res.send(html);
+  };
+
+  try {
+    let html = await getIndexHtml(baseUrl);
+    
+    const title = "About Bible Sketch - Our Story & Mission | Free Bible Coloring Pages";
+    const description = "Meet Renaud, founder of Bible Sketch. Learn how we create AI-powered Bible coloring pages for Sunday School, VBS, and homeschooling families.";
+    
+    html = html.replace(/<title>.*?<\/title>/i, `<title>${title}</title>`);
+    
+    // Schema.org JSON-LD from AboutSEO component
+    const schemaData = {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Person",
+          "name": "Renaud Gagne",
+          "jobTitle": "Founder",
+          "description": "Christian father of 4, homeschooling educator, and creator of Bible Sketch. Teaches God's Big Story curriculum at St. Timothy's Anglican Bible Church.",
+          "knowsAbout": [
+            "Bible Coloring Pages",
+            "Christian Education",
+            "Homeschooling",
+            "Sunday School",
+            "Children's Ministry",
+            "God's Big Story Curriculum"
+          ],
+          "worksFor": {
+            "@type": "Organization",
+            "name": "Bible Sketch",
+            "url": baseUrl
+          }
+        },
+        {
+          "@type": "Organization",
+          "url": baseUrl,
+          "name": "Bible Sketch",
+          "description": "AI-powered platform for creating custom, printable Bible coloring pages for Sunday School, VBS, and homeschooling families.",
+          "founder": {
+            "@type": "Person",
+            "name": "Renaud Gagne"
+          },
+          "logo": {
+            "@type": "ImageObject",
+            "url": `${baseUrl}/logo.png`
+          },
+          "contactPoint": {
+            "@type": "ContactPoint",
+            "email": "support@biblesketch.com",
+            "contactType": "Customer Service"
+          }
+        },
+        {
+          "@type": "WebPage",
+          "@id": `${baseUrl}/about`,
+          "url": `${baseUrl}/about`,
+          "name": "About Bible Sketch",
+          "description": "Meet Renaud, founder of Bible Sketch. Learn how we create AI-powered Bible coloring pages for Sunday School, VBS, and homeschooling families.",
+          "isPartOf": {
+            "@type": "WebSite",
+            "url": baseUrl,
+            "name": "Bible Sketch"
+          }
+        }
+      ]
+    };
+    
+    const schemaScript = `<script type="application/ld+json">${JSON.stringify(schemaData)}</script>`;
+    
+    const metaTags = `
+    <meta name="description" content="${escapeHtml(description)}" />
+    <link rel="canonical" href="${baseUrl}/about" />
+    <meta property="og:title" content="About Bible Sketch - Our Story & Mission" />
+    <meta property="og:description" content="${escapeHtml(description)}" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Bible Sketch" />
+    <meta property="og:url" content="${baseUrl}/about" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:image" content="${baseUrl}/logo.png" />
+    <meta property="og:image:alt" content="Bible Sketch Logo" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="About Bible Sketch - Our Story & Mission" />
+    <meta name="twitter:description" content="${escapeHtml(description)}" />
+    <meta name="twitter:url" content="${baseUrl}/about" />
+    <meta name="twitter:image" content="${baseUrl}/logo.png" />`;
+    
+    // Full about content HTML
+    const aboutContent = `
+<article style="max-width:896px;margin:0 auto;padding:40px 20px;font-family:system-ui,-apple-system,sans-serif;">
+  <h1 style="font-size:2.25rem;font-weight:700;color:#1f2937;margin-bottom:24px;">About Bible Sketch</h1>
+  
+  <p style="font-size:1.125rem;font-weight:500;color:#374151;line-height:1.75;margin-bottom:24px;">
+    <strong>Bible Sketch is an AI-powered platform that generates custom, free printable Bible coloring pages instantly.</strong> Unlike traditional static libraries, it allows parents and ministry leaders to create unique scene art and scripture typography for any Bible verse, specifically tailored for Sunday School, VBS, and personal devotion.
+  </p>
+
+  <section style="margin-top:48px;">
+    <h2 style="font-size:1.5rem;font-weight:700;color:#1f2937;margin-bottom:16px;">Our Story</h2>
+    
+    <img src="${baseUrl}/about-Renaud.webp" alt="Renaud Gagne, founder of Bible Sketch" style="max-width:300px;width:100%;height:auto;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,0.1);margin-bottom:16px;float:right;margin-left:24px;" />
+    
+    <p style="color:#374151;line-height:1.75;margin-bottom:16px;">
+      Hi, I'm <strong>Renaud Gagne</strong>, the founder of Bible Sketch. I'm a Christian, a father of four children (all under age 8), and part of a homeschooling family. If you've ever tried to teach the story of Daniel in the Lions' Den to a room full of energetic six-year-olds, you know the struggle. The wiggles are real. In our house, we call this the "chaos hour."
+    </p>
+    <p style="color:#374151;line-height:1.75;margin-bottom:16px;">
+      I built Bible Sketch because I needed a way to channel that energy into something focused, quiet, and meaningful—without spending hours prepping the night before. As someone who teaches <a href="https://dioceseofcanada.ca/gods-big-story" target="_blank" rel="noopener noreferrer" style="color:#7c3aed;text-decoration:none;">God's Big Story</a> curriculum at <a href="https://www.sttimothysabc.org/" target="_blank" rel="noopener noreferrer" style="color:#7c3aed;text-decoration:none;">St. Timothy's Anglican Bible Church</a>, I understand firsthand the challenge of finding specific artwork for obscure verses or particular lessons.
+    </p>
+    <p style="color:#374151;line-height:1.75;margin-bottom:16px;clear:right;">
+      My core philosophy is simple: <strong>"Slowness is sacred."</strong> I believe in using imagination to meditate on God's Word. I value "slow theology" over fast consumption. When my 5-year-old colors the word "GRACE" in our Verse Art tool, he isn't just seeing the word; he is physically tracing the shape of it. This builds the fine motor skills needed for handwriting while planting the scripture deep in his memory. It's handwriting practice and theology, all rolled into one.
+    </p>
+  </section>
+
+  <section style="margin-top:48px;">
+    <h2 style="font-size:1.5rem;font-weight:700;color:#1f2937;margin-bottom:16px;">Our Mission</h2>
+    <p style="color:#374151;line-height:1.75;margin-bottom:16px;">
+      Bible Sketch exists to solve a common problem for ministry leaders and parents: finding specific artwork for specific Bible verses. Rather than searching through limited pre-made collections, users generate fresh content on demand.
+    </p>
+    <p style="color:#374151;line-height:1.75;margin-bottom:16px;">
+      We designed the platform with two distinct tools to cover different ministry needs:
+    </p>
+    <ul style="list-style:disc;padding-left:24px;margin:16px 0;color:#374151;line-height:1.75;">
+      <li style="margin-bottom:8px;"><strong>Scene Art:</strong> Visual storytelling and biblical narrative. Best used for Sunday School lessons, VBS history, and teaching complex stories.</li>
+      <li style="margin-bottom:8px;"><strong>Verse Art:</strong> Typography and scripture memorization. These designs are ideal for memory verses, meditation, and relaxation.</li>
+    </ul>
+    <p style="color:#374151;line-height:1.75;margin-bottom:16px;">
+      Our values center on <strong>biblical accuracy</strong>, <strong>educational development</strong>, and <strong>accessibility</strong>. We believe that every child should have access to quality resources that help them engage with Scripture in meaningful ways.
+    </p>
+  </section>
+
+  <section style="margin-top:48px;">
+    <h2 style="font-size:1.5rem;font-weight:700;color:#1f2937;margin-bottom:16px;">What Makes Bible Sketch Different</h2>
+    <p style="color:#374151;line-height:1.75;margin-bottom:16px;">
+      The platform utilizes generative AI to interpret biblical text and render it into high-resolution line art suitable for printing. A key feature is the ability to adjust the "complexity level" of the output, ensuring the content is developmentally appropriate:
+    </p>
+    <ul style="list-style:disc;padding-left:24px;margin:16px 0;color:#374151;line-height:1.75;">
+      <li style="margin-bottom:8px;"><strong>Toddlers (Ages 2–4):</strong> Produces thick lines and large, simple shapes. Focuses on central characters with minimal background noise.</li>
+      <li style="margin-bottom:8px;"><strong>Children (Ages 5–10):</strong> Storybook-style illustrations. Balances character detail with background elements.</li>
+      <li style="margin-bottom:8px;"><strong>Teens (Ages 11–17):</strong> Dynamic, graphic-novel style compositions with "Comic Book" aesthetics.</li>
+      <li style="margin-bottom:8px;"><strong>Adults (18+):</strong> Intricate, stained glass-style or fine-art detail. Designed for stress relief, meditation, and extended coloring sessions.</li>
+    </ul>
+    <p style="color:#374151;line-height:1.75;margin-bottom:16px;">
+      Based on our analysis of user workflows, creating a page takes approximately 30 seconds. You select your tool, input the scripture, define the audience, choose an art style, and generate. Download the PDF for high-quality printing.
+    </p>
+  </section>
+
+  <section style="margin-top:48px;">
+    <h2 style="font-size:1.5rem;font-weight:700;color:#1f2937;margin-bottom:16px;">Trust & Accuracy</h2>
+    <p style="color:#374151;line-height:1.75;margin-bottom:16px;">
+      Look, I'm a dad, and I'm protective of what my kids see. We've put guardrails on our AI to respect the Bible, but technology isn't perfect. I always tell parents: treat this like a partnership. Generate the image, take a second to look at it (maybe chuckle if Noah has an extra finger), and <em>then</em> hit print. <strong>Trust, but verify.</strong>
+    </p>
+    <p style="color:#374151;line-height:1.75;margin-bottom:16px;">
+      Our AI is prompted with strict guardrails to respect the context of scripture. However, as with all AI tools, we recommend reviewing the image to ensure it aligns with your theological interpretation before printing. We acknowledge that AI is a non-deterministic technology, and while we implement safety filters, the output may occasionally require review.
+    </p>
+    <p style="color:#374151;line-height:1.75;margin-bottom:16px;">
+      Content generated on Bible Sketch is cleared for use in non-commercial ministry settings, including Sunday School classes, church bulletins, and VBS packets. Churches can print unlimited copies for their classes.
+    </p>
+  </section>
+
+  <section style="margin-top:48px;">
+    <h2 style="font-size:1.5rem;font-weight:700;color:#1f2937;margin-bottom:16px;">Who Uses Bible Sketch?</h2>
+    
+    <div style="margin-bottom:24px;">
+      <h3 style="font-weight:700;color:#1f2937;margin-bottom:8px;">For Sunday School and VBS</h3>
+      <p style="color:#374151;line-height:1.75;margin-bottom:8px;">
+        Teachers can generate materials that align perfectly with their specific curriculum. If a curriculum uses a non-standard verse, Bible Sketch creates a matching visual, eliminating the need to use unrelated generic artwork.
+      </p>
+    </div>
+
+    <div style="margin-bottom:24px;">
+      <h3 style="font-weight:700;color:#1f2937;margin-bottom:8px;">For Homeschooling</h3>
+      <p style="color:#374151;line-height:1.75;margin-bottom:8px;">
+        Parents can integrate art into Bible history or scripture memorization. The Verse Art tool is particularly effective for helping children memorize weekly verses by engaging their visual and kinesthetic learning senses.
+      </p>
+    </div>
+
+    <div style="margin-bottom:24px;">
+      <h3 style="font-weight:700;color:#1f2937;margin-bottom:8px;">For Personal Devotion</h3>
+      <p style="color:#374151;line-height:1.75;margin-bottom:8px;">
+        Many adults use the tool to create "Bible journaling" pages. Generating a coloring page based on a daily reading allows for quiet reflection and meditation on the text while coloring.
+      </p>
+    </div>
+  </section>
+
+  <section style="margin-top:48px;padding-top:32px;border-top:1px solid #e5e7eb;">
+    <h2 style="font-size:1.5rem;font-weight:700;color:#1f2937;margin-bottom:16px;">Get in Touch</h2>
+    <p style="color:#374151;line-height:1.75;margin-bottom:16px;">
+      Have questions? We'd love to hear from you. Whether you're a Sunday School teacher looking for specific resources, a homeschooling parent exploring options, or just curious about how Bible Sketch works, we're here to help.
+    </p>
+    <div style="margin-bottom:16px;">
+      <p style="color:#374151;line-height:1.75;margin-bottom:8px;">
+        <strong>Support:</strong> <a href="mailto:support@biblesketch.com" style="color:#7c3aed;text-decoration:none;font-weight:700;">support@biblesketch.com</a>
+      </p>
+      <p style="color:#374151;line-height:1.75;margin-bottom:8px;">
+        <strong>General Inquiries:</strong> <a href="mailto:hello@biblesketch.app" style="color:#7c3aed;text-decoration:none;font-weight:700;">hello@biblesketch.app</a>
+      </p>
+    </div>
+    <p style="color:#374151;line-height:1.75;margin-top:24px;">
+      You don't need another subscription that you'll forget to use. But if you're like me—tired of searching Google Images at 11 PM on a Saturday night—give the free tool a try first. Print a picture of Jonah for your kids. If it buys you 20 minutes of holy silence? Then we can talk about upgrading.
+    </p>
+  </section>
+
+  <section style="margin-top:48px;padding-top:32px;border-top:1px solid #e5e7eb;">
+    <h2 style="font-size:1.5rem;font-weight:700;color:#1f2937;margin-bottom:16px;">Ready to Get Started?</h2>
+    <p style="color:#374151;line-height:1.75;margin-bottom:16px;">
+      <a href="${baseUrl}/" style="color:#7c3aed;text-decoration:none;font-weight:500;">Try Scene Art</a> | 
+      <a href="${baseUrl}/bible-verse-coloring" style="color:#7c3aed;text-decoration:none;font-weight:500;">Try Verse Art</a> | 
+      <a href="${baseUrl}/pricing" style="color:#7c3aed;text-decoration:none;font-weight:500;">View Pricing</a> | 
+      <a href="${baseUrl}/blog" style="color:#7c3aed;text-decoration:none;font-weight:500;">Read Our Blog</a>
+    </p>
+  </section>
+</article>`;
+    
+    const removeSSRScript = `
+    <script>
+      (function() {
+        var root = document.getElementById('root');
+        if (root) {
+          root.innerHTML = '';
+        }
+      })();
+    </script>`;
+    
+    if (html.includes('</head>')) {
+      html = html.replace('</head>', `${metaTags}\n${schemaScript}\n</head>`);
+    } else {
+      html += metaTags + schemaScript;
+    }
+    
+    if (html.includes('<div id="root">')) {
+      html = html.replace(/<div id="root"><\/div>/g, `<div id="root">${aboutContent}${removeSSRScript}</div>`);
+      if (!html.includes(aboutContent)) {
+        html = html.replace(/<div id="root">/g, `<div id="root">${aboutContent}${removeSSRScript}`);
+      }
+      
+      if (!html.includes(aboutContent)) {
+        console.error("[aboutRender] Failed to inject SEO content into HTML");
+      } else {
+        console.log("[aboutRender] Successfully injected SEO content");
+      }
+    } else {
+      console.error("[aboutRender] Could not find <div id=\"root\"> in HTML template");
+    }
+    
+    res.set('Cache-Control', 'public, max-age=3600, s-maxage=7200');
+    res.status(200).send(html);
+    
+  } catch (error) {
+    console.error("[aboutRender] Error:", error);
+    serveDefault();
+  }
+});
+
+// ---------------------------------------------------------
+// 9. PRIVACY POLICY PAGE SSR RENDERER (Full Content for SEO)
+// ---------------------------------------------------------
+exports.privacyRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (req, res) => {
+  const host = 'biblesketch.app';
+  const protocol = 'https';
+  const baseUrl = `${protocol}://${host}`;
+  const userAgent = req.headers['user-agent'] || 'Unknown';
+  
+  console.log(`[privacyRender] Called - Path: ${req.path} | Method: ${req.method} | UA: ${userAgent}`);
+  
+  const serveDefault = async () => {
+    const html = await getIndexHtml(baseUrl);
+    res.send(html);
+  };
+
+  try {
+    let html = await getIndexHtml(baseUrl);
+    
+    const title = "Privacy Policy - Bible Sketch";
+    const description = "Read the Privacy Policy for Bible Sketch. Learn how we collect, use, and protect your data when using our Bible coloring page generation service.";
+    
+    html = html.replace(/<title>.*?<\/title>/i, `<title>${title}</title>`);
+    
+    const metaTags = `
+    <meta name="description" content="${escapeHtml(description)}" />
+    <meta property="og:title" content="Privacy Policy - Bible Sketch" />
+    <meta property="og:description" content="Read the Privacy Policy for Bible Sketch." />
+    <meta property="og:type" content="website" />
+    <meta name="robots" content="noindex, follow" />`;
+    
+    // Full privacy policy content HTML
+    const privacyContent = `
+<article style="max-width:896px;margin:0 auto;padding:40px 20px;font-family:system-ui,-apple-system,sans-serif;">
+  <h1 style="font-size:2.25rem;font-weight:700;color:#1f2937;margin-bottom:8px;">🔒 Bible Sketch: Privacy Policy</h1>
+  <p style="color:#6b7280;font-weight:500;margin-bottom:32px;">Last Updated: November 26, 2025</p>
+
+  <p style="color:#374151;line-height:1.75;margin-bottom:32px;">
+    Welcome to <strong>Bible Sketch</strong> ("we," "our," or "us"). This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our website and services. Please read this privacy policy carefully. By using Bible Sketch, you consent to the data practices described in this policy.
+  </p>
+
+  <hr style="border:none;border-top:1px solid #f3f4f6;margin:32px 0;" />
+
+  <section style="margin-top:32px;">
+    <h2 style="font-size:1.5rem;font-weight:700;color:#1f2937;margin-bottom:16px;">1. Information We Collect</h2>
+    
+    <h3 style="font-weight:700;color:#1f2937;font-size:1.125rem;margin-bottom:8px;">1.1. Personal Information</h3>
+    <p style="color:#374151;line-height:1.75;margin-bottom:16px;">
+      When you create an account or make a purchase, we may collect:
+    </p>
+    <ul style="list-style:disc;padding-left:24px;margin:16px 0;color:#374151;line-height:1.75;">
+      <li style="margin-bottom:4px;"><strong>Account Information:</strong> Email address, display name, and profile picture (if provided via Google Sign-In).</li>
+      <li style="margin-bottom:4px;"><strong>Payment Information:</strong> When you purchase credits, your payment is processed by our third-party payment processor, Zoho Billing. We do not store your full credit card number or payment credentials on our servers.</li>
+      <li style="margin-bottom:4px;"><strong>Generated Content:</strong> The images you create and any prompts or settings you use.</li>
+    </ul>
+
+    <h3 style="font-weight:700;color:#1f2937;font-size:1.125rem;margin-bottom:8px;">1.2. Automatically Collected Information</h3>
+    <p style="color:#374151;line-height:1.75;margin-bottom:8px;">
+      When you access Bible Sketch, we automatically collect certain information, including:
+    </p>
+    <ul style="list-style:disc;padding-left:24px;margin:16px 0;color:#374151;line-height:1.75;">
+      <li style="margin-bottom:4px;"><strong>Device Information:</strong> Browser type, operating system, device type, and screen resolution.</li>
+      <li style="margin-bottom:4px;"><strong>Usage Data:</strong> Pages visited, features used, time spent on pages, and interaction patterns.</li>
+      <li style="margin-bottom:4px;"><strong>IP Address:</strong> Your approximate geographic location based on IP address.</li>
+      <li style="margin-bottom:4px;"><strong>Cookies and Tracking Technologies:</strong> See Section 3 for details.</li>
+    </ul>
+  </section>
+
+  <section style="margin-top:32px;">
+    <h2 style="font-size:1.5rem;font-weight:700;color:#1f2937;margin-bottom:16px;">2. How We Use Your Information</h2>
+    <p style="color:#374151;line-height:1.75;margin-bottom:8px;">We use the information we collect to:</p>
+    <ul style="list-style:disc;padding-left:24px;margin:16px 0;color:#374151;line-height:1.75;">
+      <li style="margin-bottom:4px;">Provide, operate, and maintain our services.</li>
+      <li style="margin-bottom:4px;">Process transactions and send related information (purchase confirmations, credit updates).</li>
+      <li style="margin-bottom:4px;">Send you technical notices, security alerts, and support messages.</li>
+      <li style="margin-bottom:4px;">Respond to your comments, questions, and customer service requests.</li>
+      <li style="margin-bottom:4px;">Monitor and analyze usage trends to improve user experience.</li>
+      <li style="margin-bottom:4px;">Detect, prevent, and address technical issues, fraud, or abuse.</li>
+      <li style="margin-bottom:4px;">Deliver targeted advertising and measure ad effectiveness.</li>
+    </ul>
+  </section>
+
+  <section style="margin-top:32px;">
+    <h2 style="font-size:1.5rem;font-weight:700;color:#1f2937;margin-bottom:16px;">3. Cookies and Tracking Technologies</h2>
+    <p style="color:#374151;line-height:1.75;margin-bottom:16px;">
+      We use cookies and similar tracking technologies to collect and track information about your activity on our service. This helps us understand how you use Bible Sketch and allows us to improve our services and deliver relevant advertising.
+    </p>
+
+    <h3 style="font-weight:700;color:#1f2937;font-size:1.125rem;margin-bottom:8px;">3.1. Google Analytics 4 (GA4)</h3>
+    <p style="color:#374151;line-height:1.75;margin-bottom:16px;">
+      We use Google Analytics 4 to analyze website traffic and user behavior. GA4 collects information such as how often you visit, which pages you view, and what other sites you visited before coming to Bible Sketch. Google may use this data to contextualize and personalize ads in its advertising network. You can opt out of Google Analytics by installing the <a href="https://tools.google.com/dlpage/gaoptout" target="_blank" rel="noopener noreferrer" style="color:#7c3aed;text-decoration:none;">Google Analytics Opt-out Browser Add-on</a>.
+    </p>
+
+    <h3 style="font-weight:700;color:#1f2937;font-size:1.125rem;margin-bottom:8px;">3.2. Facebook Pixel</h3>
+    <p style="color:#374151;line-height:1.75;margin-bottom:16px;">
+      We use the Facebook Pixel to measure the effectiveness of our advertising on Facebook and Instagram, and to deliver targeted ads to you on those platforms. The Facebook Pixel collects information about your activity on Bible Sketch, which Facebook may associate with your Facebook account. You can manage your ad preferences in your <a href="https://www.facebook.com/settings/?tab=ads" target="_blank" rel="noopener noreferrer" style="color:#7c3aed;text-decoration:none;">Facebook Ad Settings</a>.
+    </p>
+
+    <h3 style="font-weight:700;color:#1f2937;font-size:1.125rem;margin-bottom:8px;">3.3. Pinterest Tag</h3>
+    <p style="color:#374151;line-height:1.75;margin-bottom:16px;">
+      We use the Pinterest Tag to measure conversions from Pinterest ads and to build audiences for future advertising. The Pinterest Tag collects information about your activity on Bible Sketch. You can opt out of interest-based advertising from Pinterest by adjusting your <a href="https://www.pinterest.com/settings/privacy" target="_blank" rel="noopener noreferrer" style="color:#7c3aed;text-decoration:none;">Pinterest Privacy Settings</a>.
+    </p>
+
+    <h3 style="font-weight:700;color:#1f2937;font-size:1.125rem;margin-bottom:8px;">3.4. Managing Cookies</h3>
+    <p style="color:#374151;line-height:1.75;">
+      Most web browsers allow you to control cookies through their settings. You can set your browser to refuse all cookies or to indicate when a cookie is being sent. However, if you disable cookies, some features of Bible Sketch may not function properly.
+    </p>
+  </section>
+
+  <section style="margin-top:32px;">
+    <h2 style="font-size:1.5rem;font-weight:700;color:#1f2937;margin-bottom:16px;">4. Payment Processing</h2>
+    <p style="color:#374151;line-height:1.75;margin-bottom:16px;">
+      All payment transactions are processed through <strong>Zoho Billing</strong>, a third-party payment processor. When you make a purchase:
+    </p>
+    <ul style="list-style:disc;padding-left:24px;margin:16px 0;color:#374151;line-height:1.75;">
+      <li style="margin-bottom:4px;">Your payment information is collected and processed directly by Zoho Billing.</li>
+      <li style="margin-bottom:4px;">We receive only limited information (such as the last four digits of your card, transaction ID, and payment status) necessary to fulfill your order.</li>
+      <li style="margin-bottom:4px;">Zoho Billing's use of your personal information is governed by their own <a href="https://www.zoho.com/privacy.html" target="_blank" rel="noopener noreferrer" style="color:#7c3aed;text-decoration:none;">Privacy Policy</a>.</li>
+    </ul>
+  </section>
+
+  <section style="margin-top:32px;">
+    <h2 style="font-size:1.5rem;font-weight:700;color:#1f2937;margin-bottom:16px;">5. Data Sharing and Disclosure</h2>
+    <p style="color:#374151;line-height:1.75;margin-bottom:8px;">We may share your information in the following circumstances:</p>
+    <ul style="list-style:disc;padding-left:24px;margin:16px 0;color:#374151;line-height:1.75;">
+      <li style="margin-bottom:4px;"><strong>Service Providers:</strong> We share data with third-party vendors who perform services on our behalf (payment processing, analytics, advertising).</li>
+      <li style="margin-bottom:4px;"><strong>Legal Requirements:</strong> We may disclose information if required by law or in response to valid legal requests.</li>
+      <li style="margin-bottom:4px;"><strong>Business Transfers:</strong> If Bible Sketch is involved in a merger, acquisition, or sale of assets, your information may be transferred as part of that transaction.</li>
+      <li style="margin-bottom:4px;"><strong>With Your Consent:</strong> We may share information for other purposes with your explicit consent.</li>
+    </ul>
+    <p style="color:#374151;line-height:1.75;">
+      We do <strong>not</strong> sell your personal information to third parties.
+    </p>
+  </section>
+
+  <section style="margin-top:32px;">
+    <h2 style="font-size:1.5rem;font-weight:700;color:#1f2937;margin-bottom:16px;">6. Data Security</h2>
+    <p style="color:#374151;line-height:1.75;">
+      We implement appropriate technical and organizational measures to protect your personal information against unauthorized access, alteration, disclosure, or destruction. However, no method of transmission over the Internet or electronic storage is 100% secure. While we strive to protect your data, we cannot guarantee its absolute security.
+    </p>
+  </section>
+
+  <section style="margin-top:32px;">
+    <h2 style="font-size:1.5rem;font-weight:700;color:#1f2937;margin-bottom:16px;">7. Your Rights and Choices</h2>
+    <p style="color:#374151;line-height:1.75;margin-bottom:16px;">Depending on your location, you may have certain rights regarding your personal information:</p>
+    
+    <h3 style="font-weight:700;color:#1f2937;font-size:1.125rem;margin-bottom:8px;">7.1. Access and Portability</h3>
+    <p style="color:#374151;line-height:1.75;margin-bottom:16px;">
+      You can request a copy of the personal information we hold about you.
+    </p>
+
+    <h3 style="font-weight:700;color:#1f2937;font-size:1.125rem;margin-bottom:8px;">7.2. Correction</h3>
+    <p style="color:#374151;line-height:1.75;margin-bottom:16px;">
+      You can update your account information directly through your profile settings.
+    </p>
+
+    <h3 style="font-weight:700;color:#1f2937;font-size:1.125rem;margin-bottom:8px;">7.3. Deletion</h3>
+    <p style="color:#374151;line-height:1.75;margin-bottom:16px;">
+      You can request deletion of your account and associated data. Note that some information may be retained for legal or legitimate business purposes.
+    </p>
+
+    <h3 style="font-weight:700;color:#1f2937;font-size:1.125rem;margin-bottom:8px;">7.4. Opt-Out of Marketing</h3>
+    <p style="color:#374151;line-height:1.75;margin-bottom:16px;">
+      You can opt out of receiving promotional emails by following the unsubscribe instructions in those emails. You may still receive transactional communications (such as purchase confirmations).
+    </p>
+
+    <h3 style="font-weight:700;color:#1f2937;font-size:1.125rem;margin-bottom:8px;">7.5. Opt-Out of Tracking</h3>
+    <p style="color:#374151;line-height:1.75;">
+      You can opt out of tracking by adjusting your browser settings, using browser extensions, or adjusting your preferences in the third-party platforms mentioned in Section 3.
+    </p>
+  </section>
+
+  <section style="margin-top:32px;">
+    <h2 style="font-size:1.5rem;font-weight:700;color:#1f2937;margin-bottom:16px;">8. Data Retention</h2>
+    <p style="color:#374151;line-height:1.75;">
+      We retain your personal information for as long as your account is active or as needed to provide you services. We may also retain and use your information to comply with legal obligations, resolve disputes, and enforce our agreements. Generated images in your account are retained until you delete them or close your account.
+    </p>
+  </section>
+
+  <section style="margin-top:32px;">
+    <h2 style="font-size:1.5rem;font-weight:700;color:#1f2937;margin-bottom:16px;">9. Children's Privacy</h2>
+    <p style="color:#374151;line-height:1.75;">
+      Bible Sketch is not intended for children under the age of 13. We do not knowingly collect personal information from children under 13. If you are a parent or guardian and believe your child has provided us with personal information, please contact us immediately at <a href="mailto:hello@biblesketch.app" style="color:#7c3aed;text-decoration:none;">hello@biblesketch.app</a> so we can delete the information.
+    </p>
+  </section>
+
+  <section style="margin-top:32px;">
+    <h2 style="font-size:1.5rem;font-weight:700;color:#1f2937;margin-bottom:16px;">10. International Data Transfers</h2>
+    <p style="color:#374151;line-height:1.75;">
+      Your information may be transferred to and processed in countries other than your own. These countries may have different data protection laws. By using Bible Sketch, you consent to the transfer of your information to countries outside your country of residence, including the United States.
+    </p>
+  </section>
+
+  <section style="margin-top:32px;">
+    <h2 style="font-size:1.5rem;font-weight:700;color:#1f2937;margin-bottom:16px;">11. Changes to This Privacy Policy</h2>
+    <p style="color:#374151;line-height:1.75;">
+      We may update this Privacy Policy from time to time. We will notify you of any changes by posting the new Privacy Policy on this page and updating the "Last Updated" date. You are advised to review this Privacy Policy periodically for any changes. Your continued use of Bible Sketch after any modifications indicates your acceptance of the updated Privacy Policy.
+    </p>
+  </section>
+
+  <section style="margin-top:32px;">
+    <h2 style="font-size:1.5rem;font-weight:700;color:#1f2937;margin-bottom:16px;">12. Contact Us</h2>
+    <p style="color:#374151;line-height:1.75;">
+      If you have any questions about this Privacy Policy or our data practices, please contact us at:<br/>
+      <a href="mailto:hello@biblesketch.app" style="color:#7c3aed;text-decoration:none;font-weight:700;">hello@biblesketch.app</a>
+    </p>
+  </section>
+</article>`;
+    
+    const removeSSRScript = `
+    <script>
+      (function() {
+        var root = document.getElementById('root');
+        if (root) {
+          root.innerHTML = '';
+        }
+      })();
+    </script>`;
+    
+    if (html.includes('</head>')) {
+      html = html.replace('</head>', `${metaTags}\n</head>`);
+    } else {
+      html += metaTags;
+    }
+    
+    if (html.includes('<div id="root">')) {
+      html = html.replace(/<div id="root"><\/div>/g, `<div id="root">${privacyContent}${removeSSRScript}</div>`);
+      if (!html.includes(privacyContent)) {
+        html = html.replace(/<div id="root">/g, `<div id="root">${privacyContent}${removeSSRScript}`);
+      }
+      
+      if (!html.includes(privacyContent)) {
+        console.error("[privacyRender] Failed to inject SEO content into HTML");
+      } else {
+        console.log("[privacyRender] Successfully injected SEO content");
+      }
+    } else {
+      console.error("[privacyRender] Could not find <div id=\"root\"> in HTML template");
+    }
+    
+    res.set('Cache-Control', 'public, max-age=3600, s-maxage=7200');
+    res.status(200).send(html);
+    
+  } catch (error) {
+    console.error("[privacyRender] Error:", error);
+    serveDefault();
+  }
+});
+
+// ---------------------------------------------------------
+// 10. TERMS OF SERVICE PAGE SSR RENDERER (Full Content for SEO)
+// ---------------------------------------------------------
+exports.termsRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (req, res) => {
+  const host = 'biblesketch.app';
+  const protocol = 'https';
+  const baseUrl = `${protocol}://${host}`;
+  const userAgent = req.headers['user-agent'] || 'Unknown';
+  
+  console.log(`[termsRender] Called - Path: ${req.path} | Method: ${req.method} | UA: ${userAgent}`);
+  
+  const serveDefault = async () => {
+    const html = await getIndexHtml(baseUrl);
+    res.send(html);
+  };
+
+  try {
+    let html = await getIndexHtml(baseUrl);
+    
+    const title = "Terms of Service - Bible Sketch";
+    const description = "Read the Terms of Service for Bible Sketch. Learn about our policies for creating and using Bible coloring pages, credits, subscriptions, and AI-generated content.";
+    
+    html = html.replace(/<title>.*?<\/title>/i, `<title>${title}</title>`);
+    
+    const metaTags = `
+    <meta name="description" content="${escapeHtml(description)}" />
+    <meta property="og:title" content="Terms of Service - Bible Sketch" />
+    <meta property="og:description" content="Read the Terms of Service for Bible Sketch." />
+    <meta property="og:type" content="website" />
+    <meta name="robots" content="noindex, follow" />`;
+    
+    // Full terms of service content HTML
+    const termsContent = `
+<article style="max-width:896px;margin:0 auto;padding:40px 20px;font-family:system-ui,-apple-system,sans-serif;">
+  <h1 style="font-size:2.25rem;font-weight:700;color:#1f2937;margin-bottom:8px;">⚖️ Bible Sketch: Terms of Service</h1>
+  <p style="color:#6b7280;font-weight:500;margin-bottom:32px;">Last Updated: November 19, 2025</p>
+
+  <p style="color:#374151;line-height:1.75;margin-bottom:32px;">
+    Welcome to <strong>Bible Sketch</strong> ("we," "our," or "us"). By creating an account, purchasing credits, or using our AI generation services, you agree to these legally binding Terms of Service. Please read them carefully.
+  </p>
+
+  <hr style="border:none;border-top:1px solid #f3f4f6;margin:32px 0;" />
+
+  <section style="margin-top:32px;">
+    <h2 style="font-size:1.5rem;font-weight:700;color:#1f2937;margin-bottom:16px;">1. Scope of Service</h2>
+    <p style="color:#374151;line-height:1.75;margin-bottom:16px;">
+      By using Bible Sketch, you agree that you are at least 18 years old (or a parent/guardian consenting on behalf of a minor).
+    </p>
+    
+    <h3 style="font-weight:700;color:#1f2937;font-size:1.125rem;margin-bottom:8px;">1.1. Defined Artistic Scope</h3>
+    <p style="color:#374151;line-height:1.75;margin-bottom:8px;">
+      Bible Sketch is a specialized tool designed <strong>exclusively</strong> for generating coloring pages in three specific artistic styles:
+    </p>
+    <ul style="list-style:disc;padding-left:24px;margin:16px 0;color:#374151;line-height:1.75;">
+      <li style="margin-bottom:4px;"><strong>Sunday School</strong> (Cartoon/Line Art)</li>
+      <li style="margin-bottom:4px;"><strong>Stained Glass</strong> (Geometric/Mosaic)</li>
+      <li style="margin-bottom:4px;"><strong>Iconography</strong> (Byzantine/Orthodox)</li>
+    </ul>
+    <p style="color:#374151;line-height:1.75;">
+      Any attempt to force the service to generate photorealistic imagery, modern art styles, non-biblical content, or content outside these parameters is a violation of these terms and is not supported.
+    </p>
+  </section>
+
+  <section style="margin-top:32px;">
+    <h2 style="font-size:1.5rem;font-weight:700;color:#1f2937;margin-bottom:16px;">2. Intellectual Property & Rights</h2>
+    
+    <h3 style="font-weight:700;color:#1f2937;font-size:1.125rem;margin-bottom:8px;">2.1. User Ownership</h3>
+    <p style="color:#374151;line-height:1.75;margin-bottom:16px;">
+      As between you and Bible Sketch, <strong>you own the images you generate</strong> on the platform. We assign to you all rights, title, and interest in the assets you create, subject to your compliance with these Terms. You are free to print, sell, or distribute your generated images commercially.
+    </p>
+
+    <h3 style="font-weight:700;color:#1f2937;font-size:1.125rem;margin-bottom:8px;">2.2. License Grant to Bible Sketch</h3>
+    <p style="color:#374151;line-height:1.75;margin-bottom:8px;">
+      By generating content on Bible Sketch, you grant us a <strong>perpetual, worldwide, non-exclusive, royalty-free, sublicensable, and transferable license</strong> to use, reproduce, modify, display, and distribute your generated images. We require this license to:
+    </p>
+    <ul style="list-style:disc;padding-left:24px;margin:16px 0;color:#374151;line-height:1.75;">
+      <li style="margin-bottom:4px;">Operate the service (rendering and storing images).</li>
+      <li style="margin-bottom:4px;">Market the platform (showcasing examples).</li>
+      <li style="margin-bottom:4px;">Improve our AI models and safety filters.</li>
+    </ul>
+
+    <h3 style="font-weight:700;color:#1f2937;font-size:1.125rem;margin-bottom:8px;">2.3. Public Gallery License</h3>
+    <p style="color:#374151;line-height:1.75;">
+      If you voluntarily choose to set an image to <strong>"Public"</strong> or share it to the Community Gallery, you grant other Bible Sketch users a non-exclusive license to view, download, print, and "Remix" (create variations of) that content.
+    </p>
+  </section>
+
+  <section style="margin-top:32px;">
+    <h2 style="font-size:1.5rem;font-weight:700;color:#1f2937;margin-bottom:16px;">3. Payment Terms</h2>
+    
+    <h3 style="font-weight:700;color:#1f2937;font-size:1.125rem;margin-bottom:8px;">3.1. Credit System</h3>
+    <p style="color:#374151;line-height:1.75;margin-bottom:8px;">Bible Sketch operates on a pre-paid credit basis.</p>
+    <ul style="list-style:disc;padding-left:24px;margin:16px 0;color:#374151;line-height:1.75;">
+      <li style="margin-bottom:4px;"><strong>No Expiration:</strong> Purchased credits do not expire.</li>
+      <li style="margin-bottom:4px;"><strong>Final Sale:</strong> All credit purchases are final and non-refundable. Credits have no monetary value outside of the Bible Sketch platform and cannot be exchanged for cash.</li>
+    </ul>
+
+    <h3 style="font-weight:700;color:#1f2937;font-size:1.125rem;margin-bottom:8px;">3.2. Quality Disputes</h3>
+    <p style="color:#374151;line-height:1.75;">
+      While purchases are non-refundable, we may, at our sole discretion, refund a single credit to your account balance if a generated image is technically defective (e.g., illegible text or severe distortion). You must report such issues within 24 hours of generation.
+    </p>
+  </section>
+
+  <section style="margin-top:32px;">
+    <h2 style="font-size:1.5rem;font-weight:700;color:#1f2937;margin-bottom:16px;">4. User Conduct & Prohibited Content</h2>
+    <p style="color:#374151;line-height:1.75;margin-bottom:8px;">You agree NOT to use Bible Sketch to generate:</p>
+    <ol style="list-style:decimal;padding-left:24px;margin:16px 0;color:#374151;line-height:1.75;">
+      <li style="margin-bottom:4px;">Hate speech, violence, gore, or sexually explicit content.</li>
+      <li style="margin-bottom:4px;">Images that mock, denigrate, or disrespect religious beliefs.</li>
+      <li style="margin-bottom:4px;">Content that infringes on third-party intellectual property (e.g., requesting copyrighted characters).</li>
+    </ol>
+    <p style="color:#374151;line-height:1.75;">
+      <strong>Termination:</strong> We reserve the right to suspend or ban any account that repeatedly attempts to bypass our safety filters or generates prohibited content.
+    </p>
+  </section>
+
+  <section style="margin-top:32px;">
+    <h2 style="font-size:1.5rem;font-weight:700;color:#1f2937;margin-bottom:16px;">5. DISCLAIMERS & LIMITATION OF LIABILITY</h2>
+    <p style="font-weight:700;color:#374151;margin-bottom:16px;">PLEASE READ THIS SECTION CAREFULLY.</p>
+
+    <h3 style="font-weight:700;color:#1f2937;font-size:1.125rem;margin-bottom:8px;">5.1. No Liability for AI Output ("Hallucinations")</h3>
+    <p style="color:#374151;line-height:1.75;margin-bottom:16px;">
+      You acknowledge that Artificial Intelligence is a non-deterministic technology. While we implement strict safety filters, the AI may, on rare occasions and without warning, generate content that is unexpected, inappropriate, offensive, biologically inaccurate, or visually disturbing. <strong>Bible Sketch is NOT responsible or liable for any such content.</strong><br />
+      By using the service, you agree to hold Bible Sketch harmless from any claims, damages, or distress arising from the visual nature of the AI output. Your sole remedy for an inappropriate generation is to report the image for deletion and request a credit refund.
+    </p>
+
+    <h3 style="font-weight:700;color:#1f2937;font-size:1.125rem;margin-bottom:8px;">5.2. No Guarantee of Accuracy</h3>
+    <p style="color:#374151;line-height:1.75;margin-bottom:16px;">
+      Bible Sketch does not guarantee that generated images are historically, anatomically, or theologically accurate.
+    </p>
+
+    <h3 style="font-weight:700;color:#1f2937;font-size:1.125rem;margin-bottom:8px;">5.3. Copyright Enforceability</h3>
+    <p style="color:#374151;line-height:1.75;">
+      You acknowledge that under current laws (including US Copyright Office guidance), purely AI-generated works may not be eligible for copyright registration. Bible Sketch makes no warranty regarding your ability to enforce copyright against third parties who copy your generated images.
+    </p>
+  </section>
+
+  <section style="margin-top:32px;">
+    <h2 style="font-size:1.5rem;font-weight:700;color:#1f2937;margin-bottom:16px;">6. General Limitation of Liability</h2>
+    <p style="color:#374151;line-height:1.75;">
+      To the maximum extent permitted by law, the Bible Sketch service is provided "AS IS" and "AS AVAILABLE." In no event shall Bible Sketch be liable for any indirect, incidental, special, consequential, or punitive damages, including loss of profits or data, arising out of or in connection with your use of the service.
+    </p>
+  </section>
+
+  <section style="margin-top:32px;">
+    <h2 style="font-size:1.5rem;font-weight:700;color:#1f2937;margin-bottom:16px;">7. Contact Information</h2>
+    <p style="color:#374151;line-height:1.75;">
+      For legal inquiries regarding these Terms, please contact:<br/>
+      <strong>support@biblesketch.com</strong>
+    </p>
+  </section>
+</article>`;
+    
+    const removeSSRScript = `
+    <script>
+      (function() {
+        var root = document.getElementById('root');
+        if (root) {
+          root.innerHTML = '';
+        }
+      })();
+    </script>`;
+    
+    if (html.includes('</head>')) {
+      html = html.replace('</head>', `${metaTags}\n</head>`);
+    } else {
+      html += metaTags;
+    }
+    
+    if (html.includes('<div id="root">')) {
+      html = html.replace(/<div id="root"><\/div>/g, `<div id="root">${termsContent}${removeSSRScript}</div>`);
+      if (!html.includes(termsContent)) {
+        html = html.replace(/<div id="root">/g, `<div id="root">${termsContent}${removeSSRScript}`);
+      }
+      
+      if (!html.includes(termsContent)) {
+        console.error("[termsRender] Failed to inject SEO content into HTML");
+      } else {
+        console.log("[termsRender] Successfully injected SEO content");
+      }
+    } else {
+      console.error("[termsRender] Could not find <div id=\"root\"> in HTML template");
+    }
+    
+    res.set('Cache-Control', 'public, max-age=3600, s-maxage=7200');
+    res.status(200).send(html);
+    
+  } catch (error) {
+    console.error("[termsRender] Error:", error);
+    serveDefault();
+  }
+});
+
+// ---------------------------------------------------------
+// 11. VERIFIED PAGE RENDERER (Simple client-side route)
+// ---------------------------------------------------------
+exports.verifiedRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (req, res) => {
+  const host = 'biblesketch.app';
+  const protocol = 'https';
+  const baseUrl = `${protocol}://${host}`;
+  const userAgent = req.headers['user-agent'] || 'Unknown';
+  
+  console.log(`[verifiedRender] Called - Path: ${req.path} | Method: ${req.method} | UA: ${userAgent}`);
+  
+  try {
+    const html = await getIndexHtml(baseUrl);
+    res.set('Cache-Control', 'public, max-age=3600, s-maxage=7200');
+    res.status(200).send(html);
+  } catch (error) {
+    console.error("[verifiedRender] Error:", error);
+    // Fallback to production URL if local fetch fails
+    try {
+      const response = await fetch("https://biblesketch.app/index.html");
+      if (response.ok) {
+        const html = await response.text();
+        res.status(200).send(html);
+      } else {
+        res.status(500).send('Internal Server Error');
+      }
+    } catch (fallbackError) {
+      console.error("[verifiedRender] Fallback failed:", fallbackError);
+      res.status(500).send('Internal Server Error');
+    }
+  }
+});
+
+// ---------------------------------------------------------
+// 12. ZOHO BILLING WEBHOOK HANDLER
 // ---------------------------------------------------------
 
 
