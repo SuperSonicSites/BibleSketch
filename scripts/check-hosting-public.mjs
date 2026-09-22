@@ -10,8 +10,8 @@ import fs from 'node:fs';
 import zlib from 'node:zlib';
 
 // Paths relative to hosting-public/. CHANGED: live files replaced on purpose. ADDED: new files ('dir/' = prefix).
-const CHANGED = [];
-const ADDED = [];
+const CHANGED = ['og.png', 'logo.png', 'blog-images/christian-christmas-coloring-pages.webp'];
+const ADDED = ['404.html', 'fonts/'];
 
 const DIR = 'hosting-public';
 const sha = (f) => crypto.createHash('sha256').update(zlib.gzipSync(fs.readFileSync(f), { level: 9 })).digest('hex');
