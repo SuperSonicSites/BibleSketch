@@ -15,19 +15,65 @@ service cloud.firestore {
       return request.auth != null && sketchId.matches('^bookmark_' + request.auth.uid + '_.*$');
     }
 
-    // Users: Allow public read of profiles, but only owners can write.
+    // Profile fields shown on public pages: bounded name, photo only from our storage or Google.
+    function validDisplayName(name) {
+      return name is string && name.size() <= 100;
+    }
+    function validPhotoURL(url) {
+      return url == null || url == ''
+        || (url is string && url.matches('^https://(firebasestorage[.]googleapis[.]com|lh3[.]googleusercontent[.]com)/.*'));
+    }
+
+    // Users: public profiles can be read one at a time, never listed.
+    // Credits, downloads and premium status are granted by the server only;
+    // the web client may only spend them (decrease).
     match /users/{userId} {
-      allow read: if true;
-      allow write: if isOwner(userId);
+      allow get: if true;
+      allow list: if false;
+
+      allow create: if isOwner(userId)
+        && request.resource.data.keys().hasOnly(['uid', 'email', 'displayName', 'photoFileName', 'photoURL',
+             'storagePath', 'credits', 'downloadsRemaining', 'isPremium', 'blessedSketchIds',
+             'profileComplete', 'createdAt'])
+        && request.resource.data.credits == 5
+        && request.resource.data.downloadsRemaining == 5
+        && request.resource.data.isPremium == false
+        && request.resource.data.blessedSketchIds.size() == 0
+        && validDisplayName(request.resource.data.get('displayName', ''))
+        && validPhotoURL(request.resource.data.get('photoURL', ''));
+
+      allow update: if isOwner(userId) && userUpdateAllowed();
+
+      // Kept for the web client's account deletion; balances survive via the onUserDeleted tombstone.
+      allow delete: if isOwner(userId);
 
       // Transactions subcollection: Users can only read and create their own transactions.
       // They cannot update or delete transactions (for audit trail integrity).
       match /transactions/{transactionId} {
         allow read: if isOwner(userId);
-        allow create: if request.auth != null && request.auth.uid == userId 
-                      && request.resource.data.userId == userId;
+        allow create: if isOwner(userId)
+                      && request.resource.data.userId == userId
+                      && ((request.resource.data.type == 'bonus' && request.resource.data.amount == 5)
+                          || (request.resource.data.type == 'usage' && request.resource.data.amount == -1));
         allow update, delete: if false; // Transactions are immutable for audit purposes
       }
+    }
+
+    function userUpdateAllowed() {
+      let before = resource.data;
+      let after = request.resource.data;
+      let changed = after.diff(before).affectedKeys();
+      return changed.hasOnly(['displayName', 'photoURL', 'photoFileName', 'storagePath', 'updatedAt',
+               'profileComplete', 'credits', 'downloadsRemaining', 'blessedSketchIds'])
+        && (!changed.hasAny(['credits'])
+            || (after.credits is number && after.credits >= 0 && after.credits <= before.get('credits', 0)))
+        && (!changed.hasAny(['downloadsRemaining'])
+            || (after.downloadsRemaining is number && after.downloadsRemaining >= 0
+                && after.downloadsRemaining <= before.get('downloadsRemaining', 0)))
+        && (!changed.hasAny(['blessedSketchIds'])
+            || (after.blessedSketchIds is list && after.blessedSketchIds.hasAll(before.get('blessedSketchIds', []))))
+        && (!changed.hasAny(['displayName']) || validDisplayName(after.displayName))
+        && (!changed.hasAny(['photoURL']) || validPhotoURL(after.photoURL));
     }
 
     // Sketches: Covers both original sketches and bookmarks.
@@ -41,18 +87,22 @@ service cloud.firestore {
                   || (resource != null && isOwner(resource.data.userId))
                   || isBookmarkOwner(sketchId);
 
-      // CREATE: Allow if the user is logged in and is setting their own UID as the owner.
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      // CREATE: logged in, own UID as owner, starting with no blessings.
+      allow create: if request.auth != null
+                    && request.resource.data.userId == request.auth.uid
+                    && request.resource.data.get('blessCount', 0) == 0;
 
       // DELETE: Allow if the user is the owner of the document.
       allow delete: if request.auth != null && isOwner(resource.data.userId);
 
-      // UPDATE: Allow if the user is the owner, OR if they are only incrementing the blessCount.
+      // UPDATE: the owner may change visibility and tags; anyone signed in may bless (+1).
       allow update: if request.auth != null && (
-        // Condition 1: The owner can make any change.
-        isOwner(resource.data.userId)
+        (
+          isOwner(resource.data.userId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isPublic', 'tags'])
+        )
         ||
-        // Condition 2 (BLESS): Any user can update *only* the blessCount by exactly 1.
+        // BLESS: Any user can update *only* the blessCount by exactly 1.
         (
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['blessCount'])
           && request.resource.data.blessCount == resource.data.blessCount + 1
@@ -65,5 +115,7 @@ service cloud.firestore {
     match /processedWebhooks/{eventId} {
       allow read, write: if false;
     }
+
+    // rateLimits and deletedUsers are server-only: no rules, so all client access is denied.
   }
 }

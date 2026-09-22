@@ -2,8 +2,10 @@ const { onCall, HttpsError, onRequest } = require("firebase-functions/v2/https")
 const { GoogleGenAI } = require("@google/genai");
 const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
+const { FieldValue, Timestamp } = require("firebase-admin/firestore");
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 // Initialize admin if not already done
 if (admin.apps.length === 0) {
@@ -65,6 +67,9 @@ const escapeHtml = (str) => {
         .replace(/'/g, '&#039;');
 };
 
+
+// --- HELPER: JSON-LD safe to embed in <script> (user text can't close the tag) ---
+const jsonLd = (obj) => JSON.stringify(obj).replace(/</g, '\\u003c');
 
 // --- HELPER: Convert Markdown to HTML for SSR ---
 const markdownToHtml = (markdown) => {
@@ -216,95 +221,128 @@ const LITURGICAL_TAGS = [
   { id: 'resurrection', label: 'Resurrection', category: 'theme' },
 ];
 
-exports.generateContent = onCall({ 
+// --- generateContent guards ---
+// Only the models the app uses; the value is the kind of call.
+const ALLOWED_MODELS = {
+    'gemini-2.5-flash': 'text',
+    'gemini-3.1-pro-preview': 'text',
+    'gemini-3-pro-image-preview': 'image',
+    'gemini-3.1-flash-image': 'image',
+};
+const ALLOWED_CONFIG_KEYS = ['responseMimeType', 'responseModalities', 'imageConfig', 'safetySettings'];
+// ponytail: fixed daily caps (client retries count too); raise here if real users hit them.
+const DAILY_LIMITS = { image: 60, text: 300 };
+const GLOBAL_DAILY_IMAGE_LIMIT = 500;
+const MAX_PARTS = 12;
+const MAX_TEXT_CHARS = 60000;
+const MAX_INLINE_CHARS = 9 * 1024 * 1024;
+
+const validateContents = (contents) => {
+    const list = Array.isArray(contents) ? contents : [contents];
+    const parts = list.flatMap(c => (c && Array.isArray(c.parts)) ? c.parts : [null]);
+    if (parts.length === 0 || parts.length > MAX_PARTS) {
+        throw new HttpsError('invalid-argument', 'Invalid request contents.');
+    }
+    let textChars = 0;
+    let inlineChars = 0;
+    for (const part of parts) {
+        if (part && typeof part.text === 'string') {
+            textChars += part.text.length;
+        } else if (part && part.inlineData && typeof part.inlineData.data === 'string'
+            && /^image\//.test(part.inlineData.mimeType || '')) {
+            const b64 = part.inlineData.data;
+            // Check for "<!DOCTYPE" (PCFET0) or "<html" (PGh0bW) in base64
+            if (b64.startsWith("PCFET0") || b64.startsWith("PGh0bW")) {
+                throw new HttpsError('invalid-argument', 'A reference image failed to load and returned an HTML error page. Please check client-side file paths.');
+            }
+            inlineChars += b64.length;
+        } else {
+            throw new HttpsError('invalid-argument', 'Invalid request contents.');
+        }
+    }
+    if (textChars > MAX_TEXT_CHARS || inlineChars > MAX_INLINE_CHARS) {
+        throw new HttpsError('invalid-argument', 'Request is too large.');
+    }
+    return list;
+};
+
+// Counts this call against the user's and the global daily limits. Throws when a limit is hit.
+// Calls are counted before Gemini runs, so failed and retried calls count too.
+const reserveDailyCall = async (uid, kind) => {
+    const db = admin.firestore();
+    const day = new Date().toISOString().slice(0, 10);
+    const expireAt = Timestamp.fromMillis(Date.now() + 3 * 24 * 60 * 60 * 1000);
+    const userRef = db.collection('rateLimits').doc(`${uid}_${day}`);
+    const globalRef = db.collection('rateLimits').doc(`global_${day}`);
+
+    await db.runTransaction(async (tx) => {
+        const userSnap = await tx.get(userRef);
+        const globalSnap = kind === 'image' ? await tx.get(globalRef) : null;
+        const userCount = (userSnap.exists && userSnap.get(kind)) || 0;
+        if (userCount >= DAILY_LIMITS[kind]) {
+            throw new HttpsError('resource-exhausted', 'Daily generation limit reached. Please try again tomorrow.');
+        }
+        if (globalSnap) {
+            const globalCount = (globalSnap.exists && globalSnap.get('image')) || 0;
+            if (globalCount >= GLOBAL_DAILY_IMAGE_LIMIT) {
+                console.error(`Global daily image limit (${GLOBAL_DAILY_IMAGE_LIMIT}) reached`);
+                throw new HttpsError('unavailable', 'Generation is paused for today. Please try again tomorrow.');
+            }
+            tx.set(globalRef, { image: globalCount + 1, expireAt }, { merge: true });
+        }
+        tx.set(userRef, { [kind]: userCount + 1, expireAt }, { merge: true });
+    });
+};
+
+exports.generateContent = onCall({
     secrets: [geminiApiKey],
     cors: true,
     timeoutSeconds: 300,
     memory: "1GiB"
 }, async (request) => {
-    // ... (Existing GenAI logic unchanged) ...
-    // 1. Authentication Check (Optional but recommended)
-    // if (!request.auth) {
-    //   throw new HttpsError('unauthenticated', 'The function must be called while authenticated.');
-    // }
-
-    const { model, contents, config } = request.data;
-
-    if (!model || !contents) {
-        throw new HttpsError('invalid-argument', 'The function must be called with "model" and "contents" arguments.');
+    // 1. Only signed-in, verified, non-anonymous users (the UI already requires this).
+    const token = request.auth && request.auth.token;
+    if (!token || token.firebase?.sign_in_provider === 'anonymous') {
+        throw new HttpsError('unauthenticated', 'Please sign in to create sketches.');
     }
+    if (token.email_verified !== true) {
+        throw new HttpsError('permission-denied', 'Please verify your email address first.');
+    }
+    const uid = request.auth.uid;
 
-    // 1.5 Safety Check: Detect HTML masquerading as Image (Common 404/SPA error)
-    if (contents && contents.parts) {
-        for (const part of contents.parts) {
-            if (part.inlineData && part.inlineData.data) {
-                const b64 = part.inlineData.data;
-                // Check for "<!DOCTYPE" (PCFET0) or "<html" (PGh0bW) in base64
-                if (b64.startsWith("PCFET0") || b64.startsWith("PGh0bW")) {
-                    console.error("Invalid Image Data: Detected HTML content (404 Page) instead of image.");
-                    throw new HttpsError('invalid-argument', 'A reference image failed to load and returned an HTML error page. Please check client-side file paths.');
-                }
-            }
+    // 2. Validate the request: known model, known config keys, bounded contents.
+    const { model, contents, config } = request.data || {};
+    const kind = ALLOWED_MODELS[model];
+    if (!kind || !contents) {
+        throw new HttpsError('invalid-argument', 'Invalid request.');
+    }
+    if (config !== undefined && (typeof config !== 'object' || config === null
+        || Object.keys(config).some(k => !ALLOWED_CONFIG_KEYS.includes(k)))) {
+        throw new HttpsError('invalid-argument', 'Invalid request config.');
+    }
+    const requestContents = validateContents(contents);
+
+    // 3. Image calls need at least one credit. The client still deducts it after generating.
+    if (kind === 'image') {
+        const userDoc = await admin.firestore().collection('users').doc(uid).get();
+        if (!userDoc.exists || !(userDoc.get('credits') >= 1)) {
+            throw new HttpsError('failed-precondition', 'INSUFFICIENT_CREDITS');
         }
     }
+    await reserveDailyCall(uid, kind);
 
     try {
-        // 2. Initialize Gemini with the secret key
-        let apiKey = geminiApiKey.value();
-        if (apiKey) {
-            apiKey = apiKey.trim();
-        }
-        console.log("Initializing Gemini with API Key:", apiKey ? `Present (starts with ${apiKey.substring(0, 4)}..., length: ${apiKey.length})` : "MISSING");
+        const genai = new GoogleGenAI({ apiKey: geminiApiKey.value().trim() });
+        console.log(`generateContent uid=${uid} model=${model} parts=${requestContents.reduce((n, c) => n + c.parts.length, 0)}`);
 
-        // --- DEEP DEBUG LOGGING ---
-        console.log("Request Model:", model);
-        console.log("Request Config:", JSON.stringify(config));
-
-        if (contents) {
-            console.log("Contents Type:", typeof contents);
-            console.log("Contents Is Array:", Array.isArray(contents));
-
-            const partsToLog = Array.isArray(contents) ? contents[0]?.parts : contents.parts;
-
-            if (partsToLog) {
-                console.log(`Found ${partsToLog.length} parts.`);
-                partsToLog.forEach((part, index) => {
-                    if (part.text) {
-                        console.log(`Part [${index}]: Text (Length: ${part.text.length})`);
-                    } else if (part.inlineData) {
-                        console.log(`Part [${index}]: InlineData (Mime: ${part.inlineData.mimeType}, Data Length: ${part.inlineData.data ? part.inlineData.data.length : 0})`);
-                        if (part.inlineData.data) {
-                            console.log(`Part [${index}] Data Start: ${part.inlineData.data.substring(0, 20)}...`);
-                        }
-                    } else {
-                        console.log(`Part [${index}]: Unknown Type`, Object.keys(part));
-                    }
-                });
-            } else {
-                console.log("No parts found in contents:", JSON.stringify(contents).substring(0, 200));
-            }
-        } else {
-            console.log("Contents is missing or null");
-        }
-        // ---------------------------
-
-        const genai = new GoogleGenAI({ apiKey: apiKey });
-
-        // Ensure contents is an array (SDK expects Content[])
-        const requestContents = Array.isArray(contents) ? contents : [contents];
-
-        // 3. Call the Gemini API
-        // We use the generic generateContent method which maps to the SDK's usage
         const response = await genai.models.generateContent({
             model: model,
             contents: requestContents,
             config: config
         });
 
-        // 4. Return the response data
-        // Convert to plain object to ensure JSON serialization works
-        // Firebase Functions needs pure JSON-serializable objects
-        const serializedResponse = {
+        // Convert to plain object so Firebase can serialize it
+        return {
             candidates: response.candidates?.map(candidate => ({
                 content: {
                     parts: candidate.content?.parts?.map(part => ({
@@ -320,40 +358,10 @@ exports.generateContent = onCall({
             })),
             usageMetadata: response.usageMetadata
         };
-
-        return serializedResponse;
-
     } catch (error) {
         console.error("Gemini API Error:", error);
-
-        // Construct debug info to return to client
-        let debugInfo = "Debug Info: ";
-        if (contents) {
-            debugInfo += `Type: ${typeof contents}, IsArray: ${Array.isArray(contents)}. `;
-            // Helper to safely get parts from either array or object structure
-            const getParts = (c) => {
-                if (Array.isArray(c)) return c[0]?.parts;
-                if (c && c.parts) return c.parts;
-                return null;
-            };
-            
-            const parts = getParts(contents);
-            if (parts) {
-                debugInfo += `Parts: ${parts.length}. `;
-                parts.forEach((p, i) => {
-                    if (p.inlineData) {
-                        const dataStart = p.inlineData.data ? p.inlineData.data.substring(0, 20) : "null";
-                        debugInfo += `P${i}: ${p.inlineData.mimeType} (${p.inlineData.data ? p.inlineData.data.length : 0} chars, Start: ${dataStart}). `;
-                    } else if (p.text) {
-                        debugInfo += `P${i}: Text (${p.text.length} chars). `;
-                    }
-                });
-            } else {
-                debugInfo += "No parts found. ";
-            }
-        }
-
-        throw new HttpsError('internal', `Gemini Error: ${error.message}. ${debugInfo}`);
+        // Keep Gemini's message: the client retries on "overloaded"/"quota" wording.
+        throw new HttpsError('internal', `Gemini Error: ${error.message}`);
     }
 });
 
@@ -777,7 +785,7 @@ exports.homeRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (
     const title = "Create Faith-Filled Coloring Pages | Bible Sketch";
     const description = "Turn any bible verse into a custom, print-ready coloring page in seconds. AI-powered Bible coloring pages for Sunday School, VBS, and personal devotion.";
     
-    html = html.replace(/<title>.*?<\/title>/i, `<title>${title}</title>`);
+    html = html.replace(/<title>.*?<\/title>/i, () => `<title>${escapeHtml(title)}</title>`);
     
     const metaTags = `
     <meta name="description" content="${escapeHtml(description)}" />
@@ -813,7 +821,7 @@ exports.homeRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (
     
     // Inject meta tags before </head>
     if (html.includes('</head>')) {
-      html = html.replace('</head>', `${metaTags}\n</head>`);
+      html = html.replace('</head>', () => `${metaTags}\n</head>`);
     } else {
       html += metaTags;
     }
@@ -821,10 +829,10 @@ exports.homeRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (
     // Inject body content into <div id="root"> followed by removal script
     if (html.includes('<div id="root">')) {
       // Replace self-closing tag
-      html = html.replace(/<div id="root"><\/div>/g, `<div id="root">${homeSeoContent}${removeSSRScript}</div>`);
+      html = html.replace(/<div id="root"><\/div>/g, () => `<div id="root">${homeSeoContent}${removeSSRScript}</div>`);
       // If still not replaced, replace opening tag
       if (!html.includes(homeSeoContent)) {
-        html = html.replace(/<div id="root">/g, `<div id="root">${homeSeoContent}${removeSSRScript}`);
+        html = html.replace(/<div id="root">/g, () => `<div id="root">${homeSeoContent}${removeSSRScript}`);
       }
       
       // Verify injection succeeded
@@ -910,7 +918,7 @@ exports.sketchRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async
     const imageUrl = data.imageUrl;
 
     const slug = generateSketchSlug(data);
-    const canonicalUrl = `${baseUrl}/coloring-page/${slug}/${sketchId}`;
+    const canonicalUrl = `${baseUrl}/coloring-page/${slug}/${encodeURIComponent(sketchId)}`;
     
     // Fetch author name
     let authorName = "A Bible Sketch User";
@@ -968,7 +976,7 @@ exports.sketchRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async
       }
     };
 
-    const schemaScript = `<script type="application/ld+json">${JSON.stringify(schemaData)}</script>`;
+    const schemaScript = `<script type="application/ld+json">${jsonLd(schemaData)}</script>`;
 
     let html = await getIndexHtml(baseUrl);
 
@@ -978,25 +986,25 @@ exports.sketchRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async
     // 3. Inject Schema JSON-LD before </head>
 
     // Replace Title
-    html = html.replace(/<title>.*?<\/title>/i, `<title>${title}</title>`);
+    html = html.replace(/<title>.*?<\/title>/i, () => `<title>${escapeHtml(title)}</title>`);
 
     // Prepare Meta Tags
     const metaTags = `
-    <meta name="description" content="${description}" />
-    <link rel="canonical" href="${canonicalUrl}" />
+    <meta name="description" content="${escapeHtml(description)}" />
+    <link rel="canonical" href="${escapeHtml(canonicalUrl)}" />
     
     <!-- Open Graph -->
-    <meta property="og:title" content="${title}" />
-    <meta property="og:description" content="${description}" />
-    <meta property="og:image" content="${imageUrl}" />
+    <meta property="og:title" content="${escapeHtml(title)}" />
+    <meta property="og:description" content="${escapeHtml(description)}" />
+    <meta property="og:image" content="${escapeHtml(imageUrl)}" />
     <meta property="og:type" content="article" />
-    <meta property="og:url" content="${canonicalUrl}" />
+    <meta property="og:url" content="${escapeHtml(canonicalUrl)}" />
     <meta property="og:site_name" content="Bible Sketch" />
     `;
 
     // Inject before </head>
     if (html.includes('</head>')) {
-      html = html.replace('</head>', `${metaTags}\n${schemaScript}\n</head>`);
+      html = html.replace('</head>', () => `${metaTags}\n${schemaScript}\n</head>`);
     } else {
       // Fallback if </head> is missing
       html += metaTags + schemaScript;
@@ -1098,7 +1106,7 @@ exports.sketchRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async
       
       const relatedItems = relatedSketches.map(sketch => {
         const relatedSlug = generateSketchSlug(sketch);
-        const relatedUrl = `${baseUrl}/coloring-page/${relatedSlug}/${sketch.id}`;
+        const relatedUrl = `${baseUrl}/coloring-page/${relatedSlug}/${encodeURIComponent(sketch.id)}`;
         const thumbnailUrl = getThumbnailUrl(sketch.thumbnailPath, sketch.imageUrl);
         const relatedBook = sketch.promptData?.book || "Bible";
         const relatedChapter = sketch.promptData?.chapter || "";
@@ -1110,9 +1118,9 @@ exports.sketchRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async
         
         return `
           <li style="flex-shrink:0;width:calc(50% - 8px);margin-bottom:16px;">
-            <a href="${relatedUrl}" style="display:block;text-decoration:none;color:inherit;">
+            <a href="${escapeHtml(relatedUrl)}" style="display:block;text-decoration:none;color:inherit;">
               <article style="background:white;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,0.1);border:1px solid #f3f4f6;overflow:hidden;transition:all 0.3s;">
-                <img src="${thumbnailUrl}" alt="${escapeHtml(relatedAlt)}" style="width:100%;aspect-ratio:3/4;object-fit:contain;background:#f9fafb;padding:8px;transition:transform 0.5s;" />
+                <img src="${escapeHtml(thumbnailUrl)}" alt="${escapeHtml(relatedAlt)}" style="width:100%;aspect-ratio:3/4;object-fit:contain;background:#f9fafb;padding:8px;transition:transform 0.5s;" />
                 <div style="padding:12px;">
                   <h3 style="font-weight:700;font-size:0.875rem;color:#1f2937;margin:0 0 4px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
                     ${escapeHtml(relatedBook)} ${escapeHtml(relatedChapter)}:${escapeHtml(String(relatedVerse))}
@@ -1166,7 +1174,7 @@ exports.sketchRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async
     <!-- Image Column -->
     <div style="background:white;border-radius:24px;box-shadow:0 20px 25px -5px rgba(0,0,0,0.1);border:1px solid #f3f4f6;padding:24px;background-color:#e5e5e5;display:flex;align-items:center;justify-content:center;">
       <div style="position:relative;background:white;box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);width:100%;max-width:500px;aspect-ratio:3/4;">
-        <img src="${imageUrl}" alt="${escapeHtml(`${book} ${chapter}${verseRange} Coloring Page`)}" style="width:100%;height:100%;object-fit:contain;background:white;" />
+        <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(`${book} ${chapter}${verseRange} Coloring Page`)}" style="width:100%;height:100%;object-fit:contain;background:white;" />
       </div>
     </div>
     
@@ -1174,7 +1182,7 @@ exports.sketchRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async
     <div style="display:flex;flex-direction:column;">
       <div style="background:white;border-radius:24px;padding:32px;border:1px solid #f3f4f6;box-shadow:0 1px 3px rgba(0,0,0,0.1);flex:1;">
         <h1 style="font-size:2rem;font-weight:700;color:#1f2937;margin:0 0 4px 0;">
-          ${escapeHtml(book)} ${escapeHtml(chapter)}${verseRange} Coloring Page
+          ${escapeHtml(book)} ${escapeHtml(chapter)}${escapeHtml(verseRange)} Coloring Page
         </h1>
         <p style="font-size:1rem;color:#6b7280;margin:0 0 16px 0;">
           ${sketchType === 'verse' 
@@ -1188,7 +1196,7 @@ exports.sketchRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async
           </span>
           <span style="display:flex;align-items:center;gap:4px;">
             Created by 
-            <a href="${baseUrl}/profile/${data.userId}" style="font-weight:700;color:#7c3aed;text-decoration:none;">${escapeHtml(authorName)}</a>
+            <a href="${baseUrl}/profile/${escapeHtml(encodeURIComponent(data.userId || ''))}" style="font-weight:700;color:#7c3aed;text-decoration:none;">${escapeHtml(authorName)}</a>
           </span>
           <span style="color:#d1d5db;">•</span>
           <span>${datePublishedFormatted}</span>
@@ -1217,7 +1225,7 @@ exports.sketchRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async
             <a href="https://pinterest.com/pin/create/button/?url=${encodeURIComponent(canonicalUrl)}&media=${encodeURIComponent(imageUrl)}" target="_blank" style="flex:1;padding:12px;border-radius:12px;border:1px solid #fecaca;background:#fef2f2;color:#dc2626;text-align:center;text-decoration:none;font-weight:700;font-size:0.875rem;">
               Pinterest
             </a>
-            <button onclick="navigator.clipboard.writeText('${canonicalUrl}');alert('Link copied!');" style="flex:1;padding:12px;border-radius:12px;border:1px solid #e5e7eb;background:white;color:#374151;font-weight:700;font-size:0.875rem;cursor:pointer;">
+            <button onclick="navigator.clipboard.writeText(${escapeHtml(JSON.stringify(canonicalUrl))});alert('Link copied!');" style="flex:1;padding:12px;border-radius:12px;border:1px solid #e5e7eb;background:white;color:#374151;font-weight:700;font-size:0.875rem;cursor:pointer;">
               Copy Link
             </button>
           </div>
@@ -1233,10 +1241,10 @@ exports.sketchRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async
     // Use regex to handle both self-closing and open tags reliably
     if (html.includes('<div id="root">')) {
       // Replace self-closing tag
-      html = html.replace(/<div id="root"><\/div>/g, `<div id="root">${sketchSeoContent}</div>`);
+      html = html.replace(/<div id="root"><\/div>/g, () => `<div id="root">${sketchSeoContent}</div>`);
       // If still not replaced, replace opening tag (handles case with whitespace or content)
       if (!html.includes(sketchSeoContent)) {
-        html = html.replace(/<div id="root">/g, `<div id="root">${sketchSeoContent}`);
+        html = html.replace(/<div id="root">/g, () => `<div id="root">${sketchSeoContent}`);
       }
       
       // Verify injection succeeded
@@ -1315,7 +1323,7 @@ exports.profileRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, asyn
     }).sort((a, b) => b.timestamp - a.timestamp); // Sort in memory (newest first)
 
     // 3. Build SEO Content
-    const profileUrl = `${baseUrl}/profile/${profileUid}`;
+    const profileUrl = `${baseUrl}/profile/${encodeURIComponent(profileUid)}`;
     const title = `${userName}'s Bible Coloring Pages | Bible Sketch Gallery`;
     const description = `Browse ${userName}'s collection of Bible coloring pages. Free printable Christian coloring sheets created with Bible Sketch.`;
 
@@ -1377,38 +1385,38 @@ exports.profileRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, asyn
       });
     }
 
-    const schemaScript = `<script type="application/ld+json">${JSON.stringify(schemaData)}</script>`;
+    const schemaScript = `<script type="application/ld+json">${jsonLd(schemaData)}</script>`;
 
     // 5. Get and Modify HTML
     let html = await getIndexHtml(baseUrl);
 
     // Replace Title
-    html = html.replace(/<title>.*?<\/title>/i, `<title>${title}</title>`);
+    html = html.replace(/<title>.*?<\/title>/i, () => `<title>${escapeHtml(title)}</title>`);
 
     // Prepare Meta Tags
     const metaTags = `
-    <meta name="description" content="${description}" />
-    <link rel="canonical" href="${profileUrl}" />
+    <meta name="description" content="${escapeHtml(description)}" />
+    <link rel="canonical" href="${escapeHtml(profileUrl)}" />
     
     <!-- Open Graph -->
-    <meta property="og:title" content="${title}" />
-    <meta property="og:description" content="${description}" />
-    <meta property="og:image" content="${userPhoto}" />
+    <meta property="og:title" content="${escapeHtml(title)}" />
+    <meta property="og:description" content="${escapeHtml(description)}" />
+    <meta property="og:image" content="${escapeHtml(userPhoto)}" />
     <meta property="og:type" content="profile" />
-    <meta property="og:url" content="${profileUrl}" />
+    <meta property="og:url" content="${escapeHtml(profileUrl)}" />
     <meta property="og:site_name" content="Bible Sketch" />
-    <meta property="profile:username" content="${userName}" />
+    <meta property="profile:username" content="${escapeHtml(userName)}" />
     
     <!-- Twitter -->
     <meta name="twitter:card" content="summary" />
-    <meta name="twitter:title" content="${title}" />
-    <meta name="twitter:description" content="${description}" />
-    <meta name="twitter:image" content="${userPhoto}" />
+    <meta name="twitter:title" content="${escapeHtml(title)}" />
+    <meta name="twitter:description" content="${escapeHtml(description)}" />
+    <meta name="twitter:image" content="${escapeHtml(userPhoto)}" />
     `;
 
     // Inject before </head>
     if (html.includes('</head>')) {
-      html = html.replace('</head>', `${metaTags}\n${schemaScript}\n</head>`);
+      html = html.replace('</head>', () => `${metaTags}\n${schemaScript}\n</head>`);
     } else {
       html += metaTags + schemaScript;
     }
@@ -1512,23 +1520,13 @@ exports.blogRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (
       "url": canonicalUrl
     };
 
-    const schemaScript = `<script type="application/ld+json">${JSON.stringify(schemaData)}</script>`;
+    const schemaScript = `<script type="application/ld+json">${jsonLd(schemaData)}</script>`;
 
     let html = await getIndexHtml(baseUrl);
 
     // Replace Title
-    html = html.replace(/<title>.*?<\/title>/i, `<title>${title}</title>`);
+    html = html.replace(/<title>.*?<\/title>/i, () => `<title>${escapeHtml(title)}</title>`);
 
-    // Escape HTML entities for meta tags
-    const escapeHtml = (str) => {
-      if (!str) return '';
-      return str
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-    };
 
     // Prepare Meta Tags
     const metaTags = `
@@ -1555,7 +1553,7 @@ exports.blogRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (
 
     // Inject before </head>
     if (html.includes('</head>')) {
-      html = html.replace('</head>', `${metaTags}\n${schemaScript}\n</head>`);
+      html = html.replace('</head>', () => `${metaTags}\n${schemaScript}\n</head>`);
     } else {
       html += metaTags + schemaScript;
     }
@@ -1635,7 +1633,7 @@ exports.blogRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (
         const altText = `${book} ${chapter}:${verseText} Coloring Page`;
         
         // Return image tag wrapped in link (Pinterest crawlable)
-        return `<figure style="margin:24px 0;"><a href="${sketchUrl}"><img src="${imageUrl}" alt="${escapeHtml(altText)}" width="400" height="533" style="max-width:100%;height:auto;border-radius:8px;" /></a></figure>`;
+        return `<figure style="margin:24px 0;"><a href="${escapeHtml(sketchUrl)}"><img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(altText)}" width="400" height="533" style="max-width:100%;height:auto;border-radius:8px;" /></a></figure>`;
       });
     } else {
       // Remove placeholders if no sketches found
@@ -1650,14 +1648,14 @@ exports.blogRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (
 <article style="max-width:720px;margin:0 auto;padding:40px 20px;font-family:system-ui,-apple-system,sans-serif;">
   <h1 style="font-size:2rem;font-weight:700;color:#1f2937;margin-bottom:8px;">${escapeHtml(post.title)}</h1>
   <p style="color:#6b7280;font-size:0.875rem;margin-bottom:24px;">By ${escapeHtml(author)} · ${datePublished}</p>
-  ${imageUrl !== `${baseUrl}/logo.png` ? `<figure style="margin:0 0 24px 0;"><img src="${imageUrl}" alt="${escapeHtml(post.title)}" width="1200" height="630" style="max-width:100%;height:auto;border-radius:12px;" /></figure>` : ''}
+  ${imageUrl !== `${baseUrl}/logo.png` ? `<figure style="margin:0 0 24px 0;"><img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(post.title)}" width="1200" height="630" style="max-width:100%;height:auto;border-radius:12px;" /></figure>` : ''}
   <div style="color:#374151;line-height:1.75;">
     ${articleBodyHtml}
   </div>
 </article>`;
 
     // Inject body content into <div id="root">
-    html = html.replace('<div id="root"></div>', `<div id="root">${blogSeoContent}</div>`);
+    html = html.replace('<div id="root"></div>', () => `<div id="root">${blogSeoContent}</div>`);
 
     res.set('Cache-Control', 'public, max-age=3600, s-maxage=7200');
     res.status(200).send(html);
@@ -1755,7 +1753,7 @@ exports.galleryRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, asyn
     const title = "Bible Coloring Pages Gallery - Free Printable Christian Coloring Sheets | Bible Sketch";
     const description = "Browse thousands of free printable Bible coloring pages. Discover coloring sheets for every Bible book, age group, and art style. Perfect for Sunday School, VBS, homeschool, and family devotionals.";
     
-    html = html.replace(/<title>.*?<\/title>/i, `<title>${title}</title>`);
+    html = html.replace(/<title>.*?<\/title>/i, () => `<title>${escapeHtml(title)}</title>`);
     
     const metaTags = `
     <meta name="description" content="${escapeHtml(description)}" />
@@ -1787,7 +1785,7 @@ exports.galleryRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, asyn
     
     // Inject meta tags before </head>
     if (html.includes('</head>')) {
-      html = html.replace('</head>', `${metaTags}\n</head>`);
+      html = html.replace('</head>', () => `${metaTags}\n</head>`);
     } else {
       html += metaTags;
     }
@@ -1795,10 +1793,10 @@ exports.galleryRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, asyn
     // Inject body content into <div id="root"> followed by removal script
     if (html.includes('<div id="root">')) {
       // Replace self-closing tag
-      html = html.replace(/<div id="root"><\/div>/g, `<div id="root">${gallerySeoContent}${removeSSRScript}</div>`);
+      html = html.replace(/<div id="root"><\/div>/g, () => `<div id="root">${gallerySeoContent}${removeSSRScript}</div>`);
       // If still not replaced, replace opening tag
       if (!html.includes(gallerySeoContent)) {
-        html = html.replace(/<div id="root">/g, `<div id="root">${gallerySeoContent}${removeSSRScript}`);
+        html = html.replace(/<div id="root">/g, () => `<div id="root">${gallerySeoContent}${removeSSRScript}`);
       }
       
       // Verify injection succeeded
@@ -1932,7 +1930,7 @@ exports.verseRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async 
     const title = "Create Bible Verse Coloring Pages | Bible Sketch";
     const description = "Turn any Bible verse into beautiful, decorative typography coloring art. Choose from 4 font styles and generate print-ready verse art in 60 seconds.";
     
-    html = html.replace(/<title>.*?<\/title>/i, `<title>${title}</title>`);
+    html = html.replace(/<title>.*?<\/title>/i, () => `<title>${escapeHtml(title)}</title>`);
     
     const metaTags = `
     <meta name="description" content="${escapeHtml(description)}" />
@@ -1964,7 +1962,7 @@ exports.verseRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async 
     
     // Inject meta tags before </head>
     if (html.includes('</head>')) {
-      html = html.replace('</head>', `${metaTags}\n</head>`);
+      html = html.replace('</head>', () => `${metaTags}\n</head>`);
     } else {
       html += metaTags;
     }
@@ -1972,10 +1970,10 @@ exports.verseRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async 
     // Inject body content into <div id="root"> followed by removal script
     if (html.includes('<div id="root">')) {
       // Replace self-closing tag
-      html = html.replace(/<div id="root"><\/div>/g, `<div id="root">${verseSeoContent}${removeSSRScript}</div>`);
+      html = html.replace(/<div id="root"><\/div>/g, () => `<div id="root">${verseSeoContent}${removeSSRScript}</div>`);
       // If still not replaced, replace opening tag
       if (!html.includes(verseSeoContent)) {
-        html = html.replace(/<div id="root">/g, `<div id="root">${verseSeoContent}${removeSSRScript}`);
+        html = html.replace(/<div id="root">/g, () => `<div id="root">${verseSeoContent}${removeSSRScript}`);
       }
       
       // Verify injection succeeded
@@ -2132,7 +2130,7 @@ exports.tagRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (r
     // Get HTML template
     let html = await getIndexHtml(baseUrl);
     
-    html = html.replace(/<title>.*?<\/title>/i, `<title>${escapeHtml(title)}</title>`);
+    html = html.replace(/<title>.*?<\/title>/i, () => `<title>${escapeHtml(title)}</title>`);
     
     const metaTags = `
     <meta name="description" content="${escapeHtml(description)}" />
@@ -2164,7 +2162,7 @@ exports.tagRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (r
     
     // Inject meta tags before </head>
     if (html.includes('</head>')) {
-      html = html.replace('</head>', `${metaTags}\n</head>`);
+      html = html.replace('</head>', () => `${metaTags}\n</head>`);
     } else {
       html += metaTags;
     }
@@ -2172,10 +2170,10 @@ exports.tagRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (r
     // Inject body content into <div id="root"> followed by removal script
     if (html.includes('<div id="root">')) {
       // Replace self-closing tag
-      html = html.replace(/<div id="root"><\/div>/g, `<div id="root">${tagSeoContent}${removeSSRScript}</div>`);
+      html = html.replace(/<div id="root"><\/div>/g, () => `<div id="root">${tagSeoContent}${removeSSRScript}</div>`);
       // If still not replaced, replace opening tag
       if (!html.includes(tagSeoContent)) {
-        html = html.replace(/<div id="root">/g, `<div id="root">${tagSeoContent}${removeSSRScript}`);
+        html = html.replace(/<div id="root">/g, () => `<div id="root">${tagSeoContent}${removeSSRScript}`);
       }
       
       // Verify injection succeeded
@@ -2236,7 +2234,7 @@ exports.blogListingRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, 
     const title = "Blog - Bible Sketch";
     const description = "Latest updates, tutorials, and news from Bible Sketch.";
     
-    html = html.replace(/<title>.*?<\/title>/i, `<title>${title}</title>`);
+    html = html.replace(/<title>.*?<\/title>/i, () => `<title>${escapeHtml(title)}</title>`);
     
     const metaTags = `
     <meta name="description" content="${escapeHtml(description)}" />
@@ -2273,15 +2271,15 @@ exports.blogListingRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, 
     </script>`;
     
     if (html.includes('</head>')) {
-      html = html.replace('</head>', `${metaTags}\n</head>`);
+      html = html.replace('</head>', () => `${metaTags}\n</head>`);
     } else {
       html += metaTags;
     }
     
     if (html.includes('<div id="root">')) {
-      html = html.replace(/<div id="root"><\/div>/g, `<div id="root">${blogListingContent}${removeSSRScript}</div>`);
+      html = html.replace(/<div id="root"><\/div>/g, () => `<div id="root">${blogListingContent}${removeSSRScript}</div>`);
       if (!html.includes(blogListingContent)) {
-        html = html.replace(/<div id="root">/g, `<div id="root">${blogListingContent}${removeSSRScript}`);
+        html = html.replace(/<div id="root">/g, () => `<div id="root">${blogListingContent}${removeSSRScript}`);
       }
       
       if (!html.includes(blogListingContent)) {
@@ -2324,7 +2322,7 @@ exports.pricingRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, asyn
     const title = "Pricing - Affordable Bible Coloring Page Credits | Bible Sketch";
     const description = "Get credits to create custom Bible coloring pages. Subscribe monthly or pay once — your credits never expire. Perfect for Sunday School teachers, homeschool families, and church ministries. Plans start at $4.99.";
     
-    html = html.replace(/<title>.*?<\/title>/i, `<title>${title}</title>`);
+    html = html.replace(/<title>.*?<\/title>/i, () => `<title>${escapeHtml(title)}</title>`);
     
     const metaTags = `
     <meta name="description" content="${escapeHtml(description)}" />
@@ -2443,15 +2441,15 @@ exports.pricingRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, asyn
     </script>`;
     
     if (html.includes('</head>')) {
-      html = html.replace('</head>', `${metaTags}\n</head>`);
+      html = html.replace('</head>', () => `${metaTags}\n</head>`);
     } else {
       html += metaTags;
     }
     
     if (html.includes('<div id="root">')) {
-      html = html.replace(/<div id="root"><\/div>/g, `<div id="root">${pricingContent}${removeSSRScript}</div>`);
+      html = html.replace(/<div id="root"><\/div>/g, () => `<div id="root">${pricingContent}${removeSSRScript}</div>`);
       if (!html.includes(pricingContent)) {
-        html = html.replace(/<div id="root">/g, `<div id="root">${pricingContent}${removeSSRScript}`);
+        html = html.replace(/<div id="root">/g, () => `<div id="root">${pricingContent}${removeSSRScript}`);
       }
       
       if (!html.includes(pricingContent)) {
@@ -2494,7 +2492,7 @@ exports.aboutRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async 
     const title = "About Bible Sketch - Our Story & Mission | Free Bible Coloring Pages";
     const description = "Meet Renaud, founder of Bible Sketch. Learn how we create AI-powered Bible coloring pages for Sunday School, VBS, and homeschooling families.";
     
-    html = html.replace(/<title>.*?<\/title>/i, `<title>${title}</title>`);
+    html = html.replace(/<title>.*?<\/title>/i, () => `<title>${escapeHtml(title)}</title>`);
     
     // Schema.org JSON-LD from AboutSEO component
     const schemaData = {
@@ -2553,7 +2551,7 @@ exports.aboutRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async 
       ]
     };
     
-    const schemaScript = `<script type="application/ld+json">${JSON.stringify(schemaData)}</script>`;
+    const schemaScript = `<script type="application/ld+json">${jsonLd(schemaData)}</script>`;
     
     const metaTags = `
     <meta name="description" content="${escapeHtml(description)}" />
@@ -2708,15 +2706,15 @@ exports.aboutRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async 
     </script>`;
     
     if (html.includes('</head>')) {
-      html = html.replace('</head>', `${metaTags}\n${schemaScript}\n</head>`);
+      html = html.replace('</head>', () => `${metaTags}\n${schemaScript}\n</head>`);
     } else {
       html += metaTags + schemaScript;
     }
     
     if (html.includes('<div id="root">')) {
-      html = html.replace(/<div id="root"><\/div>/g, `<div id="root">${aboutContent}${removeSSRScript}</div>`);
+      html = html.replace(/<div id="root"><\/div>/g, () => `<div id="root">${aboutContent}${removeSSRScript}</div>`);
       if (!html.includes(aboutContent)) {
-        html = html.replace(/<div id="root">/g, `<div id="root">${aboutContent}${removeSSRScript}`);
+        html = html.replace(/<div id="root">/g, () => `<div id="root">${aboutContent}${removeSSRScript}`);
       }
       
       if (!html.includes(aboutContent)) {
@@ -2759,7 +2757,7 @@ exports.privacyRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, asyn
     const title = "Privacy Policy - Bible Sketch";
     const description = "Read the Privacy Policy for Bible Sketch. Learn how we collect, use, and protect your data when using our Bible coloring page generation service.";
     
-    html = html.replace(/<title>.*?<\/title>/i, `<title>${title}</title>`);
+    html = html.replace(/<title>.*?<\/title>/i, () => `<title>${escapeHtml(title)}</title>`);
     
     const metaTags = `
     <meta name="description" content="${escapeHtml(description)}" />
@@ -2957,15 +2955,15 @@ exports.privacyRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, asyn
     </script>`;
     
     if (html.includes('</head>')) {
-      html = html.replace('</head>', `${metaTags}\n</head>`);
+      html = html.replace('</head>', () => `${metaTags}\n</head>`);
     } else {
       html += metaTags;
     }
     
     if (html.includes('<div id="root">')) {
-      html = html.replace(/<div id="root"><\/div>/g, `<div id="root">${privacyContent}${removeSSRScript}</div>`);
+      html = html.replace(/<div id="root"><\/div>/g, () => `<div id="root">${privacyContent}${removeSSRScript}</div>`);
       if (!html.includes(privacyContent)) {
-        html = html.replace(/<div id="root">/g, `<div id="root">${privacyContent}${removeSSRScript}`);
+        html = html.replace(/<div id="root">/g, () => `<div id="root">${privacyContent}${removeSSRScript}`);
       }
       
       if (!html.includes(privacyContent)) {
@@ -3008,7 +3006,7 @@ exports.termsRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async 
     const title = "Terms of Service - Bible Sketch";
     const description = "Read the Terms of Service for Bible Sketch. Learn about our policies for creating and using Bible coloring pages, credits, subscriptions, and AI-generated content.";
     
-    html = html.replace(/<title>.*?<\/title>/i, `<title>${title}</title>`);
+    html = html.replace(/<title>.*?<\/title>/i, () => `<title>${escapeHtml(title)}</title>`);
     
     const metaTags = `
     <meta name="description" content="${escapeHtml(description)}" />
@@ -3150,15 +3148,15 @@ exports.termsRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async 
     </script>`;
     
     if (html.includes('</head>')) {
-      html = html.replace('</head>', `${metaTags}\n</head>`);
+      html = html.replace('</head>', () => `${metaTags}\n</head>`);
     } else {
       html += metaTags;
     }
     
     if (html.includes('<div id="root">')) {
-      html = html.replace(/<div id="root"><\/div>/g, `<div id="root">${termsContent}${removeSSRScript}</div>`);
+      html = html.replace(/<div id="root"><\/div>/g, () => `<div id="root">${termsContent}${removeSSRScript}</div>`);
       if (!html.includes(termsContent)) {
-        html = html.replace(/<div id="root">/g, `<div id="root">${termsContent}${removeSSRScript}`);
+        html = html.replace(/<div id="root">/g, () => `<div id="root">${termsContent}${removeSSRScript}`);
       }
       
       if (!html.includes(termsContent)) {
@@ -3217,15 +3215,48 @@ exports.verifiedRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, asy
 // ---------------------------------------------------------
 
 
-/**
- * SECURITY NOTE: Signature verification is disabled because Firebase Cloud Functions Gen 2
- * parses JSON bodies before we can access the raw bytes, making HMAC verification impossible.
- * 
- * Security is maintained through:
- * 1. Obscure webhook URL (only Zoho knows it)
- * 2. Dynamic UID parameter (?uid=XXX) that requires knowing the user's Firebase UID
- * 3. Zoho's internal security for webhook delivery
- */
+const zohoWebhookSecret = defineSecret("ZOHO_WEBHOOK_SECRET");
+
+// Rollout switch (functions/.env): unset/false = log whether the request is authenticated but
+// still process it; true = reject unauthenticated requests with 401.
+// Set ZOHO_ENFORCE_AUTH=true once Zoho sends the header, then redeploy.
+const ZOHO_ENFORCE_AUTH = process.env.ZOHO_ENFORCE_AUTH === 'true';
+
+const safeEqual = (a, b) => {
+  const ab = Buffer.from(String(a));
+  const bb = Buffer.from(String(b));
+  return ab.length === bb.length && crypto.timingSafeEqual(ab, bb);
+};
+
+// Zoho's optional HMAC-SHA256 signature: sorted key+value pairs of the query string
+// (plus form fields for form posts), then the raw JSON body. Returns null when unsigned.
+const zohoSignatureValid = (req, secret) => {
+  const signature = req.get('x-zoho-webhook-signature');
+  if (!signature) return null;
+  const isJson = req.is('application/json');
+  const fields = { ...req.query, ...(isJson ? {} : (req.body || {})) };
+  const pairs = Object.keys(fields).sort().map(k => k + String(fields[k])).join('');
+  const payload = pairs + (isJson && req.rawBody ? req.rawBody.toString('utf8') : '');
+  const mac = crypto.createHmac('sha256', secret).update(payload);
+  const digest = mac.digest();
+  return safeEqual(signature, digest.toString('hex')) || safeEqual(signature, digest.toString('base64'));
+};
+
+// A stable id for this delivery, so Zoho retries don't grant twice. Renewals get a new id
+// because the billing term changes. Returns null when the payload has nothing usable.
+const zohoDeliveryId = (body, packType) => {
+  const b = body || {};
+  const d = b.data || {};
+  if (b.event_id) return `evt_${b.event_id}`;
+  if (packType) {
+    const paymentId = b.payment?.payment_id || d.payment?.payment_id;
+    const invoiceId = b.invoice?.invoice_id || d.invoice?.invoice_id;
+    return (paymentId || invoiceId) ? `pack_${paymentId || invoiceId}` : null;
+  }
+  const s = b.subscription || {};
+  const term = s.current_term_starts_at || s.last_billing_at;
+  return (s.subscription_id && term) ? `sub_${s.subscription_id}_${s.status}_${term}` : null;
+};
 
 /**
  * Extracts Firebase UID from Zoho customer custom fields (fallback).
@@ -3233,15 +3264,18 @@ exports.verifiedRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, asy
  */
 const extractFirebaseUid = (body) => {
   const customFields = body.subscription?.customer?.custom_fields || [];
-  const uidField = customFields.find(f => 
-    f.label === 'firebase_uid' || 
+  const uidField = customFields.find(f =>
+    f.label === 'firebase_uid' ||
     f.api_name === 'cf_cf_firebase_uid'
   );
   return uidField?.value || null;
 };
 
 /**
- * Handles Zoho Billing webhooks for subscription lifecycle events.
+ * Handles Zoho Billing webhooks: credit pack purchases (?pack=&uid=) and subscription lifecycle events.
+ *
+ * Authentication: Zoho must send the header `x-webhook-token: <ZOHO_WEBHOOK_SECRET>`
+ * (Zoho Billing → Settings → Automation → Webhooks → Headers), or a valid X-Zoho-Webhook-Signature.
  *
  * Configure these events in Zoho Billing → Settings → Automation → Workflow Actions:
  * - New Subscription
@@ -3253,7 +3287,8 @@ const extractFirebaseUid = (body) => {
 exports.handleZohoWebhook = onRequest({
   cors: false,
   memory: "256MiB",
-  timeoutSeconds: 60
+  timeoutSeconds: 60,
+  secrets: [zohoWebhookSecret]
 }, async (req, res) => {
   // Only accept POST requests
   if (req.method !== 'POST') {
@@ -3261,9 +3296,21 @@ exports.handleZohoWebhook = onRequest({
   }
 
   try {
-    // 1. Log incoming request
-    console.log('📩 Zoho webhook received');
-    console.log('   Query:', JSON.stringify(req.query));
+    // 1. Authenticate before touching anything
+    const secret = zohoWebhookSecret.value().trim();
+    const token = req.get('x-webhook-token');
+    const tokenValid = !!token && safeEqual(token.trim(), secret);
+    const signatureValid = zohoSignatureValid(req, secret);
+    console.log(`📩 Zoho webhook: token=${token ? tokenValid : 'absent'} signature=${signatureValid === null ? 'absent' : signatureValid}`);
+
+    if (!tokenValid && signatureValid !== true) {
+      if (ZOHO_ENFORCE_AUTH) {
+        return res.status(401).send('Unauthorized');
+      }
+      console.warn('⚠️ Unauthenticated Zoho webhook processed (enforcement off)');
+    }
+
+    const db = admin.firestore();
 
     // --- CREDIT PACK HANDLER (early exit) ---
     const PACK_CREDITS = {
@@ -3286,35 +3333,57 @@ exports.handleZohoWebhook = onRequest({
         return res.status(400).send('Missing UID');
       }
 
-      console.log(`📦 Credit pack purchase: ${packType}`);
-      console.log(`   Adding ${pack.credits} credits, ${pack.downloads} downloads`);
-      console.log(`   User: ${firebaseUid}`);
+      const deliveryId = zohoDeliveryId(req.body, packType);
+      if (!deliveryId) {
+        console.warn('⚠️ Credit pack webhook has no payment/invoice id; cannot de-duplicate');
+      }
 
-      const userRef = admin.firestore().collection('users').doc(firebaseUid);
-      await userRef.set({
-        credits: admin.firestore.FieldValue.increment(pack.credits),
-        downloadsRemaining: admin.firestore.FieldValue.increment(pack.downloads),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp()
-      }, { merge: true });
+      const userRef = db.collection('users').doc(firebaseUid);
+      const processedRef = deliveryId ? db.collection('processedWebhooks').doc(deliveryId) : null;
 
-      // Log transaction
-      await userRef.collection('transactions').add({
-        type: 'credit_purchase',
-        pack: packType,
-        creditsAdded: pack.credits,
-        downloadsRemainingAdded: pack.downloads,
-        price: pack.price,
-        timestamp: admin.firestore.FieldValue.serverTimestamp()
+      const granted = await db.runTransaction(async (tx) => {
+        if (processedRef && (await tx.get(processedRef)).exists) return false;
+
+        tx.set(userRef, {
+          credits: FieldValue.increment(pack.credits),
+          downloadsRemaining: FieldValue.increment(pack.downloads),
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+
+        // Log transaction
+        tx.set(userRef.collection('transactions').doc(), {
+          type: 'credit_purchase',
+          pack: packType,
+          creditsAdded: pack.credits,
+          downloadsRemainingAdded: pack.downloads,
+          price: pack.price,
+          ...(deliveryId && { deliveryId }),
+          timestamp: FieldValue.serverTimestamp()
+        });
+
+        if (processedRef) {
+          tx.set(processedRef, {
+            processedAt: FieldValue.serverTimestamp(),
+            status: 'credit_purchase',
+            userId: firebaseUid,
+            pack: packType
+          });
+        }
+        return true;
       });
 
-      console.log(`✅ +${pack.credits} credits granted to user: ${firebaseUid}`);
+      if (!granted) {
+        console.log(`↩️ Credit pack ${deliveryId} already processed`);
+        return res.status(200).send('Already processed');
+      }
+      console.log(`✅ ${packType} pack: +${pack.credits} credits for ${firebaseUid} (${deliveryId || 'no id'})`);
       return res.status(200).send('Credit pack processed');  // EARLY EXIT - Premium logic below won't run
     }
 
-    // --- PREMIUM SUBSCRIPTION LOGIC (unchanged) ---
+    // --- PREMIUM SUBSCRIPTION LOGIC ---
 
     // 2. Extract subscription data
-    const subscription = req.body.subscription;
+    const subscription = req.body?.subscription;
     if (!subscription) {
       console.warn('⚠️ No subscription data in webhook payload');
       return res.status(200).send('Ignored: No subscription data');
@@ -3322,100 +3391,103 @@ exports.handleZohoWebhook = onRequest({
 
     const subscriptionId = subscription.subscription_id;
     const subscriptionStatus = subscription.status;
-    
-    console.log(`📩 Received Zoho webhook`);
-    console.log(`   Subscription ID: ${subscriptionId}`);
-    console.log(`   Status: ${subscriptionStatus}`);
 
     // 3. Extract Firebase UID from query param (preferred) or body (fallback)
     const firebaseUid = req.query.uid || extractFirebaseUid(req.body);
 
     if (!firebaseUid) {
-      console.warn('⚠️ Webhook received without Firebase UID');
-      console.warn('   Query params:', JSON.stringify(req.query));
-      console.warn('   Customer data:', JSON.stringify(subscription.customer || {}));
+      console.warn(`⚠️ Subscription ${subscriptionId} webhook without Firebase UID`);
       return res.status(200).send('Ignored: No Firebase UID found');
     }
 
-    console.log(`   Firebase UID: ${firebaseUid}`);
+    console.log(`   Subscription ${subscriptionId} status=${subscriptionStatus} uid=${firebaseUid}`);
 
-    // 4. Idempotency Check
-    const eventId = `${subscriptionStatus}_${subscriptionId}`;
-    const processedRef = admin.firestore().collection('processedWebhooks').doc(eventId);
-
-    const existingEvent = await processedRef.get();
-    if (existingEvent.exists) {
-      console.log(`⚠️ Webhook ${eventId} was previously processed, but re-processing for debugging...`);
-      // Temporarily disabled for debugging:
-      // return res.status(200).send('Already processed');
-    }
-
-    // 5. Get User Reference
-    const db = admin.firestore();
+    // 4. Get User Reference
     const userRef = db.collection('users').doc(firebaseUid);
 
-    // 6. Handle based on subscription status
+    // 5. Handle based on subscription status
     if (subscriptionStatus === 'live' || subscriptionStatus === 'active') {
-      // New subscription or renewal
-      const userDoc = await userRef.get();
-      const isNewSubscription = !userDoc.exists || !userDoc.data()?.isPremium;
+      // New subscription or renewal: grant once per delivery id
+      const deliveryId = zohoDeliveryId(req.body, null);
+      if (!deliveryId) {
+        console.warn('⚠️ Subscription webhook has no event id or billing term; cannot de-duplicate');
+      }
+      const processedRef = deliveryId ? db.collection('processedWebhooks').doc(deliveryId) : null;
 
-      await userRef.set({
-        isPremium: true,
-        credits: admin.firestore.FieldValue.increment(10),
-        planStatus: 'active',
-        zohoSubscriptionId: subscriptionId,
-        zohoCustomerId: subscription.customer?.customer_id || null,
-        ...(isNewSubscription && { subscriptionStartDate: admin.firestore.FieldValue.serverTimestamp() }),
-        ...(!isNewSubscription && { lastRenewal: admin.firestore.FieldValue.serverTimestamp() }),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp()
-      }, { merge: true });
+      const action = await db.runTransaction(async (tx) => {
+        if (processedRef && (await tx.get(processedRef)).exists) return null;
 
-      // Log transaction to subcollection
-      const action = isNewSubscription ? 'Premium subscription activated' : 'Monthly subscription renewal';
-      try {
-        const txRef = db.collection('users').doc(firebaseUid).collection('transactions').doc();
-        await txRef.set({
+        const userDoc = await tx.get(userRef);
+        const isNewSubscription = !userDoc.exists || !userDoc.data()?.isPremium;
+
+        tx.set(userRef, {
+          isPremium: true,
+          credits: FieldValue.increment(10),
+          planStatus: 'active',
+          zohoSubscriptionId: subscriptionId,
+          zohoCustomerId: subscription.customer?.customer_id || null,
+          ...(isNewSubscription && { subscriptionStartDate: FieldValue.serverTimestamp() }),
+          ...(!isNewSubscription && { lastRenewal: FieldValue.serverTimestamp() }),
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+
+        // Log transaction to subcollection
+        const label = isNewSubscription ? 'Premium subscription activated' : 'Monthly subscription renewal';
+        const txRef = userRef.collection('transactions').doc();
+        tx.set(txRef, {
           id: txRef.id,
           userId: firebaseUid,
           amount: 10,
-          description: action,
+          description: label,
           type: 'subscription',
+          ...(deliveryId && { deliveryId }),
           timestamp: Date.now(),
-          createdAt: admin.firestore.FieldValue.serverTimestamp()
+          createdAt: FieldValue.serverTimestamp()
         });
-      } catch (txError) {
-        console.error('Failed to log transaction:', txError);
-      }
 
+        if (processedRef) {
+          tx.set(processedRef, {
+            processedAt: FieldValue.serverTimestamp(),
+            status: subscriptionStatus,
+            userId: firebaseUid,
+            subscriptionId: subscriptionId
+          });
+        }
+        return label;
+      });
+
+      if (!action) {
+        console.log(`↩️ Subscription webhook ${deliveryId} already processed`);
+        return res.status(200).send('Already processed');
+      }
       console.log(`✅ ${action} for user: ${firebaseUid}`);
 
     } else if (subscriptionStatus === 'cancelled' || subscriptionStatus === 'canceled') {
       // Subscription cancelled
-      await userRef.update({
+      await userRef.set({
         isPremium: false,
         planStatus: 'canceled',
-        updatedAt: admin.firestore.FieldValue.serverTimestamp()
-      });
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
 
       console.log(`❌ Premium DEACTIVATED for user: ${firebaseUid}`);
 
     } else if (subscriptionStatus === 'expired') {
       // Subscription expired
-      await userRef.update({
+      await userRef.set({
         isPremium: false,
         planStatus: 'expired',
-        updatedAt: admin.firestore.FieldValue.serverTimestamp()
-      });
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
 
       console.log(`❌ Premium EXPIRED for user: ${firebaseUid}`);
 
     } else if (subscriptionStatus === 'non_renewing') {
       // User cancelled but subscription still active until period ends
-      await userRef.update({
+      await userRef.set({
         planStatus: 'pending_cancel',
-        updatedAt: admin.firestore.FieldValue.serverTimestamp()
-      });
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
 
       console.log(`⏳ Cancellation SCHEDULED for user: ${firebaseUid}`);
 
@@ -3423,18 +3495,57 @@ exports.handleZohoWebhook = onRequest({
       console.log(`ℹ️ Unhandled subscription status: ${subscriptionStatus}`);
     }
 
-    // 7. Mark as Processed
-    await processedRef.set({
-      processedAt: admin.firestore.FieldValue.serverTimestamp(),
-      status: subscriptionStatus,
-      userId: firebaseUid,
-      subscriptionId: subscriptionId
-    });
-
     res.status(200).send('Webhook processed successfully');
 
   } catch (error) {
     console.error('🔥 Error processing Zoho webhook:', error);
     res.status(500).send('Internal Server Error');
   }
+});
+
+// ---------------------------------------------------------
+// 13. USER DOC TRIGGERS
+// ---------------------------------------------------------
+const { onDocumentCreated, onDocumentDeleted } = require("firebase-functions/v2/firestore");
+
+// Server-owned fields kept when a user doc is deleted, restored if the same uid signs in again.
+// Without this, deleting your own doc and signing back in resets you to the 5 welcome credits,
+// and a premium user whose account deletion half-failed would come back without premium.
+const RESTORED_USER_FIELDS = ['credits', 'downloadsRemaining', 'isPremium', 'planStatus',
+  'zohoSubscriptionId', 'zohoCustomerId', 'subscriptionStartDate', 'lastRenewal'];
+
+exports.onUserCreated = onDocumentCreated("users/{uid}", async (event) => {
+  const snap = event.data;
+  if (!snap) return;
+
+  // Emails live in Firebase Auth; the public profile doc must not expose them.
+  const update = {};
+  if (snap.get('email') !== undefined) {
+    update.email = FieldValue.delete();
+  }
+
+  const tombstone = await admin.firestore().collection('deletedUsers').doc(event.params.uid).get();
+  if (tombstone.exists) {
+    for (const field of RESTORED_USER_FIELDS) {
+      if (tombstone.get(field) !== undefined) update[field] = tombstone.get(field);
+    }
+  }
+
+  if (Object.keys(update).length > 0) {
+    await snap.ref.update(update);
+  }
+});
+
+exports.onUserDeleted = onDocumentDeleted("users/{uid}", async (event) => {
+  const data = event.data?.data();
+  if (!data) return;
+
+  const kept = {};
+  for (const field of RESTORED_USER_FIELDS) {
+    if (data[field] !== undefined) kept[field] = data[field];
+  }
+  await admin.firestore().collection('deletedUsers').doc(event.params.uid).set({
+    ...kept,
+    deletedAt: FieldValue.serverTimestamp()
+  });
 });
