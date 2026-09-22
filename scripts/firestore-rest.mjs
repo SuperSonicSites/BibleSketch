@@ -10,7 +10,7 @@ const base = emulator ? `http://${emulator}/v1` : 'https://firestore.googleapis.
 export const DOCS = `projects/${PROJECT}/databases/(default)/documents`;
 
 let token;
-const getToken = async () => {
+export const getToken = async () => {
   if (emulator) return 'owner';
   if (!token) {
     const cli = createRequire(`${execSync('npm root -g').toString().trim()}/firebase-tools/lib/`);
