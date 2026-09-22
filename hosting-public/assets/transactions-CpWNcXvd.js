@@ -1,0 +1,1 @@
+import{c as t,d as s,a as c,s as n}from"./index-DHKtGwi1.js";const d=async(r,o)=>{try{const a=t(s,"users",r,"transactions");return(await c(a,{userId:r,...o,timestamp:n()})).id}catch(a){throw console.error("Error adding transaction:",a),a}};export{d as addTransaction};

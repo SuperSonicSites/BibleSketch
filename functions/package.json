@@ -5,7 +5,7 @@
     "serve": "firebase emulators:start --only functions",
     "shell": "firebase functions:shell",
     "start": "npm run shell",
-    "deploy": "firebase deploy --only functions",
+    "deploy": "node -e \"console.error('disabled on recovered-prod: see README > Deploying');process.exit(1)\"",
     "logs": "firebase functions:log"
   },
   "engines": {

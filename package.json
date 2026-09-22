@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && node -e \"require('fs').copyFileSync('dist/index.html', 'functions/index.html')\"",
-    "deploy": "npm run build && firebase deploy",
+    "build": "node -e \"console.error('disabled on recovered-prod: see README > Deploying');process.exit(1)\"",
+    "deploy": "node -e \"console.error('disabled on recovered-prod: see README > Deploying');process.exit(1)\"",
     "preview": "vite preview",
     "emulators": "firebase emulators:start",
     "emulators:import": "firebase emulators:start --import=./emulator-data --export-on-exit",
