@@ -214,6 +214,12 @@ const hook = (query, body, headers = {}) => fetch(`${FN}/handleZohoWebhook?${new
   method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body),
 });
 const token = { 'x-webhook-token': ZOHO_SECRET };
+// Zoho's real default payload (${JSONString}): only a `subscription` object. A pack purchase is a new $0
+// subscription; the Firebase UID is also in the customer's custom field.
+const zohoSub = (id, uid, extra = {}) => ({ subscription: {
+  subscription_id: id, status: 'live', current_term_starts_at: '2026-09-21',
+  customer: { customer_id: 'c1', custom_field_hash: { cf_cf_firebase_uid: uid } }, ...extra,
+} });
 
 await step('webhook rejects requests without a valid token or signature', async () => {
   assert.equal((await hook({ pack: 'beacon', uid: alice.uid }, {})).status, 401);
@@ -221,17 +227,26 @@ await step('webhook rejects requests without a valid token or signature', async 
   assert.equal((await hook({ uid: alice.uid }, { subscription: { subscription_id: 's', status: 'live' } }, { 'x-zoho-webhook-signature': 'bad' })).status, 401);
 });
 
-await step('webhook grants a credit pack once per payment', async () => {
+await step('webhook grants a credit pack once per purchase (Zoho retries and resends are ignored)', async () => {
   const c0 = await credits(alice);
-  const body = { payment: { payment_id: `pay-${run}` } };
-  assert.equal((await hook({ pack: 'spark', uid: alice.uid }, body, token)).status, 200);
+  const body = zohoSub(`pack-${run}`, alice.uid);
+  assert.equal((await hook({ uid: alice.uid, pack: 'spark' }, body, token)).status, 200);
   assert.equal(await credits(alice), c0 + 20);
-  assert.equal(await (await hook({ pack: 'spark', uid: alice.uid }, body, token)).text(), 'Already processed');
+  assert.equal(await (await hook({ uid: alice.uid, pack: 'spark' }, body, token)).text(), 'Already processed');
   assert.equal(await credits(alice), c0 + 20);
 });
 
+await step('webhook falls back to the customer UID field when ?uid= is empty', async () => {
+  const c0 = await credits(alice);
+  assert.equal((await hook({ uid: '', pack: 'spark' }, zohoSub(`pack-nouid-${run}`, alice.uid), token)).status, 200);
+  assert.equal(await credits(alice), c0 + 20);
+  // No UID anywhere: fail visibly (Zoho logs the delivery as failed) instead of a silent 200.
+  assert.equal((await hook({ uid: '', pack: 'spark' }, zohoSub(`pack-none-${run}`, ''), token)).status, 400);
+  assert.equal((await hook({ uid: '' }, zohoSub(`sub-none-${run}`, ''), token)).status, 400);
+});
+
 await step('webhook grants a subscription once per billing term, renewals included', async () => {
-  const sub = (term) => ({ subscription: { subscription_id: `sub-${run}`, status: 'live', current_term_starts_at: term, customer: { customer_id: 'c1' } } });
+  const sub = (term) => zohoSub(`sub-${run}`, alice.uid, { current_term_starts_at: term });
   const c0 = await credits(alice);
   assert.equal((await hook({ uid: alice.uid }, sub('2026-09-01'), token)).status, 200);
   assert.equal(await credits(alice), c0 + 10);
@@ -244,7 +259,7 @@ await step('webhook grants a subscription once per billing term, renewals includ
 
 await step('webhook accepts a valid Zoho HMAC signature', async () => {
   const query = { pack: 'torch', uid: alice.uid };
-  const raw = JSON.stringify({ payment: { payment_id: `pay2-${run}` } });
+  const raw = JSON.stringify(zohoSub(`pack-signed-${run}`, alice.uid));
   const signed = Object.keys(query).sort().map((k) => k + query[k]).join('') + raw;
   const signature = crypto.createHmac('sha256', ZOHO_SECRET).update(signed).digest('hex');
   const c0 = await credits(alice);

@@ -3242,20 +3242,16 @@ const zohoSignatureValid = (req, secret) => {
   return safeEqual(signature, digest.toString('hex')) || safeEqual(signature, digest.toString('base64'));
 };
 
-// A stable id for this delivery, so Zoho retries don't grant twice. Renewals get a new id
-// because the billing term changes. Returns null when the payload has nothing usable.
+// A stable id for this delivery, so Zoho retries and resends don't grant twice.
+// Zoho posts only {"subscription": {...}}. Each pack purchase is its own $0 subscription,
+// so its id identifies the purchase; premium renewals get a new id because the term changes.
+// Returns null when the payload has nothing usable.
 const zohoDeliveryId = (body, packType) => {
-  const b = body || {};
-  const d = b.data || {};
-  if (b.event_id) return `evt_${b.event_id}`;
-  if (packType) {
-    const paymentId = b.payment?.payment_id || d.payment?.payment_id;
-    const invoiceId = b.invoice?.invoice_id || d.invoice?.invoice_id;
-    return (paymentId || invoiceId) ? `pack_${paymentId || invoiceId}` : null;
-  }
-  const s = b.subscription || {};
+  const s = (body && body.subscription) || {};
+  if (!s.subscription_id) return null;
+  if (packType) return `pack_${s.subscription_id}`;
   const term = s.current_term_starts_at || s.last_billing_at;
-  return (s.subscription_id && term) ? `sub_${s.subscription_id}_${s.status}_${term}` : null;
+  return term ? `sub_${s.subscription_id}_${s.status}_${term}` : null;
 };
 
 /**
@@ -3263,7 +3259,9 @@ const zohoDeliveryId = (body, packType) => {
  * Primary method is via URL query parameter ?uid=XXX
  */
 const extractFirebaseUid = (body) => {
-  const customFields = body.subscription?.customer?.custom_fields || [];
+  const customer = body?.subscription?.customer || {};
+  if (customer.custom_field_hash?.cf_cf_firebase_uid) return customer.custom_field_hash.cf_cf_firebase_uid;
+  const customFields = customer.custom_fields || [];
   const uidField = customFields.find(f =>
     f.label === 'firebase_uid' ||
     f.api_name === 'cf_cf_firebase_uid'
@@ -3327,7 +3325,7 @@ exports.handleZohoWebhook = onRequest({
         return res.status(200).send('Unknown pack');
       }
 
-      const firebaseUid = req.query.uid;
+      const firebaseUid = req.query.uid || extractFirebaseUid(req.body);
       if (!firebaseUid) {
         console.error('❌ No Firebase UID for credit pack purchase');
         return res.status(400).send('Missing UID');
@@ -3397,7 +3395,7 @@ exports.handleZohoWebhook = onRequest({
 
     if (!firebaseUid) {
       console.warn(`⚠️ Subscription ${subscriptionId} webhook without Firebase UID`);
-      return res.status(200).send('Ignored: No Firebase UID found');
+      return res.status(400).send('Missing UID');
     }
 
     console.log(`   Subscription ${subscriptionId} status=${subscriptionStatus} uid=${firebaseUid}`);
