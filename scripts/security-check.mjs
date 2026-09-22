@@ -4,7 +4,7 @@
 // Runs against local emulators only:
 //   functions/.secret.local  GEMINI_API_KEY=<any dummy>  ZOHO_WEBHOOK_SECRET=localtestsecret123
 //   functions/.env.local     ZOHO_ENFORCE_AUTH=true
-//   dist/                    copy of the live hosting files (functions render the pages)
+//   hosting-public/          the live hosting files (functions render the pages)
 //   firebase emulators:start --only auth,firestore,storage,functions,hosting --project biblesketch-5104c
 // Usage: node scripts/security-check.mjs
 import assert from 'node:assert/strict';
@@ -295,6 +295,64 @@ await step('sketch page escapes user-controlled prompt data', async () => {
   const html = await (await fetch(`${HOSTING}/coloring-page/x/${sketchId}`)).text();
   assert.ok(html.includes('og:title'), 'sketch page was rendered');
   assert.ok(!html.includes('<img src=x onerror'), 'raw payload in sketch page');
+});
+
+// ---------------------------------------------------------------- status codes and redirects
+const get = (url, headers = {}) => fetch(url.startsWith('http') ? url : `${HOSTING}${url}`, { redirect: 'manual', headers });
+const isShell = (html) => html.includes('<div id="root">') && html.includes('/assets/index-DHKtGwi1.js');
+
+await step('missing pages are real 404s that still boot the app', async () => {
+  for (const url of ['/coloring-page/x/doesnotexist123', '/blog/does-not-exist', '/tags/nope', '/profile/doesnotexist123']) {
+    const res = await get(url);
+    assert.equal(res.status, 404, url);
+    assert.equal(res.headers.get('x-robots-tag'), 'noindex', url);
+    assert.match(res.headers.get('cache-control'), /s-maxage=3600/, url);
+    assert.ok(isShell(await res.text()), `${url} body is the SPA shell`);
+  }
+});
+
+await step('a private sketch is an uncached 404 shell, without a redirect that would leak its slug', async () => {
+  const privateId = `${sketchId}-private`;
+  await allowed(setDoc(doc(alice.db, 'sketches', privateId), {
+    userId: alice.uid, isPublic: false, blessCount: 0, isBookmark: false, type: 'scene',
+    imageUrl: 'https://firebasestorage.googleapis.com/v0/b/x/o/p.png', storagePath: '', thumbnailPath: '',
+    createdAt: serverTimestamp(), promptData: { book: 'Ruth', chapter: 2, start_verse: 17, age_group: 'Teen', art_style: 'Classic' },
+  }), 'create private');
+  const res = await get(`/coloring-page/wrong/${privateId}`);
+  assert.equal(res.status, 404);
+  assert.equal(res.headers.get('cache-control'), 'private');
+  assert.equal(res.headers.get('location'), null);
+  assert.ok(isShell(await res.text()), 'owner still gets the app shell');
+});
+
+await step('wrong slugs, trailing slashes and default hosts 301 to the canonical URL', async () => {
+  const wrong = await get(`/coloring-page/x/${sketchId}?ref=pin`);
+  assert.equal(wrong.status, 301);
+  assert.match(wrong.headers.get('location'), new RegExp(`^/coloring-page/[a-z0-9-]+-1-1/${sketchId}\\?ref=pin$`));
+  assert.match(wrong.headers.get('cache-control'), /s-maxage=7200/);
+  assert.equal((await get(wrong.headers.get('location'))).status, 200, 'canonical sketch URL');
+  const slash = await get('/pricing/');
+  assert.equal(slash.status, 301);
+  assert.equal(slash.headers.get('location'), '/pricing');
+  assert.equal((await get('/pricing')).status, 200, 'no redirect loop');
+  const webApp = await get(`${FN}/pricingRender`, { 'x-forwarded-host': 'biblesketch-5104c.web.app' });
+  assert.equal(webApp.status, 301);
+  assert.match(webApp.headers.get('location'), /^https:\/\/biblesketch\.app\//);
+  const viaCloudflare = await get(`${FN}/pricingRender`, { 'x-forwarded-host': 'biblesketch-5104c.web.app', 'cf-ray': 'x' });
+  assert.equal(viaCloudflare.status, 200, 'Cloudflare traffic is never redirected');
+});
+
+await step('thin pages are noindexed; real ones are not', async () => {
+  const verified = await get('/verified');
+  assert.equal(verified.status, 200);
+  assert.equal(verified.headers.get('x-robots-tag'), 'noindex');
+  assert.match(await verified.text(), /<title>Email Verified \| Bible Sketch<\/title>/);
+  assert.equal((await get(`/profile/${bob.uid}`)).headers.get('x-robots-tag'), 'noindex', 'profile with nothing public');
+  const aliceProfile = await get(`/profile/${alice.uid}`);
+  assert.equal(aliceProfile.headers.get('x-robots-tag'), null, 'profile with a public sketch');
+  assert.match(await aliceProfile.text(), /<h1>.*Bible Coloring Pages<\/h1>/);
+  assert.equal((await get('/tags/pentecost')).headers.get('x-robots-tag'), 'noindex', 'tag with no public sketches');
+  assert.equal((await get('/tags/advent')).headers.get('x-robots-tag'), null, 'tag with a public sketch');
 });
 
 // ---------------------------------------------------------------- storage

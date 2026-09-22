@@ -699,10 +699,38 @@ async function getIndexHtml(baseUrl) {
   }
 }
 
+const CANONICAL_ORIGIN = 'https://biblesketch.app';
+
+// The SPA shell with a real status. The app still boots from it (createRoot ignores the status), so an
+// owner opening their own private sketch still sees it; crawlers get 404 + noindex, or 503.
+// cacheable: only for URLs that can't become public later (missing doc, unknown slug, tag or user).
+const sendShell = async (res, status, cacheable = false) => {
+  const html = await getIndexHtml(CANONICAL_ORIGIN);
+  if (status === 404) res.set('X-Robots-Tag', 'noindex');
+  if (status === 503) res.set('Retry-After', '120');
+  res.set('Cache-Control', cacheable ? 'public, max-age=0, s-maxage=3600' : 'private');
+  res.status(status).send(html);
+};
+
+// 301 the default Firebase hosts to biblesketch.app, and path variants (trailing or double slashes, a wrong
+// sketch slug) to canonicalPath. Keeps the query string. Returns true when it answered the request.
+const WRONG_HOSTS = new Set(['biblesketch-5104c.web.app', 'biblesketch-5104c.firebaseapp.com']);
+const redirectToCanonical = (req, res, canonicalPath, cacheControl = 'public, max-age=3600, s-maxage=86400') => {
+  const host = String(req.get('x-fh-requested-host') || req.get('x-forwarded-host') || '').split(',')[0].trim().toLowerCase();
+  const wrongHost = WRONG_HOSTS.has(host) && !req.get('cf-ray'); // Cloudflare only fronts biblesketch.app
+  const path = canonicalPath || '/' + req.path.split('/').filter(Boolean).join('/');
+  if (!wrongHost && path === req.path) return false;
+  const q = req.originalUrl.indexOf('?');
+  res.set('Cache-Control', cacheControl);
+  res.redirect(301, (wrongHost ? CANONICAL_ORIGIN : '') + path + (q >= 0 ? req.originalUrl.slice(q) : ''));
+  return true;
+};
+
 // ---------------------------------------------------------
 // 2. HOMEPAGE SSR RENDERER (Minimal SSR for SEO - Hidden from Users)
 // ---------------------------------------------------------
 exports.homeRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (req, res) => {
+  if (redirectToCanonical(req, res)) return;
   const host = 'biblesketch.app';
   const protocol = 'https';
   const baseUrl = `${protocol}://${host}`;
@@ -710,11 +738,6 @@ exports.homeRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (
   
   console.log(`[homeRender] Called - Path: ${req.path} | Method: ${req.method} | UA: ${userAgent}`);
   
-  const serveDefault = async () => {
-    const html = await getIndexHtml(baseUrl);
-    res.send(html);
-  };
-
   try {
     // Query top 10-15 public sketches (not bookmarks, not verse type)
     let sketches = [];
@@ -850,7 +873,7 @@ exports.homeRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (
     
   } catch (error) {
     console.error("[homeRender] Error:", error);
-    serveDefault();
+    sendShell(res, 503);
   }
 });
 
@@ -858,6 +881,7 @@ exports.homeRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (
 // 3. SKETCH PAGE SEO RENDERER (Server-Side Meta Tags for Individual Sketches)
 // ---------------------------------------------------------
 exports.sketchRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (req, res) => {
+  if (redirectToCanonical(req, res)) return;
   const host = 'biblesketch.app';
   const protocol = 'https';
   const baseUrl = `${protocol}://${host}`;
@@ -870,14 +894,9 @@ exports.sketchRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async
 
   console.log(`[sketchRender] Path: ${req.path} | ID: ${sketchId} | UA: ${userAgent}`);
 
-  const serveDefault = async () => {
-    const html = await getIndexHtml(baseUrl);
-    res.send(html);
-  };
-
   if (!sketchId) {
-    console.log("[sketchRender] No sketch ID found, serving default.");
-    return serveDefault();
+    console.log("[sketchRender] No sketch ID found, serving 404.");
+    return sendShell(res, 404, true);
   }
 
   try {
@@ -885,15 +904,16 @@ exports.sketchRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async
 
     if (!doc.exists) {
       console.log(`[sketchRender] Sketch ${sketchId} not found.`);
-      return serveDefault();
+      return sendShell(res, 404, true);
     }
 
     const data = doc.data();
-    
-    // Check if sketch is public
+
+    // Private: 404 for crawlers, uncached, no redirect (the slug would reveal the verse). The owner's
+    // browser still boots the app from this shell and loads the sketch client-side.
     if (data.isPublic !== true) {
       console.log(`[sketchRender] Sketch ${sketchId} is not public.`);
-      return serveDefault();
+      return sendShell(res, 404);
     }
     
     const book = data.promptData?.book || "Bible";
@@ -918,8 +938,11 @@ exports.sketchRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async
     const imageUrl = data.imageUrl;
 
     const slug = generateSketchSlug(data);
-    const canonicalUrl = `${baseUrl}/coloring-page/${slug}/${encodeURIComponent(sketchId)}`;
-    
+    const canonicalPath = `/coloring-page/${slug}/${encodeURIComponent(sketchId)}`;
+    const canonicalUrl = `${baseUrl}${canonicalPath}`;
+    // Wrong or missing slug: 301, cached like the page so a sketch made private stops redirecting soon.
+    if (redirectToCanonical(req, res, canonicalPath, 'public, max-age=3600, s-maxage=7200')) return;
+
     // Fetch author name
     let authorName = "A Bible Sketch User";
     try {
@@ -1262,7 +1285,7 @@ exports.sketchRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async
 
   } catch (error) {
     console.error("[sketchRender] Error:", error);
-    serveDefault();
+    sendShell(res, 503);
   }
 });
 
@@ -1270,6 +1293,7 @@ exports.sketchRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async
 // 3. PROFILE PAGE SEO RENDERER (Server-Side Schema for Profiles)
 // ---------------------------------------------------------
 exports.profileRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (req, res) => {
+  if (redirectToCanonical(req, res)) return;
   const host = 'biblesketch.app';
   const protocol = 'https';
   const baseUrl = `${protocol}://${host}`;
@@ -1282,14 +1306,9 @@ exports.profileRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, asyn
 
   console.log(`[profileRender] Path: ${req.path} | UID: ${profileUid} | UA: ${userAgent}`);
 
-  const serveDefault = async () => {
-    const html = await getIndexHtml(baseUrl);
-    res.send(html);
-  };
-
   if (!profileUid) {
-    console.log("[profileRender] No profile UID found, serving default.");
-    return serveDefault();
+    console.log("[profileRender] No profile UID found, serving 404.");
+    return sendShell(res, 404, true);
   }
 
   try {
@@ -1321,6 +1340,11 @@ exports.profileRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, asyn
         timestamp: data.createdAt?.toMillis?.() || Date.now()
       };
     }).sort((a, b) => b.timestamp - a.timestamp); // Sort in memory (newest first)
+
+    if (!userDoc.exists && sketches.length === 0) {
+      console.log(`[profileRender] User ${profileUid} not found.`);
+      return sendShell(res, 404, true);
+    }
 
     // 3. Build SEO Content
     const profileUrl = `${baseUrl}/profile/${encodeURIComponent(profileUid)}`;
@@ -1385,13 +1409,33 @@ exports.profileRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, asyn
       });
     }
 
-    const schemaScript = `<script type="application/ld+json">${jsonLd(schemaData)}</script>`;
+    // data-rh: the client's ProfileSEO emits the same ProfilePage block, so Helmet replaces this one after JS
+    const schemaScript = `<script type="application/ld+json" data-rh="true">${jsonLd(schemaData)}</script>`;
 
     // 5. Get and Modify HTML
     let html = await getIndexHtml(baseUrl);
 
     // Replace Title
     html = html.replace(/<title>.*?<\/title>/i, () => `<title>${escapeHtml(title)}</title>`);
+
+    // Crawler-only body (H1 + links to the sketches), removed before React mounts like the other listings
+    if (sketches.length > 0) {
+      const linkItems = sketches.map(sketch => {
+        const sketchUrl = `${baseUrl}/coloring-page/${generateSketchSlug(sketch)}/${sketch.id}`;
+        const endVerse = sketch.promptData?.end_verse;
+        const startVerse = sketch.promptData?.start_verse || "";
+        const verseText = endVerse && endVerse > startVerse ? `${startVerse}-${endVerse}` : String(startVerse);
+        const linkText = `${sketch.promptData?.book || "Bible"} ${sketch.promptData?.chapter || ""}:${verseText} Coloring Page`;
+        return `<li><a href="${escapeHtml(sketchUrl)}">${escapeHtml(linkText)}</a></li>`;
+      });
+      const profileSeoContent = `
+      <h1>${escapeHtml(userName)}'s Bible Coloring Pages</h1>
+      <ol>
+        ${linkItems.join('\n        ')}
+      </ol>
+      <script>(function () { var root = document.getElementById('root'); if (root) root.innerHTML = ''; })();</script>`;
+      html = html.replace('<div id="root"></div>', () => `<div id="root">${profileSeoContent}</div>`);
+    }
 
     // Prepare Meta Tags
     const metaTags = `
@@ -1421,12 +1465,14 @@ exports.profileRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, asyn
       html += metaTags + schemaScript;
     }
 
+    // Existing user with nothing public: keep the page working, keep it out of the index
+    if (sketches.length === 0) res.set('X-Robots-Tag', 'noindex');
     res.set('Cache-Control', 'public, max-age=1800, s-maxage=3600'); // 30min client, 1hr CDN
     res.status(200).send(html);
 
   } catch (error) {
     console.error("[profileRender] Error:", error);
-    serveDefault();
+    sendShell(res, 503);
   }
 });
 
@@ -1434,6 +1480,7 @@ exports.profileRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, asyn
 // 4. BLOG PAGE SEO RENDERER (Server-Side Meta Tags for Blog Posts)
 // ---------------------------------------------------------
 exports.blogRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (req, res) => {
+  if (redirectToCanonical(req, res)) return;
   const host = 'biblesketch.app';
   const protocol = 'https';
   const baseUrl = `${protocol}://${host}`;
@@ -1446,15 +1493,10 @@ exports.blogRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (
 
   console.log(`[blogRender] Path: ${req.path} | Slug: ${slug} | UA: ${userAgent}`);
 
-  const serveDefault = async () => {
-    const html = await getIndexHtml(baseUrl);
-    res.send(html);
-  };
-
-  // If no slug, serve default (blog listing page)
+  // /blog itself is blogListingRender; /blog/ was already redirected there
   if (!slug) {
-    console.log("[blogRender] No slug found, serving default.");
-    return serveDefault();
+    console.log("[blogRender] No slug found, serving 404.");
+    return sendShell(res, 404, true);
   }
 
   try {
@@ -1467,7 +1509,7 @@ exports.blogRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (
       blogPosts = JSON.parse(blogPostsData);
     } else {
       console.warn('[blogRender] blog-posts.json not found');
-      return serveDefault();
+      return sendShell(res, 503);
     }
 
     // Find the blog post by slug
@@ -1475,7 +1517,7 @@ exports.blogRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (
 
     if (!post || !post.title) {
       console.log(`[blogRender] Blog post "${slug}" not found.`);
-      return serveDefault();
+      return sendShell(res, 404, true);
     }
 
     const title = `${post.title} - Bible Sketch Blog`;
@@ -1662,7 +1704,7 @@ exports.blogRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (
 
   } catch (error) {
     console.error("[blogRender] Error:", error);
-    serveDefault();
+    sendShell(res, 503);
   }
 });
 
@@ -1670,6 +1712,7 @@ exports.blogRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (
 // 5. GALLERY PAGE SSR RENDERER (Minimal SSR for SEO - Hidden from Users)
 // ---------------------------------------------------------
 exports.galleryRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (req, res) => {
+  if (redirectToCanonical(req, res)) return;
   const host = 'biblesketch.app';
   const protocol = 'https';
   const baseUrl = `${protocol}://${host}`;
@@ -1677,11 +1720,6 @@ exports.galleryRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, asyn
   
   console.log(`[galleryRender] Called - Path: ${req.path} | Method: ${req.method} | UA: ${userAgent}`);
   
-  const serveDefault = async () => {
-    const html = await getIndexHtml(baseUrl);
-    res.send(html);
-  };
-
   try {
     // Query all public sketches (both scene and verse types, not bookmarks)
     let sketches = [];
@@ -1814,7 +1852,7 @@ exports.galleryRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, asyn
     
   } catch (error) {
     console.error("[galleryRender] Error:", error);
-    serveDefault();
+    sendShell(res, 503);
   }
 });
 
@@ -1822,6 +1860,7 @@ exports.galleryRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, asyn
 // 6. VERSE ART PAGE SSR RENDERER (Minimal SSR for SEO - Hidden from Users)
 // ---------------------------------------------------------
 exports.verseRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (req, res) => {
+  if (redirectToCanonical(req, res)) return;
   const host = 'biblesketch.app';
   const protocol = 'https';
   const baseUrl = `${protocol}://${host}`;
@@ -1829,11 +1868,6 @@ exports.verseRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async 
   
   console.log(`[verseRender] Called - Path: ${req.path} | Method: ${req.method} | UA: ${userAgent}`);
   
-  const serveDefault = async () => {
-    const html = await getIndexHtml(baseUrl);
-    res.send(html);
-  };
-
   try {
     // Query top 10-15 public verse sketches (type === 'verse')
     let sketches = [];
@@ -1991,7 +2025,7 @@ exports.verseRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async 
     
   } catch (error) {
     console.error("[verseRender] Error:", error);
-    serveDefault();
+    sendShell(res, 503);
   }
 });
 
@@ -1999,6 +2033,7 @@ exports.verseRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async 
 // 6a. TAG PAGE SSR RENDERER (Minimal SSR for SEO - Hidden from Users)
 // ---------------------------------------------------------
 exports.tagRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (req, res) => {
+  if (redirectToCanonical(req, res)) return;
   const host = 'biblesketch.app';
   const protocol = 'https';
   const baseUrl = `${protocol}://${host}`;
@@ -2006,30 +2041,26 @@ exports.tagRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (r
   
   console.log(`[tagRender] Called - Path: ${req.path} | Method: ${req.method} | UA: ${userAgent}`);
   
-  const serveDefault = async () => {
-    const html = await getIndexHtml(baseUrl);
-    res.send(html);
-  };
-
   // Extract tagId from path (/tags/:tagId)
   const pathSegments = req.path.split('/').filter(p => p.length > 0);
   const tagId = pathSegments.length > 1 && pathSegments[0] === 'tags' ? pathSegments[1] : null;
 
   if (!tagId) {
-    console.log("[tagRender] No tagId found, serving default.");
-    return serveDefault();
+    console.log("[tagRender] No tagId found, serving 404.");
+    return sendShell(res, 404, true);
   }
 
   // Validate tag exists
   const tagInfo = LITURGICAL_TAGS.find(t => t.id === tagId);
   if (!tagInfo) {
-    console.log(`[tagRender] Tag ${tagId} not found, serving default.`);
-    return serveDefault();
+    console.log(`[tagRender] Tag ${tagId} not found, serving 404.`);
+    return sendShell(res, 404, true);
   }
 
   try {
     // Query top 10-15 public sketches with this tag
     let sketches = [];
+    let tagQueried = false; // true once a query succeeded, so an empty list really means "no sketches"
     try {
       const query = admin.firestore()
         .collection("sketches")
@@ -2039,6 +2070,7 @@ exports.tagRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (r
         .limit(50);
       
       const snapshot = await query.get();
+      tagQueried = true;
       sketches = snapshot.docs
         .map(doc => ({
           id: doc.id,
@@ -2185,13 +2217,16 @@ exports.tagRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (r
     } else {
       console.error("[tagRender] Could not find <div id=\"root\"> in HTML template");
     }
-    
+
+    // A known tag with no public sketches is a thin page: keep it working, keep it out of the index
+    // (the sitemap leaves it out by the same rule)
+    if (tagQueried && sketches.length === 0) res.set('X-Robots-Tag', 'noindex');
     res.set('Cache-Control', 'public, max-age=3600, s-maxage=7200');
     res.status(200).send(html);
     
   } catch (error) {
     console.error("[tagRender] Error:", error);
-    serveDefault();
+    sendShell(res, 503);
   }
 });
 
@@ -2199,6 +2234,7 @@ exports.tagRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (r
 // 6b. BLOG LISTING PAGE SSR RENDERER (List of Blog Posts)
 // ---------------------------------------------------------
 exports.blogListingRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (req, res) => {
+  if (redirectToCanonical(req, res)) return;
   const host = 'biblesketch.app';
   const protocol = 'https';
   const baseUrl = `${protocol}://${host}`;
@@ -2206,11 +2242,6 @@ exports.blogListingRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, 
   
   console.log(`[blogListingRender] Called - Path: ${req.path} | Method: ${req.method} | UA: ${userAgent}`);
   
-  const serveDefault = async () => {
-    const html = await getIndexHtml(baseUrl);
-    res.send(html);
-  };
-
   try {
     // Read blog posts metadata from JSON file
     const blogPostsPath = path.join(__dirname, 'blog-posts.json');
@@ -2296,7 +2327,7 @@ exports.blogListingRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, 
     
   } catch (error) {
     console.error("[blogListingRender] Error:", error);
-    serveDefault();
+    sendShell(res, 503);
   }
 });
 
@@ -2304,6 +2335,7 @@ exports.blogListingRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, 
 // 7. PRICING PAGE SSR RENDERER (Full Content for SEO)
 // ---------------------------------------------------------
 exports.pricingRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (req, res) => {
+  if (redirectToCanonical(req, res)) return;
   const host = 'biblesketch.app';
   const protocol = 'https';
   const baseUrl = `${protocol}://${host}`;
@@ -2311,11 +2343,6 @@ exports.pricingRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, asyn
   
   console.log(`[pricingRender] Called - Path: ${req.path} | Method: ${req.method} | UA: ${userAgent}`);
   
-  const serveDefault = async () => {
-    const html = await getIndexHtml(baseUrl);
-    res.send(html);
-  };
-
   try {
     let html = await getIndexHtml(baseUrl);
     
@@ -2466,7 +2493,7 @@ exports.pricingRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, asyn
     
   } catch (error) {
     console.error("[pricingRender] Error:", error);
-    serveDefault();
+    sendShell(res, 503);
   }
 });
 
@@ -2474,6 +2501,7 @@ exports.pricingRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, asyn
 // 8. ABOUT PAGE SSR RENDERER (Full Content for SEO)
 // ---------------------------------------------------------
 exports.aboutRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (req, res) => {
+  if (redirectToCanonical(req, res)) return;
   const host = 'biblesketch.app';
   const protocol = 'https';
   const baseUrl = `${protocol}://${host}`;
@@ -2481,11 +2509,6 @@ exports.aboutRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async 
   
   console.log(`[aboutRender] Called - Path: ${req.path} | Method: ${req.method} | UA: ${userAgent}`);
   
-  const serveDefault = async () => {
-    const html = await getIndexHtml(baseUrl);
-    res.send(html);
-  };
-
   try {
     let html = await getIndexHtml(baseUrl);
     
@@ -2731,7 +2754,7 @@ exports.aboutRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async 
     
   } catch (error) {
     console.error("[aboutRender] Error:", error);
-    serveDefault();
+    sendShell(res, 503);
   }
 });
 
@@ -2739,6 +2762,7 @@ exports.aboutRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async 
 // 9. PRIVACY POLICY PAGE SSR RENDERER (Full Content for SEO)
 // ---------------------------------------------------------
 exports.privacyRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (req, res) => {
+  if (redirectToCanonical(req, res)) return;
   const host = 'biblesketch.app';
   const protocol = 'https';
   const baseUrl = `${protocol}://${host}`;
@@ -2746,11 +2770,6 @@ exports.privacyRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, asyn
   
   console.log(`[privacyRender] Called - Path: ${req.path} | Method: ${req.method} | UA: ${userAgent}`);
   
-  const serveDefault = async () => {
-    const html = await getIndexHtml(baseUrl);
-    res.send(html);
-  };
-
   try {
     let html = await getIndexHtml(baseUrl);
     
@@ -2980,7 +2999,7 @@ exports.privacyRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, asyn
     
   } catch (error) {
     console.error("[privacyRender] Error:", error);
-    serveDefault();
+    sendShell(res, 503);
   }
 });
 
@@ -2988,6 +3007,7 @@ exports.privacyRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, asyn
 // 10. TERMS OF SERVICE PAGE SSR RENDERER (Full Content for SEO)
 // ---------------------------------------------------------
 exports.termsRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (req, res) => {
+  if (redirectToCanonical(req, res)) return;
   const host = 'biblesketch.app';
   const protocol = 'https';
   const baseUrl = `${protocol}://${host}`;
@@ -2995,11 +3015,6 @@ exports.termsRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async 
   
   console.log(`[termsRender] Called - Path: ${req.path} | Method: ${req.method} | UA: ${userAgent}`);
   
-  const serveDefault = async () => {
-    const html = await getIndexHtml(baseUrl);
-    res.send(html);
-  };
-
   try {
     let html = await getIndexHtml(baseUrl);
     
@@ -3173,7 +3188,7 @@ exports.termsRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async 
     
   } catch (error) {
     console.error("[termsRender] Error:", error);
-    serveDefault();
+    sendShell(res, 503);
   }
 });
 
@@ -3181,6 +3196,7 @@ exports.termsRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async 
 // 11. VERIFIED PAGE RENDERER (Simple client-side route)
 // ---------------------------------------------------------
 exports.verifiedRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async (req, res) => {
+  if (redirectToCanonical(req, res)) return;
   const host = 'biblesketch.app';
   const protocol = 'https';
   const baseUrl = `${protocol}://${host}`;
@@ -3189,24 +3205,14 @@ exports.verifiedRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, asy
   console.log(`[verifiedRender] Called - Path: ${req.path} | Method: ${req.method} | UA: ${userAgent}`);
   
   try {
-    const html = await getIndexHtml(baseUrl);
+    // Email-verification landing page: real title, never indexed
+    const html = (await getIndexHtml(baseUrl)).replace(/<title>.*?<\/title>/i, '<title>Email Verified | Bible Sketch</title>');
+    res.set('X-Robots-Tag', 'noindex');
     res.set('Cache-Control', 'public, max-age=3600, s-maxage=7200');
     res.status(200).send(html);
   } catch (error) {
     console.error("[verifiedRender] Error:", error);
-    // Fallback to production URL if local fetch fails
-    try {
-      const response = await fetch("https://biblesketch.app/index.html");
-      if (response.ok) {
-        const html = await response.text();
-        res.status(200).send(html);
-      } else {
-        res.status(500).send('Internal Server Error');
-      }
-    } catch (fallbackError) {
-      console.error("[verifiedRender] Fallback failed:", fallbackError);
-      res.status(500).send('Internal Server Error');
-    }
+    sendShell(res, 503);
   }
 });
 
