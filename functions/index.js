@@ -712,10 +712,15 @@ const sendShell = async (res, status, cacheable = false) => {
   res.status(status).send(html);
 };
 
+// A URL segment Firestore accepts as a document ID. Reserved ones (__x__, ., ..) make get() throw, which
+// would otherwise land in the 503 catch instead of a 404.
+const isDocId = (id) => Boolean(id) && id !== '.' && id !== '..' && !/^__.*__$/.test(id) && Buffer.byteLength(id) <= 1500;
+
 // 301 the default Firebase hosts to biblesketch.app, and path variants (trailing or double slashes, a wrong
 // sketch slug) to canonicalPath. Keeps the query string. Returns true when it answered the request.
+// Cached briefly: a Functions rollback doesn't purge the Hosting CDN, so a bad redirect must not stick for long.
 const WRONG_HOSTS = new Set(['biblesketch-5104c.web.app', 'biblesketch-5104c.firebaseapp.com']);
-const redirectToCanonical = (req, res, canonicalPath, cacheControl = 'public, max-age=3600, s-maxage=86400') => {
+const redirectToCanonical = (req, res, canonicalPath, cacheControl = 'public, max-age=300, s-maxage=3600') => {
   const host = String(req.get('x-fh-requested-host') || req.get('x-forwarded-host') || '').split(',')[0].trim().toLowerCase();
   const wrongHost = WRONG_HOSTS.has(host) && !req.get('cf-ray'); // Cloudflare only fronts biblesketch.app
   const path = canonicalPath || '/' + req.path.split('/').filter(Boolean).join('/');
@@ -894,8 +899,8 @@ exports.sketchRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, async
 
   console.log(`[sketchRender] Path: ${req.path} | ID: ${sketchId} | UA: ${userAgent}`);
 
-  if (!sketchId) {
-    console.log("[sketchRender] No sketch ID found, serving 404.");
+  if (!isDocId(sketchId)) {
+    console.log("[sketchRender] No valid sketch ID found, serving 404.");
     return sendShell(res, 404, true);
   }
 
@@ -1306,8 +1311,8 @@ exports.profileRender = onRequest({ timeoutSeconds: 60, memory: "256MiB" }, asyn
 
   console.log(`[profileRender] Path: ${req.path} | UID: ${profileUid} | UA: ${userAgent}`);
 
-  if (!profileUid) {
-    console.log("[profileRender] No profile UID found, serving 404.");
+  if (!isDocId(profileUid)) {
+    console.log("[profileRender] No valid profile UID found, serving 404.");
     return sendShell(res, 404, true);
   }
 

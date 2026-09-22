@@ -311,6 +311,15 @@ await step('missing pages are real 404s that still boot the app', async () => {
   }
 });
 
+await step('reserved Firestore ids are 404s, and thin pages stay working 200s', async () => {
+  for (const url of ['/coloring-page/x/__x__', '/profile/__x__']) assert.equal((await get(url)).status, 404, url);
+  for (const url of [`/profile/${bob.uid}`, '/tags/pentecost']) {
+    const res = await get(url);
+    assert.equal(res.status, 200, url);
+    assert.equal(res.headers.get('x-robots-tag'), 'noindex', url);
+  }
+});
+
 await step('a private sketch is an uncached 404 shell, without a redirect that would leak its slug', async () => {
   const privateId = `${sketchId}-private`;
   await allowed(setDoc(doc(alice.db, 'sketches', privateId), {
