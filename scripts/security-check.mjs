@@ -419,6 +419,17 @@ await step('blog post: cover is high priority, BlogPosting replaced by the clien
   assert.match(await (await get('/pricing')).text(), /<meta name="twitter:card" content="summary" \/>/, 'square logo card');
 });
 
+await step('rendered pages use only self-hosted fonts', async () => {
+  for (const url of ['/', '/gallery', '/bible-verse-coloring', '/pricing', '/about', '/privacy', '/terms', '/verified', '/blog',
+    '/tags/easter', `/profile/${bob.uid}`, `/coloring-page/ruth-2-17/${sketchId}-hero`, '/coloring-page/x/doesnotexist123']) {
+    const html = await (await get(url)).text();
+    assert.ok(isShell(html) && html.includes('/fonts/inter-v20-latin.woff2'), `${url} uses the template with self-hosted fonts`);
+    assert.ok(!html.includes('fonts.googleapis.com'), `${url} still loads Google Fonts`);
+  }
+  // (the Hosting emulator doesn't apply firebase.json headers; the immutable header is checked on the channel)
+  assert.equal((await get('/fonts/quicksand-v37-latin.woff2')).status, 200);
+});
+
 await step('sitemap: each URL once, only indexable pages, escaped XML, cacheable, bad keys 404', async () => {
   for (const [id, promptData, type] of [
     [`${sketchId}-comic`, { book: 'Jonah', chapter: 1, start_verse: 17, age_group: 'Pre-Teen', art_style: 'Comic Book' }, 'scene'],
