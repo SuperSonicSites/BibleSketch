@@ -23,6 +23,10 @@ dist-ssr
 *.sln
 *.sw?
 
+# Prompt lab: local-only tool, never pushed (holds the Gemini key and generated rounds)
+lab/
+.claude/launch.json
+
 # Firebase
 .firebase
 firebase-debug.log

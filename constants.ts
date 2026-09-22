@@ -9,11 +9,13 @@ export const APP_DOMAIN = 'https://BibleSketch.app';
 // ==========================================
 // 1. MODEL CONFIGURATION
 // ==========================================
-// "Nano Banana Pro" (gemini-3-pro-image-preview) is used for the Artist
-// because it supports multimodal input (Reference Images).
+// "Nano Banana 2" (gemini-3.1-flash-image) is the Artist: it takes style reference images,
+// matched Nano Banana Pro in prompt-lab reviews, and is ~25% cheaper and ~2x faster.
 export const MODELS = {
-  ARCHITECT: "gemini-2.5-flash",
-  ARTIST: "gemini-3-pro-image-preview",
+  // The "writer": composition quality is the bottleneck, so it gets the strongest text model.
+  // 2.5-flash dropped key scene elements (the ark); 3.8-flash still misread speech passages and staging.
+  ARCHITECT: "gemini-3.1-pro-preview",
+  ARTIST: "gemini-3.1-flash-image",
   CRITIC: "gemini-2.5-flash"
 };
 
@@ -49,41 +51,51 @@ export const REFERENCE_MAP: Record<string, string | string[]> = {
   [`${AgeGroup.TEEN}_${ArtStyle.COMIC}`]:            [`${BASE_PATH}teen-comicbook.jpg`, `${BASE_PATH}teen-comicbook-2.jpg`],
 
   // ADULT
-  [`${AgeGroup.ADULT}_${ArtStyle.CLASSIC}`]:             `${BASE_PATH}adult-classic.jpg`,
+  // adult-classic.jpg (hairline hatching) made outputs too fine; teen-classic-2.jpg made them look like teen pages.
+  // These two are user-approved prompt-lab renders (round 09: Genesis 9:12-17 and 4:3-5) that lock in the look.
+  [`${AgeGroup.ADULT}_${ArtStyle.CLASSIC}`]:             [`${BASE_PATH}adult-classic-a.jpg`, `${BASE_PATH}adult-classic-b.jpg`],
+  // adult-iconography.jpg (zentangle) was too fine too; teen-iconography.jpg is a stopgap.
   [`${AgeGroup.ADULT}_${ArtStyle.STAINED_GLASS}`]:       [`${BASE_PATH}adult-stainglass.jpg`, `${BASE_PATH}adult-stainglass-2.jpg`],
-  [`${AgeGroup.ADULT}_${ArtStyle.ICONOGRAPHY}`]:         `${BASE_PATH}adult-iconography.jpg`,
+  [`${AgeGroup.ADULT}_${ArtStyle.ICONOGRAPHY}`]:         `${BASE_PATH}teen-iconography.jpg`,
   [`${AgeGroup.ADULT}_${ArtStyle.DOODLE}`]:              [`${BASE_PATH}adult-doodle.jpg`, `${BASE_PATH}adult-doodle-2.jpg`]
 };
 
 // ==========================================
 // 3. LOGIC RULES (The "Double-Lock" Text)
 // ==========================================
+// Line work + composition per audience. Keep these free of "white background" wording:
+// the model reads it as "leave the background empty" and floats the subject.
 export const AGE_LOGIC = {
   [AgeGroup.TODDLER]: {
-    keywords: "BOLD, SIMPLE LINE ART. FULL SCENE COVERAGE. Background elements (simple waves, hills, clouds) must fill the page edge-to-edge. OUTLINE ONLY. NO SOLID FILLS. Ultra-thick uniform black outlines (approx 4-5mm). NO shading. Proportions: Natural/Realistic (Simplified). NO cartoon/chibi/bobblehead style.",
-    subjectFocus: "Focus on a single central subject or a simple pair interacting with the environment. Do NOT float subjects in empty space. Visuals must be iconic, cheerful, and easy to color. Simplify complex crowds to 1-2 representative figures. Do NOT use black ink to represent darkness or night; use symbols (stars, moon) on white space."
+    // Toddler pages need ~2 mm lines (5-7 pt); the smoke test before the r10 deploy measured 0.95 mm without this number.
+    keywords: "Very bold, simple line art for ages 2-4: ultra-thick outlines as wide as a chunky marker (about 2 mm on the printed page), the same thickness everywhere including the frame. A few large simple shapes, big open areas that are easy to color, almost no small details (no fingers, toes or tiny accessories drawn separately). Friendly rounded forms with natural body proportions (no oversized heads).",
+    subjectFocus: "One central subject or a simple pair, set in a simple setting (ground line, hills, a few clouds or waves) that fills the frame. Cheerful and iconic. Crowds become 1-2 representative figures. Night is an outlined moon and stars, never a dark sky."
   },
   [AgeGroup.YOUNG_CHILD]: {
-    keywords: "STORYBOOK LINE ART. PURE WHITE BACKGROUND. OUTLINE ONLY. NO SOLID FILLS. Consistent, medium-thick outlines (approx 2mm). Focus on clear object separation. Detailed environments are acceptable (water, sky) but must maintain large, colorable segments.",
-    subjectFocus: "Interaction between maximum two characters. Clear action. Visual storytelling that reflects specific narrative emotion."
+    keywords: "Storybook line art for ages 5-8: consistent medium-thick outlines, clear separation between objects, a readable setting (water, sky, land) divided into large colorable areas.",
+    subjectFocus: "At most two main characters with a clear action and an emotion that tells the story."
   },
   [AgeGroup.TEEN]: {
-    keywords: "ENGAGING COLORING BOOK STYLE. PURE WHITE BACKGROUND. OUTLINE ONLY. NO SOLID FILLS. NO hatching, NO cross-hatching, NO shading. Variable line weight (thick outer contours, fine inner lines). Complex composition with plenty of white space for coloring. Avoid large, solid black areas.", 
-    subjectFocus: "Cinematic composition. Clean outlines only. **Ensure natural human height and scale. No giant figures unless giants are explicitly mentioned.**"
+    keywords: "Coloring book line art for ages 9-15: thick outer contours and medium inner lines, moderate detail split into medium-size areas to color. Faces and garments stay simple: a few folds, no patterns covering clothing or wings.",
+    subjectFocus: "Cinematic composition. Natural human height and scale: no giant figures unless the passage describes giants."
   },
   [AgeGroup.ADULT]: {
-    keywords: "STRESS-RELIEF COLORING BOOK STYLE. PURE WHITE BACKGROUND. OUTLINE ONLY. NO SOLID FILLS. NO hatching, NO cross-hatching, NO texture shading. Use clean contour lines and decorative ornamental borders. Generous white space within each shape for pleasant coloring.",
-    subjectFocus: "Symbolic, elegant composition. Detail through ornamental flourishes and borders, NOT through texture fills or dense linework."
+    // Adults buy density, but this user's sweet spot is rich, not maximal: r07 👍 pages had ~500-900 areas and
+    // 0.4-0.5 mm lines, 👎 pages ~1000-1400 areas and 0.32-0.40 mm. Detail = closed shapes, never texture strokes.
+    // What the detail depicts (ornament vs dramatic scenery) is the style's job, not this rule's.
+    keywords: "Premium adult coloring page, like the bestselling adult coloring books: rich and rewarding, made for 30-90 minutes of colored-pencil or fine-marker work. Crisp, smooth, confident ink lines with a clear hierarchy: bold outer contours and solid inner lines like a 0.4 mm fine-liner, never hairline, never broken. The page is well filled with about 30-40% open space: rich, but never so dense that shapes become too small for a coloring pen. Detail is always drawn as closed shapes, never as realistic texture: no wood grain, no strand-by-strand hair, straw or fur, no hatching, no sketchy strokes.",
+    subjectFocus: "A scene with one clear focal action that reads at a glance, with enough surrounding detail to make the whole page a pleasure to color. Frame-worthy. The frame stays slim; the richness lives inside the scene."
   }
 };
 
 export const STYLE_LOGIC = {
-  [ArtStyle.SUNDAY_SCHOOL]: "Gentle aesthetic, soft rounded edges, safe for children. Expressions must reflect the narrative's emotional tone.",
-  [ArtStyle.STAINED_GLASS]: "Authentic medieval leaded glass. MOSAIC SEGMENTATION. Every shape must be fully enclosed by thick black lead-lines. No free-floating lines. Geometric subdivision. Stiff, architectural style.",
-  [ArtStyle.ICONOGRAPHY]: "Byzantine orthodox style, formal stiff pose, halos with geometric patterns, flat perspective, spiritual and solemn.",
-  [ArtStyle.COMIC]: "Dynamic comic book style, bold clean outlines, simple action lines, expressive poses, NO shading, NO hatching, NO cross-hatching.",
-  [ArtStyle.CLASSIC]: "Traditional fine art illustration. Realistic proportions, clean detailed outlines, NO hatching, NO cross-hatching, NO shading. Intricate line work for detail without fill techniques.",
-  [ArtStyle.DOODLE]: "Modern liturgical vector art. Bernardo Ramonfaur style illustration. Minimalist Catholic iconography. Faceted character design using straight lines and sharp corners. Clean vector lines with decorative hatching. Solemn and dignified atmosphere. Black and white ink sketch."
+  [ArtStyle.SUNDAY_SCHOOL]: "Warm children's Bible storybook illustration: natural proportions, gentle faces and simple clean shapes, safe for children, not cartoonish or chibi. Expressions match the story's emotional tone.",
+  [ArtStyle.STAINED_GLASS]: "Leaded stained-glass window design set inside the rectangular frame: figures and background alike are divided into glass panes by thick lead lines of even weight. Every pane is a closed shape, no free-floating lines. Stylized and architectural.",
+  [ArtStyle.ICONOGRAPHY]: "Byzantine icon composition drawn as line art: round halos decorated with simple geometric line patterns, flat space with little perspective depth, a solemn mood, and an ornamental patterned border framing the icon. Figures are dignified but alive: distinct faces, clear gestures and body turns that tell the story, not stiff identical poses.",
+  [ArtStyle.COMIC]: "Unmistakable comic-book inking: bold confident outlines, expressive faces, dynamic action poses and a few simple motion lines. Clean line inks only, no spot blacks or ink shadows.",
+  // Doré (public domain) for the drama; his engraved shading is translated into outlined, sculpted shapes.
+  [ArtStyle.CLASSIC]: "Classical biblical illustration with the emotional power and theatrical drama of Gustave Doré's Bible engravings, translated into clean line art for coloring. Stage the story's most dramatic moment as a grand tableau: a bold diagonal composition, a dramatic low or high viewpoint, sweeping gestures, wind-swept drapery and hair, faces full of awe, fear, grief or joy, and the story's own setting made vast and sublime (its skies, waters, landscape or architecture). Heavenly light breaks through parted clouds as bold radiating ray lines. All drama comes from composition, gesture and scale in outlines only: where Doré engraved shading, clouds, rocks, waves and heavy drapery folds become sculpted closed shapes. Faces and bodies have the restraint of academic engraving: correct proportions and noble, subtle expressions, never comic-book scowls or exaggerated features. Never cartoonish or photorealistic, and dramatic but never gory. Plain ancient Near-Eastern robes and cloaks (no embroidered patterns unless the text describes royal or priestly garments).",
+  [ArtStyle.DOODLE]: "Modern liturgical line art in the style of Bernardo Ramonfaur: minimalist, faceted figures built from straight lines and sharp angular corners, with angular geometric shards in the background. Areas are split into closed facets instead of being hatched. Solemn and dignified."
 };
 
 export const BIBLE_BOOKS = [
@@ -109,11 +121,13 @@ export const CHRISTIAN_GUIDELINES = `
 1. **TRINITY VISUAL RULES (STRICT):** - **God the Father:** NEVER depict as a human/man. Focus on the *effect* of His presence (light rays, wind, reaction of nature/people). Do NOT use a physical representation (like a hand) unless specifically appropriate for Genesis Creation scenes.
    - **Jesus:** Depict as a historical human male (Middle Eastern descent).
    - **Holy Spirit:** Depict as a Dove or Tongues of Fire.
+   - **The Angel of the LORD / God's glory appearing** in a bush, fire, cloud or light (e.g. Exodus 3:2): draw only the fire, cloud or light itself, never a figure inside it.
 2. **Subject Count:** Draw EXACTLY the number of characters described.
 3. **Biblical Accuracy:** - **Exodus:** Water walls must be liquid waves, not rock.
    - **Eden:** Serpents on ground/trees only (no wings/legs).
 4. **Chronological Consistency:** - **Pre-Fall (Gen 1-2):** NO SNAKES, NO APPLES, NO THORNS. NO CLOTHING. Use strategic visual modesty: foreground plants/flowers covering lower body, long hair, waist-deep water, or waist-up framing.
-   - **Post-Fall (Gen 3+):** Clothing is animal skins (rough).
+   - **After the fall, Genesis 3:7-20:** Adam and Eve wear aprons of fig leaves (3:7).
+   - **From Genesis 3:21 on:** Clothing is animal skins (rough), which God made for them.
 5. **Modesty:** Private areas must ALWAYS be concealed. Pre-Fall: use environmental/natural elements (NOT clothing). Post-Fall+: use period-appropriate attire.
 6. **Scale:** Humans should always be depicted in natural, realistic scale. NO GIANT FIGURES.
 7. **Digital Safety:** ALL SHAPES MUST BE CLOSED PATHS (for bucket fill).
@@ -145,45 +159,36 @@ export const LITURGICAL_TAGS = [
 
 export type LiturgicalTagId = typeof LITURGICAL_TAGS[number]['id'];
 
-export const GOLDEN_NEGATIVES = [
-  // THEOLOGY NEGATIVES
-  "face of god, old man in sky, bearded god, zeus, human god figure, anthropomorphic father",
-
-  // STYLE NEGATIVES
-  "color, colored, colorful, polychrome, chromatic, red, blue, green, yellow, pink, purple, orange, brown, gold, silver, rainbow",
-  "shading, grayscale, gradient, 3d render, photo, realistic texture, filled colors, grey, shadows, sketchiness, charcoal, smudge, blurry, dithering, noise, hatching, cross-hatching, wood grain texture, stippling",
-  "duplicate characters, twins, clones, multiple versions of same character, crowd, extra people, collage, split screen, comic panels",
-  "extra fingers, extra limbs, fused fingers, malformed hands, floating hands, anatomy disconnected, bad anatomy, mutation, missing limbs",
-  "text, watermark, signature, writing, letters, numbers, bible verse numbers, chapter numbers, bottom text, footer, date, copyright",
-  "modern clothing, suits, zippers, cars, buildings, glasses, wristwatches, tattoos",
-  "smiling angels (in judgment scenes), happy expressions on sad characters, laughing, celebrating, party, wedding",
-  "wings on serpents, dragons, surrealism, people merging with objects",
-
-  // Ratio & Scale
-  "hierarchical scaling, symbolic perspective, giant leader, giant moses, giant jesus, figure larger than mountains, scale mismatch, tiny crowd, forced perspective",
-
-  // Coloring Book Physics
-  "solid black areas, filled black shapes, heavy black background, dense cross-hatching, ink wash, filled hair, silhouette, inverted colors, night mode",
-  "broken lines, gaps in lines, open shapes, sketching artifacts, unfinished lines"
-].join(", ");
-
 // ==========================================
-// 6. LAYOUT RULES (V2)
+// 6. COLORING PAGE RULES (V3)
 // ==========================================
-export const LAYOUT_RULES = `
-CANVAS: FULL BLEED. Extend content to all 4 edges. NO margins. NO padding.
-ORIENTATION: Camera must be level. Keep vertical lines vertical. NO Dutch angles. NO camera tilt.
-NO decorative frames, borders, or margins.
+// Gemini image models have no negative-prompt parameter, and a long list of banned
+// words primes the very concepts it names. So the rules describe the target positively
+// and name each unwanted technique once.
+export const COLORING_PAGE_RULES = `
+1. FLAT ARTWORK ONLY: the image is the drawing itself, edge to edge. Never a photo or mockup: no book, paper sheet, page curl, desk, table, wall, background surface or drop shadow.
+2. INK ONLY: pure black lines on pure white. The image has exactly two tones, black and white (1-bit), like a crisp vector drawing.
+3. NO BLACK AREAS: black is used only for lines, never to fill an area (filled areas waste printer ink). Skies stay white even at night: the moon and stars are outlined. Hair, clothing, doorways, caves and dark objects are outlined, not filled.
+4. EMPTY SHAPES: every area enclosed by lines stays plain white, ready to be colored. Volume, depth, light and texture are shown with outlines only: no shading, shadows, hatching, cross-hatching, stippling, gradients or gray tones, and no texture strokes (wood grain, straw, fur or hair strands, brick mortar lines).
+5. CLOSED SHAPES: lines are clean and continuous and meet, so every shape is closed and can be bucket-filled. Every line belongs to the outline of a shape: no loose strokes.
+6. FRAME (every style, stained glass included): a clean, slim rectangular border runs around the scene, close to the image edges and even in width on all four sides. Any ornament in it stays narrow and never crowds the scene. Nothing in the scene overlaps or crosses it. It is outlined, never a solid black band. Outside the border there is only plain white. The scene fills the whole frame: ground, sky and setting reach the border on all four sides, never a subject floating on empty white.
+7. BIG, CLEAR SUBJECT: the main subject is large and fills most of the frame (about 80%). One clear focal action that reads at a glance; any decorative detail supports it and never competes with it.
+8. STEADY CAMERA: the horizon is level and vertical lines stay vertical, no tilted or Dutch angles. Dramatic low or high viewpoints are fine.
+9. NO TEXT: no letters, words, numbers, captions, signatures or watermarks anywhere.
+`;
+
+// References set the look (kinds of shapes, motifs, mood), not the density: several of them
+// are far more detailed than a comfortable coloring page, and some contain hatching.
+export const REFERENCE_INSTRUCTION = `
+STYLE REFERENCES: the attached images show the target look (the kind of shapes, motifs and mood). Do not copy their subject matter. Do not copy their density either: line weight and amount of detail follow the LINE WORK rule above, even when a reference is more detailed. Ignore any hatching, gray tones or black areas in them.
 `;
 
 // ==========================================
-// 7. CRITICAL NEGATIVES (V2 - Optimized)
+// 7. CRITICAL NEGATIVES (edit prompt only)
 // ==========================================
-// Reduced from ~800 to ~150 chars for faster generation
 export const CRITICAL_NEGATIVES = [
   "color", "shading", "hatching", "3d", "solid black", "sketch", "noise",
-  "text", "watermark", "border", "rotated image", "tilted frame", "diagonal border",
-  "white border", "margin", "padding", "inset image",
+  "text", "watermark", "rotated image", "tilted frame",
   "cartoon proportions", "chibi", "big head",
   "face of god", "modern", "anachronism",
   "bad anatomy", "extra limbs", "giant figure"
@@ -229,7 +234,7 @@ export const VERSE_LAYOUT_RULES = {
 // ==========================================
 // 10. BIBLE VERSE COLORING - NEGATIVES
 // ==========================================
-// Different from GOLDEN_NEGATIVES - ALLOWS text but blocks solid fills
+// ALLOWS text but blocks solid fills
 export const VERSE_NEGATIVES = [
   // Color negatives (same as scene)
   "color", "colored", "colorful", "red", "blue", "green", "yellow", "pink", "purple", "orange", "brown", "gold", "silver", "rainbow",

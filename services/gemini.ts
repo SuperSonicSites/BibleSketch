@@ -1,18 +1,14 @@
 
-import { Modality, HarmCategory, HarmBlockThreshold, GenerateContentResponse } from "@google/genai";
+import { GenerateContentResponse } from "@google/genai";
 import { httpsCallable } from "firebase/functions";
 import { functions } from "./firebase";
 import {
   MODELS,
   REFERENCE_MAP,
-  GOLDEN_NEGATIVES,
-  LAYOUT_RULES,
-  CRITICAL_NEGATIVES,
-  CHRISTIAN_GUIDELINES,
-  AGE_LOGIC,
-  STYLE_LOGIC
+  CRITICAL_NEGATIVES
 } from "../constants";
 import { AgeGroup, ArtStyle, BibleReference } from "../types";
+import { ARTIST_CONFIG, buildArtistPrompt, buildBriefPrompt, fetchPassage } from "./prompts";
 import { postProcessImage, thresholdToBW } from "../utils/imageProcessing";
 import { downloadImageAsBase64 } from "../utils/storage";
 
@@ -86,40 +82,7 @@ const generateCreativeBrief = async (
   ageGroup: AgeGroup,
   artStyle: ArtStyle
 ): Promise<ArchitectBrief> => {
-  const refString = `${reference.book} ${reference.chapter}:${reference.startVerse}${
-    reference.endVerse && reference.endVerse > reference.startVerse
-      ? '-' + reference.endVerse
-      : ''
-  }`;
-
-  const ageRules = AGE_LOGIC[ageGroup];
-  const styleRules = STYLE_LOGIC[artStyle];
-
-  const systemPrompt = `
-    ROLE: Biblical Art Director.
-    TASK: Create a JSON brief for an Image Generator.
-    INPUT: Passage "${refString}".
-    
-    TARGET AUDIENCE SPECS (${ageGroup}):
-    - Line Style: ${ageRules.keywords}
-    - Composition Focus: ${ageRules.subjectFocus}
-
-    ART STYLE SPECS (${artStyle}):
-    - Visual Rules: ${styleRules}
-    
-    CRITICAL RULES:
-    1. ${CHRISTIAN_GUIDELINES}
-    2. IF the scene is Genesis pre-fall, you MUST add "thorns, dead plants" to negative_prompt.
-    3. CHECK SCRIPTURE: If the INPUT passage does not exist in the standard protestant bible, return JSON with a single field: {"error": "INVALID_REFERENCE"}.
-
-    OUTPUT JSON:
-    {
-      "positive_prompt": "Detailed visual description incorporating the line style and composition focus...",
-      "negative_prompt": "Specific exclusion list...",
-      "validation_criteria": ["List 3 specific checks for the Critic"],
-      "reasoning": "Brief explanation"
-    }
-  `;
+  const systemPrompt = buildBriefPrompt(reference, ageGroup, artStyle, await fetchPassage(reference));
 
   try {
     // Fix: Explicitly type the retry call to GenerateContentResponse
@@ -157,9 +120,6 @@ const renderImage = async (
 
   // Use all available references
   const refUris = Array.isArray(refUriRaw) ? refUriRaw : (refUriRaw ? [refUriRaw] : []);
-
-  const ageKeywords = AGE_LOGIC[ageGroup].keywords;
-  const styleKeywords = STYLE_LOGIC[artStyle];
 
   const refImageParts: any[] = [];
 
@@ -227,57 +187,21 @@ const renderImage = async (
     }
   }
 
-  // Fallback instruction if images fail to load
-  let styleInstruction = `
-    --- VISUAL REFERENCE INSTRUCTION ---
-    Use the attached images as STRICT STYLE SOURCES. 
-    Adopt the line weight, stroke confidence, and level of detail from the references.
-    Do NOT copy the subject matter of the references; only copy the artistic style.
-  `;
-
-  if (refImageParts.length === 0) {
-    styleInstruction = `
-        --- STYLE EMULATION MODE (IMPORTANT) ---
-        You must strictly adhere to the LINE STYLE and ART TECHNIQUE described below.
-        Simulate the visual characteristics of this style perfectly based on the text description alone.
-        Generate a HIGH CONTRAST BLACK AND WHITE coloring page.
-     `;
-  }
-
-  const promptText = `
-    ${brief.positive_prompt}
-    
-    --- LAYOUT REQUIREMENTS ---
-    ${LAYOUT_RULES}
-    
-    --- TECHNICAL SPECIFICATIONS (STRICT) ---
-    1. LINE STYLE: ${ageKeywords} 
-    2. ART TECHNIQUE: ${styleKeywords}
-    
-    ${styleInstruction}
-    NEGATIVE PROMPT: ${brief.negative_prompt}, ${CRITICAL_NEGATIVES}
-  `;
+  const promptText = buildArtistPrompt(brief, ageGroup, artStyle, refImageParts.length > 0);
 
   try {
     // Fix: Explicitly type the retry call to GenerateContentResponse
     const response = await callWithRetry<GenerateContentResponse>(() => callGeminiProxy({
-      model: MODELS.ARTIST, // gemini-3-pro-image-preview
-      contents: { 
-        role: 'user', 
+      model: MODELS.ARTIST,
+      contents: {
+        role: 'user',
         parts: [
           // Ensure images come before text for optimal understanding
           ...refImageParts,
           { text: promptText }
         ]
       },
-      config: {
-        responseModalities: [Modality.IMAGE],
-        imageConfig: {
-          imageSize: "2K",
-          aspectRatio: "3:4"
-        },
-        safetySettings: [{ category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE }]
-      }
+      config: ARTIST_CONFIG
     }));
 
     // Handle cases where the image is in a different part index
@@ -431,35 +355,27 @@ export const editColoringPage = async (
     
     --- CRITICAL CANVAS RULES (MANDATORY) ---
     1. PRESERVE EXACT CANVAS SIZE: The output must have the SAME dimensions as the input.
-    2. FULL BLEED: Content must extend to ALL 4 EDGES. NO white margins. NO padding. NO borders.
-    3. DO NOT zoom out, shrink, scale down, or add any empty space around the artwork.
-    4. The artwork must FILL THE ENTIRE CANVAS edge-to-edge, exactly like the input.
-    
+    2. KEEP THE FRAMING: same border, same margins, same position and scale of the artwork as the input.
+    3. DO NOT zoom in, zoom out, crop, shrink or scale the artwork.
+
     --- STYLE CONSTRAINTS ---
-    - Maintain black and white line art style.
+    - Keep clean black-and-white line art: no shading, gray tones, hatching or solid black fills.
     - Output ONLY the modified image.
-    
-    NEGATIVE PROMPT: ${CRITICAL_NEGATIVES}, white margin, white border, padding, zoomed out, scaled down, empty space around image, frame
+
+    NEGATIVE PROMPT: ${CRITICAL_NEGATIVES}, zoomed out, zoomed in, cropped, scaled down
   `;
 
   try {
     // Fix: Explicitly type the retry call to GenerateContentResponse
     const response = await callWithRetry<GenerateContentResponse>(() => callGeminiProxy({
-      model: MODELS.ARTIST, // Updated to use 3-pro-image-preview for better quality/editing
+      model: MODELS.ARTIST,
       contents: {
         parts: [
           { text: prompt },
           { inlineData: { mimeType, data: cleanBase64 } }
         ]
       },
-      config: {
-        responseModalities: [Modality.IMAGE],
-        imageConfig: {
-          imageSize: "2K",
-          aspectRatio: "3:4"
-        },
-        safetySettings: [{ category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE }]
-      }
+      config: ARTIST_CONFIG
     }));
 
     // Extract Image
