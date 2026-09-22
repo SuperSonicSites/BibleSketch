@@ -216,7 +216,8 @@ const markdownToHtml = (markdown) => {
 
 // --- HELPER: Constants (Mirrored from Frontend) ---
 const AGE_GROUPS = ["Toddler", "Young Child", "Teen", "Adult"];
-const ART_STYLES = ["Sunday School", "Stained Glass", "Iconography", "Comic", "Classic", "Doodles"];
+const ART_STYLES = ["Sunday School", "Stained Glass", "Iconography", "Comic Book", "Classic", "Doodles"];
+const VERSE_FONT_STYLES = ["Elegant Script", "Modern Brush", "Playful", "Classic Serif"];
 
 // Liturgical tags for static sitemap generation and SSR
 const LITURGICAL_TAGS = [
@@ -385,269 +386,96 @@ exports.generateContent = onCall({
 });
 
 // ---------------------------------------------------------
-// 1. SITEMAP GENERATOR (Dynamic + Deduplicated + Segmented)
+// 1. SITEMAP (one Firestore scan, each URL in exactly one sub-sitemap)
 // ---------------------------------------------------------
+const SITE = 'https://biblesketch.app';
+// Profiles need this many public sketches to be listed. Profiles with 0 are noindexed (profileRender), so
+// every listed URL stays indexable.
+const MIN_PROFILE_SKETCHES = 3;
+const MAX_SITEMAP_URLS = 50000;
+const keyPart = (s) => s.toLowerCase().replace(/ /g, '-');
+const isoOf = (ts) => (ts && ts.toDate ? ts.toDate().toISOString() : null);
+const newestOf = (dates) => dates.filter(Boolean).sort().pop() || null; // ISO strings sort by time
+
+// Exactly one sub-sitemap per sketch; unknown values go to 'sketches-other' so no public sketch is dropped.
+const sketchBucket = (s) => {
+  const p = s.promptData || {};
+  if (s.type === 'verse') return VERSE_FONT_STYLES.includes(p.font_style) ? `verses-${keyPart(p.font_style)}` : 'sketches-other';
+  const age = p.age_group === 'Pre-Teen' ? 'Teen' : p.age_group;
+  return AGE_GROUPS.includes(age) && ART_STYLES.includes(p.art_style) ? `${keyPart(age)}-${keyPart(p.art_style)}` : 'sketches-other';
+};
+
+const readBlogPosts = () => {
+  try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'blog-posts.json'), 'utf-8')); }
+  catch (e) { console.error('blog-posts.json:', e); return []; }
+};
+
+// One scan of public sketches -> Map of sub-sitemap key -> [{ loc, lastmod, image }], newest first.
+// Only indexable URLs: no /terms, /privacy or /verified (noindex), no empty tags, no thin profiles.
+const buildSitemapGroups = async () => {
+  const snap = await admin.firestore().collection('sketches').where('isPublic', '==', true)
+    .select('userId', 'type', 'promptData', 'tags', 'createdAt', 'imageUrl', 'isBookmark').get();
+  const sketches = snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((s) => !s.isBookmark)
+    .map((s) => ({ ...s, lastmod: isoOf(s.createdAt) }))
+    .sort((a, b) => (b.lastmod || '').localeCompare(a.lastmod || ''));
+  const posts = readBlogPosts();
+  const groups = new Map(); // a Map, so ?type=constructor is a 404, not a crash
+  const add = (key, loc, lastmod = null, image = null) => {
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push({ loc: SITE + loc, lastmod, image });
+  };
+  // Listing pages show the most-blessed sketches, not the newest, so they get no lastmod
+  ['/', '/gallery', '/bible-verse-coloring', '/about', '/pricing'].forEach((p) => add('pages', p));
+  add('blog', '/blog', newestOf(posts.map((p) => p.lastmod)));
+  posts.forEach((p) => add('blog', `/blog/${p.slug}`, p.lastmod || null, p.coverImage ? SITE + p.coverImage : null));
+  LITURGICAL_TAGS.forEach((t) => {
+    const s = sketches.find((x) => Array.isArray(x.tags) && x.tags.includes(t.id));
+    if (s) add('tags', `/tags/${t.id}`, s.lastmod);
+  });
+  const byUser = new Map();
+  for (const s of sketches) {
+    if (!s.userId) continue;
+    if (!byUser.has(s.userId)) byUser.set(s.userId, []);
+    byUser.get(s.userId).push(s);
+  }
+  byUser.forEach((list, uid) => {
+    if (list.length >= MIN_PROFILE_SKETCHES) add('profiles', `/profile/${encodeURIComponent(uid)}`, list[0].lastmod);
+  });
+  sketches.forEach((s) => add(sketchBucket(s), `/coloring-page/${generateSketchSlug(s)}/${encodeURIComponent(s.id)}`, s.lastmod, s.imageUrl));
+  return groups;
+};
+
+const urlXml = (u) => `<url><loc>${escapeHtml(u.loc)}</loc>${u.lastmod ? `<lastmod>${u.lastmod}</lastmod>` : ''}`
+  + `${typeof u.image === 'string' && u.image.startsWith('https://') ? `<image:image><image:loc>${escapeHtml(u.image)}</image:loc></image:image>` : ''}</url>`;
+
 exports.sitemap = onRequest(async (req, res) => {
-  const host = 'biblesketch.app';
-  const protocol = 'https';
-  const baseUrl = `${protocol}://${host}`;
-  
-  // type = 'index' | 'recent' | 'tags' | 'toddler-sunday-school' etc.
-  const type = req.query.type || 'index';
-
+  const type = String(req.query.type || 'index');
   try {
-    // --- A. SITEMAP INDEX ---
+    const groups = await buildSitemapGroups();
+    let xml;
     if (type === 'index') {
-      let sitemaps = [];
-
-      // 1. Main "Recent" Sitemap
-      sitemaps.push(`${baseUrl}/sitemap.xml?type=recent`);
-
-      // 1.5 "Popular" Sitemap (Most Blessed)
-      sitemaps.push(`${baseUrl}/sitemap.xml?type=popular`);
-
-      // 2. "Tags" Sitemap (NEW)
-      sitemaps.push(`${baseUrl}/sitemap.xml?type=tags`);
-
-      // 2.5 "Blog" Sitemap (Blog posts)
-      sitemaps.push(`${baseUrl}/sitemap.xml?type=blog`);
-
-      // 3. "Profiles" Sitemap (Public user galleries)
-      sitemaps.push(`${baseUrl}/sitemap.xml?type=profiles`);
-
-      // 4. Generate Topic Sitemaps (Valid Age + Style combinations only)
-      const VALID_COMBINATIONS = [
-        { age: "Toddler", styles: ["Sunday School"] },
-        { age: "Young Child", styles: ["Sunday School", "Stained Glass", "Iconography", "Comic"] },
-        { age: "Teen", styles: ["Classic", "Stained Glass", "Iconography", "Comic"] },
-        { age: "Adult", styles: ["Classic", "Stained Glass", "Iconography", "Doodles"] }
-      ];
-
-      VALID_COMBINATIONS.forEach(group => {
-        group.styles.forEach(style => {
-           const key = `${group.age.toLowerCase().replace(/ /g, '-')}-${style.toLowerCase().replace(/ /g, '-')}`;
-           sitemaps.push(`${baseUrl}/sitemap.xml?type=${key}`);
-        });
-      });
-
-      // 5. Generate Verse Art Sitemaps (by font style)
-      const VERSE_FONT_STYLES = ["Elegant Script", "Modern Brush", "Playful", "Classic Serif"];
-      VERSE_FONT_STYLES.forEach(fontStyle => {
-        const key = `verses-${fontStyle.toLowerCase().replace(/ /g, '-')}`;
-        sitemaps.push(`${baseUrl}/sitemap.xml?type=${key}`);
-      });
-
-      let xml = `<?xml version="1.0" encoding="UTF-8"?>
-      <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`;
-
-      sitemaps.forEach(url => {
-          xml += `
-          <sitemap>
-            <loc>${url}</loc>
-            <lastmod>${new Date().toISOString()}</lastmod>
-          </sitemap>`;
-      });
-      
-      xml += `</sitemapindex>`;
-      
-      res.set("Content-Type", "application/xml");
-      return res.status(200).send(xml);
-    }
-
-    // --- B. TAGS SITEMAP (Static Pages) ---
-    if (type === 'tags') {
-        let xml = `<?xml version="1.0" encoding="UTF-8"?>
-        <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`;
-
-        LITURGICAL_TAGS.forEach(tag => {
-            xml += `
-            <url>
-                <loc>${baseUrl}/tags/${tag.id}</loc>
-                <changefreq>weekly</changefreq>
-                <priority>0.9</priority>
-            </url>`;
-        });
-
-        xml += `</urlset>`;
-        res.set("Content-Type", "application/xml");
-        return res.status(200).send(xml);
-    }
-
-    // --- B.5 BLOG SITEMAP (Blog Posts) ---
-    if (type === 'blog') {
-        let xml = `<?xml version="1.0" encoding="UTF-8"?>
-        <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`;
-
-        // Add blog index page
-        xml += `
-        <url>
-            <loc>${baseUrl}/blog</loc>
-            <changefreq>weekly</changefreq>
-            <priority>0.9</priority>
-        </url>`;
-
-        // Read blog posts metadata
-        try {
-            const blogPostsPath = path.join(__dirname, 'blog-posts.json');
-            let blogPosts = [];
-            
-            if (fs.existsSync(blogPostsPath)) {
-                const blogPostsData = fs.readFileSync(blogPostsPath, 'utf-8');
-                blogPosts = JSON.parse(blogPostsData);
-            } else {
-                console.warn('blog-posts.json not found, blog sitemap will only include index page');
-            }
-
-            // Add each blog post
-            blogPosts.forEach(post => {
-                xml += `
-        <url>
-            <loc>${baseUrl}/blog/${post.slug}</loc>
-            <lastmod>${post.lastmod}</lastmod>
-            <changefreq>monthly</changefreq>
-            <priority>0.8</priority>
-        </url>`;
-            });
-        } catch (error) {
-            console.error('Error reading blog posts:', error);
-            // Continue with just the index page if there's an error
-        }
-
-        xml += `</urlset>`;
-        res.set("Content-Type", "application/xml");
-        return res.status(200).send(xml);
-    }
-
-    // --- C. PROFILES SITEMAP (Public user galleries) ---
-    if (type === 'profiles') {
-        const publicSketches = await admin.firestore()
-            .collection("sketches")
-            .where("isPublic", "==", true)
-            .select("userId")
-            .get();
-
-        const userIds = [...new Set(publicSketches.docs.map(d => d.data().userId))];
-
-        let xml = `<?xml version="1.0" encoding="UTF-8"?>
-        <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`;
-
-        userIds.forEach(uid => {
-            xml += `
-            <url>
-                <loc>${baseUrl}/profile/${uid}</loc>
-                <changefreq>weekly</changefreq>
-                <priority>0.6</priority>
-            </url>`;
-        });
-
-        xml += `</urlset>`;
-        res.set("Content-Type", "application/xml");
-        return res.status(200).send(xml);
-    }
-
-    // --- D. CONTENT SITEMAPS ---
-    let query = admin.firestore().collection("sketches").where("isPublic", "==", true);
-
-    // Apply Filters based on 'type'
-    if (type === 'recent') {
-       query = query.orderBy("createdAt", "desc").limit(5000);
-    } else if (type === 'popular') {
-       query = query.orderBy("blessCount", "desc").limit(1000);
+      xml = '<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+        + [...groups].map(([key, urls]) => {
+          const last = newestOf(urls.map((u) => u.lastmod));
+          return `<sitemap><loc>${SITE}/sitemap.xml?type=${key}</loc>${last ? `<lastmod>${last}</lastmod>` : ''}</sitemap>`;
+        }).join('')
+        + '</sitemapindex>';
+    } else if (groups.has(type)) {
+      const urls = groups.get(type);
+      // ponytail: truncates past 50k URLs per sub-sitemap; add &page=N chunking when a bucket nears that
+      if (urls.length > MAX_SITEMAP_URLS) console.error(`sitemap ${type}: ${urls.length} URLs, truncated`);
+      xml = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">'
+        + urls.slice(0, MAX_SITEMAP_URLS).map(urlXml).join('') + '</urlset>';
     } else {
-       // Parse "toddler-sunday-school" back to "Toddler" and "Sunday School"
-       let found = false;
-       
-       for (const age of AGE_GROUPS) {
-         for (const style of ART_STYLES) {
-            const key = `${age.toLowerCase().replace(/ /g, '-')}-${style.toLowerCase().replace(/ /g, '-')}`;
-            if (key === type) {
-                if (age === "Teen") {
-                   query = query.where("promptData.age_group", "in", ["Teen", "Pre-Teen"]);
-                } else {
-                   query = query.where("promptData.age_group", "==", age);
-                }
-
-                query = query.where("promptData.art_style", "==", style)
-                             .orderBy("createdAt", "desc")
-                             .limit(5000);
-                found = true;
-                break;
-            }
-         }
-         if (found) break;
-       }
-
-       // Check for verse font style sitemaps
-       if (!found && type.startsWith('verses-')) {
-         const VERSE_FONT_STYLES = ["Elegant Script", "Modern Brush", "Playful", "Classic Serif"];
-         for (const fontStyle of VERSE_FONT_STYLES) {
-           const key = `verses-${fontStyle.toLowerCase().replace(/ /g, '-')}`;
-           if (key === type) {
-             query = query
-               .where("type", "==", "verse")
-               .where("promptData.font_style", "==", fontStyle)
-               .orderBy("createdAt", "desc")
-               .limit(5000);
-             found = true;
-             break;
-           }
-         }
-       }
-
-       if (!found) {
-         return res.status(404).send("Sitemap topic not found");
-       }
+      return res.status(404).send('Sitemap not found'); // retired keys (recent, popular, *-comic) and empty groups
     }
-
-    // Execute Query
-    const sketchesSnapshot = await query.get();
-
-    let xml = `<?xml version="1.0" encoding="UTF-8"?>
-    <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`;
-
-    // Add Static Routes (Only in 'recent' to avoid duplicates)
-    if (type === 'recent') {
-        const staticRoutes = ["/", "/gallery", "/blog", "/about", "/pricing", "/terms"];
-        staticRoutes.forEach(route => {
-            xml += `
-            <url>
-                <loc>${baseUrl}${route}</loc>
-                <changefreq>weekly</changefreq>
-                <priority>0.8</priority>
-            </url>`;
-        });
-    }
-
-    // Add Dynamic Sketch Routes
-    sketchesSnapshot.forEach(doc => {
-        const data = doc.data();
-        const slug = generateSketchSlug(data);
-        
-        xml += `
-          <url>
-            <loc>${baseUrl}/coloring-page/${slug}/${doc.id}</loc>
-            <changefreq>monthly</changefreq>
-            <priority>0.5</priority>
-          </url>`;
-    });
-
-    xml += `</urlset>`;
-
-    res.set("Content-Type", "application/xml");
+    res.set('Content-Type', 'application/xml; charset=utf-8');
+    // 1 h while the new structure settles; raise s-maxage to 21600 (6 h) once Search Console shows it clean
+    res.set('Cache-Control', 'public, max-age=3600, s-maxage=3600');
     return res.status(200).send(xml);
-
   } catch (error) {
-    console.error("Sitemap Error:", error);
-    // Fallback for missing index errors
-    if (error.code === 9 || error.message.includes("index")) {
-        return res.status(500).send(`
-            <error>
-                <message>Missing Firestore Index. Please create composite index for query.</message>
-                <details>${error.message}</details>
-            </error>
-        `);
-    }
-    res.status(500).end();
+    console.error('Sitemap Error:', error);
+    return res.status(500).end();
   }
 });
 
