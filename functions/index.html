@@ -34,6 +34,11 @@
 
   <!-- Only Quicksand (headings) is preloaded: Tailwind's font-sans overrides Inter on almost all text -->
   <link rel="preload" href="/fonts/quicksand-v37-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <!-- ponytail: layout patches for the live bundle, delete with the front-end rebuild.
+       overflow-x: the home/verse hero's decorative blur and badge stick out 33px (horizontal scroll on desktop).
+       min-height: while React shows "Loading…" the content area is short and the footer sits in view, then jumps
+       when the data arrives (mobile CLS 0.19 on sketch and gallery pages); keep the footer below the fold. -->
+  <style>html,body{overflow-x:clip}#root>div>.flex-grow{min-height:100vh}</style>
   <!-- Inter 400/600 + Quicksand 600/700, self-hosted (same @font-face rules Google Fonts served) -->
   <style>
     @font-face{font-family:'Inter';font-style:normal;font-weight:400;font-display:swap;src:url(/fonts/inter-v20-cyrillic-ext.woff2) format('woff2');unicode-range:U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F}
