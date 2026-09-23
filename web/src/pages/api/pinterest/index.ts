@@ -26,9 +26,10 @@ ${body}</body></html>`,
 const connectBlock = `<p>Connect the Bible Sketch Pinterest account. You'll sign in on Pinterest and approve access;
 only @${ACCOUNT} can be connected.</p><p><a class="btn" href="/api/pinterest/connect">Connect Pinterest</a></p>`;
 
-export const GET: APIRoute = async ({ cache, cookies }) => {
+export const GET: APIRoute = async ({ url, cache, cookies }) => {
   cache.set(false);
-  if (!(await isOwner(cookies.get(OWNER_COOKIE)?.value))) {
+  if (url.searchParams.has('signout')) cookies.delete(OWNER_COOKIE, { path: '/api/pinterest' });
+  if (url.searchParams.has('signout') || !(await isOwner(cookies.get(OWNER_COOKIE)?.value))) {
     return page(`${(await connected()) ? '<p class="muted">An account is connected. Connect again to open a session.</p>' : ''}${connectBlock}`);
   }
   const today = new Date(Date.now() - 86400_000).toISOString().slice(0, 10);
@@ -39,7 +40,7 @@ export const GET: APIRoute = async ({ cache, cookies }) => {
       return `<option value="${esc(e.sketchId)}"${done ? ' disabled' : ''}>${esc(`${e.release} · ${e.board} · ${e.title}${done ? ' (published)' : ''}`)}</option>`;
     }),
   );
-  return page(`<p class="ok">Connected as <b>@${ACCOUNT}</b>.</p>
+  return page(`<p class="ok">Connected as <b>@${ACCOUNT}</b>. <a href="/api/pinterest?signout">Sign out</a></p>
 <form method="post"><label for="sketchId"><b>Pin to publish</b> (from the reviewed calendar)</label>
 <select id="sketchId" name="sketchId">${options.join('')}</select>
 <button class="btn" type="submit">Publish to Pinterest</button></form>

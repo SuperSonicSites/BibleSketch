@@ -120,9 +120,10 @@ export async function api(path: string, init: { method?: string; body?: unknown 
 }
 
 // ---------------------------------------------------------------- publishing
-// Our board by name; in Sandbox the production boards are invisible, so a Sandbox copy is created once.
+// Our board by name. Sandbox hides the production boards but still refuses a duplicate name (and names of 50+
+// characters), so its copies are named "Sandbox - <board>" and created once.
 async function boardId(board: PinEntry['board']) {
-  const name = BOARD_NAMES[board];
+  const name = sandbox() ? `Sandbox - ${board}` : BOARD_NAMES[board];
   let bookmark: string | undefined;
   for (let page = 0; page < 20; page++) {
     const j = await api(`/boards?page_size=250${bookmark ? `&bookmark=${encodeURIComponent(bookmark)}` : ''}`);
