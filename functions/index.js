@@ -3675,10 +3675,11 @@ exports.editSketch = onCall(GENERATION_OPTS, async (request) => {
 
   if (op === 'addRef') {
     if (s.userId !== uid || s.isBookmark) throw new HttpsError('permission-denied', 'Only the owner can change this sketch.');
+    if (s.refAdded) return { status: 'done', sketchId, imageUrl: s.imageUrl };
     const pd = s.promptData || {};
     const text = GP.formatReference({ book: GP.displayBook(pd.book || ''), chapter: pd.chapter, startVerse: pd.start_verse, endVerse: pd.end_verse });
     const files = await uploadSketchPng(uid, await GI.toPng(await GI.addCaption(source, text)));
-    await snap.ref.update({ ...files, updatedAt: FieldValue.serverTimestamp() });
+    await snap.ref.update({ ...files, refAdded: true, updatedAt: FieldValue.serverTimestamp() });
     await deleteSketchFiles(s.storagePath);
     return { status: 'done', sketchId, imageUrl: files.imageUrl };
   }
