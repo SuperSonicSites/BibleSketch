@@ -45,7 +45,7 @@ If any Workers item fails, switch to the React Router v8 fallback.
 ### Rollout phases (each shippable and reversible)
 1. `/about`, `/privacy`, `/terms`, `/verified`, `/blog` and posts (MDX collection; `<<sketch>>` / `<<CTA>>` shortcodes become components).
 2. `/coloring-page/*`, `/tags/*`, `/profile/*` (305 + 15 + 16 URLs), plus the purge trigger.
-3. `/gallery` (+ modal) and `/pricing` (Zoho round trip, `/verified` return, Zaraz purchase event with the real price: the bundle hard-codes 4.99, the plan is $7).
+3. `/gallery` (+ modal) and `/pricing` (Zoho round trip, `/verified` return, Zaraz purchase events as the bundle sends them: Premium 4.99 USD, packs 4.99/14.99/29.99 USD; owner confirmed 2026-09-23 that prices are in USD, about $7 CAD).
 4. `/` (Scene Art) and `/bible-verse-coloring` (Verse Art, rebuilt from the minified bundle: it only exists there). Fold in the `coloring-page-quality` branch (new prompts and models).
 5. Remove the 13 render functions, the old SPA routes, and the template patches (`functions/index.html` rating stripper and layout CSS). Keep old hashed assets forever.
 
