@@ -1,11 +1,13 @@
-// POST /api/purge  { ids: string[] }  header x-purge-secret: <PURGE_SECRET>
+// POST /api/purge  { ids: string[], lists?: string[] }  header x-purge-secret: <PURGE_SECRET>
 // Called by the onSketchWritten Cloud Function when a sketch is published, made private, deleted or retagged.
 // Drops, globally, every cached response tagged sketch:<id> (the page, its slug redirects, its 404) and
-// related:<id> (other pages that list the sketch in their related grid).
+// related:<id> (other pages that list the sketch in their related grid). `lists` adds the listing pages a newly
+// published sketch should appear on right away: gallery, home, verse, tag:<id>, profile:<uid>.
 import type { APIRoute } from 'astro';
 import { env } from 'cloudflare:workers';
 
-const MAX_IDS = 50; // 2 tags per id; a purge call takes up to 100 tags
+const MAX_IDS = 40; // 2 tags per id + up to 20 lists; a purge call takes up to 100 tags
+const LIST = /^(gallery|home|verse|tag:[a-z-]{1,30}|profile:[A-Za-z0-9]{1,128})$/;
 
 // Constant-time compare so the secret can't be guessed byte by byte from response timing.
 async function secretMatches(given: string, expected: string) {
@@ -23,11 +25,12 @@ export const POST: APIRoute = async ({ request, cache }) => {
   if (!(await secretMatches(request.headers.get('x-purge-secret') ?? '', expected))) {
     return new Response('unauthorized', { status: 401 });
   }
-  const body = (await request.json().catch(() => null)) as { ids?: unknown } | null;
+  const body = (await request.json().catch(() => null)) as { ids?: unknown; lists?: unknown } | null;
   const ids = Array.isArray(body?.ids) ? body.ids.filter((x): x is string => typeof x === 'string' && x.length > 0) : [];
   if (ids.length === 0 || ids.length > MAX_IDS) return new Response(`ids: 1-${MAX_IDS} strings`, { status: 400 });
+  const lists = (Array.isArray(body?.lists) ? body.lists : []).filter((x): x is string => typeof x === 'string' && LIST.test(x)).slice(0, 20);
   try {
-    await cache.invalidate({ tags: ids.flatMap((id) => [`sketch:${id}`, `related:${id}`]) });
+    await cache.invalidate({ tags: [...ids.flatMap((id) => [`sketch:${id}`, `related:${id}`]), ...lists] });
   } catch (e) {
     // Local workerd has no Workers Cache (cache.purge is undefined); in production this is a real failure the
     // caller must log.

@@ -10,7 +10,7 @@ import Pagination from '../components/Pagination.astro';
 import GalleryTabs from '../components/GalleryTabs.tsx';
 import { query } from '../lib/firestore.ts';
 import { ORIGIN, TAG_LABELS, loadAuthors, type Sketch } from '../lib/sketch.ts';
-import { applyFilters, filterQuery, paginate, parseFilters } from '../lib/listing.ts';
+import { applyFilters, availableFilters, filterQuery, paginate, parseFilters } from '../lib/listing.ts';
 
 const f = parseFilters(Astro.url.searchParams, { sort: 'newest', tags: Object.keys(TAG_LABELS) });
 let all: Sketch[] = [];
@@ -48,7 +48,7 @@ const description = 'Browse thousands of free printable Bible coloring pages. Di
     <GalleryTabs client:idle />
 
     <section id="community" aria-label="Community coloring pages">
-      <FilterForm filters={f} action="/gallery" showTag defaultSort="newest" />
+      <FilterForm filters={f} action="/gallery#community" showTag defaultSort="newest" available={availableFilters(all, Object.keys(TAG_LABELS))} />
       {failed ? (
         <p class="text-center py-16 text-gray-500">The gallery is temporarily unavailable. Please try again in a couple of minutes.</p>
       ) : items.length === 0 ? (
@@ -62,7 +62,7 @@ const description = 'Browse thousands of free printable Bible coloring pages. Di
           {items.map((s) => <ListingCard sketch={s} author={s.userId ? authors.get(s.userId) : undefined} />)}
         </div>
       )}
-      <Pagination page={page} pages={pages} href={(n) => '/gallery' + filterQuery(f, 'newest', n)} />
+      <Pagination page={page} pages={pages} href={(n) => '/gallery' + filterQuery(f, 'newest', n) + '#community'} />
     </section>
   </div>
 </Base>

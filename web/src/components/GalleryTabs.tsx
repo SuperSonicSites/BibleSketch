@@ -88,7 +88,7 @@ export default function GalleryTabs() {
           {tabs.map(([t, label, Icon]) => (
             <button key={t} type="button" role="tab" aria-selected={tab === t}
               onClick={() => (t === 'community' || user ? go(t) : requireAuth(() => go(t), 'login'))}
-              className={`flex items-center gap-2 px-4 md:px-6 py-2.5 rounded-full text-sm font-bold transition-all ${tab === t ? 'bg-[#7C3AED] text-white shadow-md' : 'text-gray-500 hover:text-[#7C3AED]'}`}>
+              className={`flex items-center gap-2 px-3 sm:px-4 md:px-6 py-2.5 rounded-full text-sm font-bold whitespace-nowrap transition-all ${tab === t ? 'bg-[#7C3AED] text-white shadow-md' : 'text-gray-500 hover:text-[#7C3AED]'}`}>
               <Icon className="w-4 h-4" aria-hidden="true" />{label}
             </button>
           ))}
@@ -152,6 +152,7 @@ export default function GalleryTabs() {
       {open && (
         <Dialog label="Your coloring page" onClose={() => setOpen(null)} cardClass="max-w-6xl max-h-[92vh] overflow-y-auto p-6 md:p-8">
           <SketchOwnerView
+            inGallery
             sketch={open}
             onSwitch={(next) => { setItems((xs) => [next, ...xs]); setOpen(next); }}
             onChange={(patch) => {

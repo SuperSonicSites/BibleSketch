@@ -43,6 +43,7 @@ const schema = jsonLd({
 ---
 <Base title={title} description={description} canonical={`${ORIGIN}/`} image={`${ORIGIN}/og.png`} imageAlt={title} ogType="website" schemas={[schema]}>
   <main class="max-w-7xl mx-auto px-4 mt-8 md:mt-16">
+    <script is:inline>if (/[?&]sketch=/.test(location.search)) document.documentElement.setAttribute('data-opening', '');</script>
     <div class="text-center mb-10" data-form-only>
       <h1 class="font-display text-4xl md:text-6xl font-bold text-[#1F2937] leading-tight mb-4">
         Create Faith-Filled <br class="hidden md:block" />

@@ -57,7 +57,8 @@ const active = filters.book || filters.age || filters.style || filters.tag;
     form.addEventListener('change', () => {
       const q = new URLSearchParams();
       for (const [k, v] of new FormData(form)) if (v && !(k === 'sort' && v === form.dataset.defaultSort)) q.set(k, String(v));
-      location.href = form.action.split('?')[0] + (q.size ? `?${q}` : '');
+      const [base, hash] = form.action.split('#'); // an action may end in #results to land on the list
+      location.href = base.split('?')[0] + (q.size ? `?${q}` : '') + (hash ? `#${hash}` : '');
     }),
   );
 </script>

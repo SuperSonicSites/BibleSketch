@@ -68,6 +68,16 @@ export function paginate<T>(items: T[], page: number) {
   return { items: items.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE), page: current, pages };
 }
 
+// Filter options limited to what a listing contains (no choice that can only lead to "No sketches found").
+export function availableFilters(all: Sketch[], tags: string[]) {
+  return {
+    books: BIBLE_BOOKS.filter((b) => all.some((s) => s.promptData?.book === b)),
+    ages: AGE_GROUPS.filter((a) => all.some((s) => ageOf(s) === a)),
+    styles: ART_STYLES.filter((st) => all.some((s) => s.promptData?.art_style === st)),
+    tags: tags.filter((t) => all.some((s) => s.tags?.includes(t))),
+  };
+}
+
 // Card second line (bundle gallery card): "Elegant Script" for Verse Art, else "Sunday School • Toddler".
 export function cardSubtitle(s: Sketch): string {
   if (s.type === 'verse') return s.promptData?.font_style || 'Verse Art';

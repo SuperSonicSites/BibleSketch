@@ -9,7 +9,7 @@ import FilterForm from '../../components/FilterForm.astro';
 import Pagination from '../../components/Pagination.astro';
 import { getDoc, query } from '../../lib/firestore.ts';
 import { ORIGIN, TAG_LABELS, canonicalPath, isDocId, jsonLd, reference, type Sketch } from '../../lib/sketch.ts';
-import { AGE_GROUPS, ART_STYLES, BIBLE_BOOKS, applyFilters, filterQuery, paginate, parseFilters } from '../../lib/listing.ts';
+import { applyFilters, availableFilters, filterQuery, paginate, parseFilters } from '../../lib/listing.ts';
 
 const uid = Astro.params.uid ?? '';
 if (!isDocId(uid)) return Astro.rewrite('/404');
@@ -39,13 +39,7 @@ const path = `/profile/${encodeURIComponent(uid)}`;
 const canonical = `${ORIGIN}${path}`;
 
 // Filter options come from what this creator has published (bundle behaviour).
-const present = <T,>(list: T[], has: (v: T) => boolean) => list.filter(has);
-const available = {
-  books: present(BIBLE_BOOKS, (b) => all.some((s) => s.promptData?.book === b)),
-  ages: present(AGE_GROUPS, (a) => all.some((s) => (s.promptData?.age_group === 'Pre-Teen' ? 'Teen' : s.promptData?.age_group) === a)),
-  styles: present(ART_STYLES, (st) => all.some((s) => s.promptData?.art_style === st)),
-  tags: present(Object.keys(TAG_LABELS), (t) => all.some((s) => s.tags?.includes(t))),
-};
+const available = availableFilters(all, Object.keys(TAG_LABELS));
 
 if (failed) {
   Astro.cache.set(false);

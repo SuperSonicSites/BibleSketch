@@ -7,7 +7,7 @@ import { useStore } from '@nanostores/react';
 import { BookOpen, Check, ChevronDown, PencilLine, Search, Sparkles, ArrowLeft } from 'lucide-react';
 import Button from './shell/Button.tsx';
 import SketchOwnerView from './SketchOwnerView.tsx';
-import { $profile, $user, requireAuth } from '../lib/store.ts';
+import { $authReady, $profile, $user, requireAuth } from '../lib/store.ts';
 import { BIBLE_BOOKS } from '../lib/listing.ts';
 import type { Sketch } from '../lib/sketch.ts';
 
@@ -81,6 +81,7 @@ function BookPicker({ value, onChange }: { value: string; onChange: (b: string) 
     return () => document.removeEventListener('mousedown', close);
   }, [open]);
   const books = BIBLE_BOOKS.filter((b) => b.toLowerCase().includes(q.toLowerCase()));
+  const pick = (b: string) => { onChange(b); setQ(''); setOpen(false); };
   return (
     <div className="relative" ref={box}>
       <span className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Book</span>
@@ -93,13 +94,14 @@ function BookPicker({ value, onChange }: { value: string; onChange: (b: string) 
           <div className="p-2 border-b border-gray-100 flex items-center gap-2">
             <Search className="w-4 h-4 text-gray-400 ml-2" />
             <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search book..." aria-label="Search book"
+              onKeyDown={(e) => { if (e.key === 'Enter' && books[0]) { e.preventDefault(); pick(books[0]); } if (e.key === 'Escape') setOpen(false); }}
               className="flex-1 px-2 py-2 text-sm focus:outline-none" />
           </div>
           <ul role="listbox" className="overflow-y-auto p-1">
             {books.length === 0 && <li className="px-4 py-3 text-sm text-gray-400">No books found</li>}
             {books.map((b) => (
               <li key={b} role="option" aria-selected={b === value}>
-                <button type="button" onClick={() => { onChange(b); setQ(''); setOpen(false); }}
+                <button type="button" onClick={() => pick(b)}
                   className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-50 ${b === value ? 'text-[#7C3AED] font-bold' : 'text-gray-700'}`}>
                   {b}
                 </button>
@@ -133,7 +135,7 @@ function Loader({ status }: { status: string }) {
           <p className="text-lg text-gray-700 italic">“{QUOTES[quote][0]}”</p>
           <footer className="mt-3 text-sm font-bold text-[#7C3AED]">{QUOTES[quote][1]}</footer>
         </blockquote>
-        <p className="mt-6 text-sm text-gray-500">This takes about a minute. You can leave this page open; your page is saved to My Gallery.</p>
+        <p className="mt-6 text-sm text-gray-500">This takes about a minute. If you close this page, it still finishes and waits for you in My Gallery.</p>
       </div>
     </div>
   );
@@ -141,6 +143,10 @@ function Loader({ status }: { status: string }) {
 
 export default function Generator({ kind }: { kind: Kind }) {
   const user = useStore($user);
+  const ready = useStore($authReady);
+  const profile = useStore($profile);
+  // A ?sketch=<id> link: show a placeholder, not the form, until the saved page is loaded (or can't be).
+  const [opening, setOpening] = useState(false);
   const [ref, setRef] = useState<Ref>(kind === 'scene' ? { book: 'Daniel', chapter: 6, startVerse: 16 } : { book: 'Psalms', chapter: 23, startVerse: 1 });
   const [age, setAge] = useState<string>('Young Child');
   const [style, setStyle] = useState('Sunday School');
@@ -157,7 +163,12 @@ export default function Generator({ kind }: { kind: Kind }) {
     if (fresh) { setCelebrate(true); setTimeout(() => setCelebrate(false), 4000); }
   };
   // The page's hero, example and community grid hide while a result is shown (global.css).
-  useEffect(() => { document.body.toggleAttribute('data-result', Boolean(result)); }, [result]);
+  useEffect(() => { document.body.toggleAttribute('data-result', Boolean(result || opening)); }, [result, opening]);
+  useEffect(() => { if (new URLSearchParams(location.search).has('sketch')) setOpening(true); }, []);
+  // The page's early "opening" mark (inline script) goes once the island shows its placeholder or the result.
+  const settle = () => document.documentElement.removeAttribute('data-opening');
+  useEffect(() => { if (opening || result) settle(); }, [opening, result]);
+  useEffect(() => { if (ready && !user) { setOpening(false); settle(); } }, [ready, user]);
   const back = () => {
     setResult(null);
     history.replaceState(null, '', location.pathname);
@@ -178,6 +189,7 @@ export default function Generator({ kind }: { kind: Kind }) {
       m.showGenerationError(e, kind === 'verse' ? 'generate verse art' : 'generate a coloring page');
     } finally {
       setStatus(null);
+      settle();
     }
   };
 
@@ -188,11 +200,12 @@ export default function Generator({ kind }: { kind: Kind }) {
     gen().then((m) => {
       const pending = m.pendingGeneration();
       if (pending && (pending.data.kind === kind || pending.fn === 'editSketch')) {
+        setOpening(false);
         setStatus('Finishing your coloring page...');
         const p = m.resumeGeneration();
         if (p) finish(p);
       } else if (id) {
-        m.loadSketch(id).then((s) => s && s.userId === user.uid && show(s, false)).catch(() => {});
+        m.loadSketch(id).then((s) => s && s.userId === user.uid && show(s, false)).catch(() => {}).finally(() => { setOpening(false); settle(); });
       }
     });
   }, [user?.uid]);
@@ -209,6 +222,14 @@ export default function Generator({ kind }: { kind: Kind }) {
       : { kind, ...base, font }));
   }, 'signup');
 
+  if (opening && !result) {
+    return (
+      <div className="bg-white rounded-3xl shadow-xl border border-gray-100 p-10 flex flex-col items-center gap-4" role="status">
+        <div className="w-12 h-12 border-4 border-purple-200 border-t-[#7C3AED] rounded-full animate-spin" />
+        <p className="font-bold text-gray-600">Opening your coloring page...</p>
+      </div>
+    );
+  }
   if (result) {
     return (
       <div className="relative">
@@ -284,7 +305,7 @@ export default function Generator({ kind }: { kind: Kind }) {
             <p className="font-bold text-gray-800 mb-2">Choose Font Style</p>
             <div className="grid grid-cols-2 gap-3" role="radiogroup" aria-label="Font style">
               {FONTS.map(([name, hint]) => (
-                <button key={name} type="button" role="radio" aria-checked={font === name} onClick={() => setFont(name)}
+                <button key={name} type="button" role="radio" aria-checked={font === name} aria-label={`${name}: ${hint}`} onClick={() => setFont(name)}
                   className={`relative text-left p-4 rounded-2xl border-2 transition-all ${font === name ? 'border-[#7C3AED] bg-purple-50' : 'border-gray-100 bg-white hover:border-purple-200'}`}>
                   {font === name && <span className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-[#FCD34D] flex items-center justify-center"><Check className="w-4 h-4 text-purple-900" /></span>}
                   <span className="block font-bold text-gray-800">{name}</span>
@@ -305,7 +326,10 @@ export default function Generator({ kind }: { kind: Kind }) {
           <Button size="lg" className="w-full gap-2" onClick={create} isLoading={Boolean(status)}>
             <Sparkles className="w-5 h-5" />{status ? (kind === 'verse' ? 'Creating...' : 'Generating...') : kind === 'verse' ? 'Create Verse Art' : 'Create Coloring Page'}
           </Button>
-          <p className="text-center text-sm text-gray-400 mt-3">Uses 1 credit • Takes ~60 seconds</p>
+          <p className="text-center text-sm text-gray-400 mt-3">
+            Uses 1 credit • Takes ~60 seconds
+            {user && profile && <> • <a href="/pricing" className="underline hover:text-[#7C3AED]">You have {profile.credits ?? 0} credit{profile.credits === 1 ? '' : 's'}</a></>}
+          </p>
         </div>
       </div>
     </>

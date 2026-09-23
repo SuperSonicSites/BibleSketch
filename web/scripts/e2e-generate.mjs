@@ -174,7 +174,8 @@ try {
     assert.equal(doc.promptData.mapValue.fields.book.stringValue, 'Daniel');
     await open(`/?sketch=${made}`);
     await waitFor(async () => /Try another scripture/.test(await text()), 'result after refresh');
-    assert.match(await text(), /Saved in My Gallery \(private\)/);
+    assert.match(await text(), /Saved privately in My Gallery/);
+    assert.match(await text(), /Share with the community/);
   });
 
   await step('result view: Add Ref is free and changes the image; Remove Color costs a credit and makes a new page', async () => {

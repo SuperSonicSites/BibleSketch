@@ -13,8 +13,9 @@ import { ageDisplay, bookDisplay, canonicalPath, type Sketch } from '../lib/sket
 
 const gen = () => import('../lib/generate.ts');
 
-export default function SketchOwnerView({ sketch, onSwitch, onChange, onDelete }: {
+export default function SketchOwnerView({ sketch, onSwitch, onChange, onDelete, inGallery }: {
   sketch: Sketch;
+  inGallery?: boolean; // opened from My Gallery: no "saved in My Gallery" note
   onSwitch: (next: Sketch) => void; // a paid edit made a new sketch
   onChange: (patch: Partial<Sketch>) => void;
   onDelete: () => void;
@@ -23,6 +24,19 @@ export default function SketchOwnerView({ sketch, onSwitch, onChange, onDelete }
   const [busy, setBusy] = useState<'addRef' | 'removeColor' | 'refine' | null>(null);
   const [editing, setEditing] = useState(false);
   const [instruction, setInstruction] = useState('');
+  const [sharing, setSharing] = useState(false);
+  const share = async (isPublic: boolean) => {
+    setSharing(true);
+    try {
+      await (await import('../lib/sketch-actions.ts')).setVisibility(sketch.id, isPublic);
+      onChange({ isPublic });
+    } catch (e) {
+      console.error('[visibility]', e);
+      alert('Failed to update visibility');
+    } finally {
+      setSharing(false);
+    }
+  };
   const p = sketch.promptData ?? {};
   const ref = `${bookDisplay(p.book ?? '')} ${p.chapter}:${p.start_verse}${p.end_verse && p.end_verse > (p.start_verse ?? 0) ? `-${p.end_verse}` : ''}`;
   const subtitle = sketch.type === 'verse' ? p.font_style || 'Verse Art' : [ageDisplay(p.age_group), p.art_style].filter(Boolean).join(' • ');
@@ -78,9 +92,16 @@ export default function SketchOwnerView({ sketch, onSwitch, onChange, onDelete }
         <div>
           <h2 className="font-display text-3xl font-bold text-gray-800">{ref}</h2>
           <p className="text-gray-500 font-medium mt-1">{subtitle}</p>
-          <p className="mt-3 inline-block text-xs font-bold px-3 py-1 rounded-full bg-green-50 text-green-700 border border-green-100">
-            ✓ Saved in <a href="/gallery#my" className="underline">My Gallery</a>{sketch.isPublic ? ' and shared publicly' : ' (private)'}
-          </p>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            {sketch.isPublic ? (
+              <p className="text-sm font-bold text-green-700 bg-green-50 border border-green-100 rounded-full px-3 py-1">✓ Shared with the community</p>
+            ) : (
+              <>
+                <p className="text-sm text-gray-500">{inGallery ? 'Private: only you can see it.' : <>Saved privately in <a href="/gallery#my" className="underline">My Gallery</a>.</>}</p>
+                <Button size="sm" variant="secondary" onClick={() => share(true)} isLoading={sharing}>Share with the community</Button>
+              </>
+            )}
+          </div>
         </div>
 
         <SketchActions sketch={sketch} />
@@ -93,7 +114,7 @@ export default function SketchOwnerView({ sketch, onSwitch, onChange, onDelete }
           {editing ? (
             <div className="space-y-2">
               <label htmlFor={`refine-${sketch.id}`} className="sr-only">Describe the change</label>
-              <textarea id={`refine-${sketch.id}`} value={instruction} maxLength={500} rows={3} onChange={(e) => setInstruction(e.target.value)}
+              <textarea id={`refine-${sketch.id}`} autoFocus value={instruction} maxLength={500} rows={3} onChange={(e) => setInstruction(e.target.value)}
                 placeholder={'e.g. "Add a dove in the sky" or "Make the lines thicker"'}
                 className="w-full rounded-xl border border-purple-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400" />
               <div className="flex gap-2">
@@ -117,10 +138,10 @@ export default function SketchOwnerView({ sketch, onSwitch, onChange, onDelete }
               </Button>
             )}
           </div>
-          <p className="text-xs text-gray-500">Edits are saved as a new page in My Gallery; this one stays as it is. If an edit fails, the credit is refunded.</p>
+          <p className="text-xs text-gray-500">Edits are saved as a new page in My Gallery; this one stays as it is. If an edit fails, the credit is refunded. You have {profile?.credits ?? 0} credit{profile?.credits === 1 ? '' : 's'}.</p>
         </div>
 
-        <OwnerControls key={sketch.id} sketch={sketch} onChange={onChange} onDelete={onDelete} />
+        <OwnerControls key={`${sketch.id}-${sketch.isPublic}`} sketch={sketch} onChange={onChange} onDelete={onDelete} />
 
         {sketch.isPublic && (
           <a href={canonicalPath(sketch)} className="inline-flex items-center gap-2 text-sm font-bold text-[#7C3AED] hover:underline">

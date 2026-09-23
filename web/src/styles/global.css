@@ -12,6 +12,9 @@ html, body { overflow-x: clip; }
 /* Generator result view: the result takes the whole page (the bundle swapped the page for `qP`). */
 body[data-result] [data-form-only] { display: none !important; }
 body[data-result] [data-gen-col] { grid-column: 1 / -1; }
+/* A ?sketch= link, before the Generator island takes over: don't flash the form (set by an inline script). */
+html[data-opening] [data-form-only] { display: none !important; }
+html[data-opening] [data-gen-col] > * { visibility: hidden; }
 
 /* The live app's readability overrides of the small text sizes (verbatim from the live stylesheet). */
 @media (max-width: 767px) {
