@@ -177,6 +177,41 @@ Our data and the model agree: the account's strength is **kids' Bible story scen
   in one step (worth clicking). If the landing page makes people hunt, Search learns our Pins don't deliver the
   click (1.5).
 
+### 3.3a Pin copy rules (every calendar entry in `web/src/data/pins.json`)
+The rules for writing each Pin's title and description. `web/scripts/pins-check.mjs` enforces the ones marked
+**(checked)**; the rest are for whoever writes the copy.
+
+**Title** `[opener]: [story moment] | [reference] Coloring Page for Kids`
+- 40-100 characters, contains `|` and the Bible reference **(checked)**.
+- Contains "Coloring" **(checked)**. If the opener lacks it ("Sunday School Crafts", "Nativity Scene Drawing"),
+  put "Coloring Page" after the reference.
+- Never "Free" **(checked)**. Unique across the whole account, old Pins included.
+- The opener is a phrase people search: Sunday School Coloring Pages, Bible Story Coloring, Christmas Bible Story
+  Coloring, Advent Coloring Page, Nativity Scene Drawing, Nativity Crafts for Kids, Sunday School Crafts, Bible
+  Verse Coloring Pages, Scripture Coloring Page. Never the same opener twice in a row on a board (warned).
+- The story moment names the scene the way people say it, with the names they search: "Noah's Ark", "David and
+  Goliath", "Baby Jesus in the Manger". The first ~40 characters show in the feed, so the main words go first.
+- The ending names the audience the image is for: "for Kids" / "for Toddlers" on kids' pages, "for Adults" or no
+  audience on black-template pages. Never a kids' title on an adult-style page, or the reverse (1.2).
+- After an entry's release date, never change the text before `|`: the Pin image name is built from it.
+
+**Description** 250-420 characters **(checked)**, in this order:
+1. A hook that speaks to the teacher or parent ("Picture your Sunday school class coloring…", a question, a
+   one-line story fact). A different first sentence from every other Pin on the board (warned).
+2. What is drawn and nothing else: who, doing what, where; then the reference in parentheses.
+3. The phrase "coloring page" once, with the searched qualifier that fits: nativity / Christmas / Advent /
+   Bible verse / Sunday school coloring page **(checked)**.
+4. Who it is for (toddlers, preschool, early elementary, teens, adults) and where (Sunday school, children's
+   church, homeschool, VBS, family devotions).
+5. One lesson theme ("a lesson on trusting God").
+6. Ends with `Get your first 5 prints free at BibleSketch.` **(checked)**
+- No hashtags or emojis **(checked)**, no keyword lists, no "AI generated", and no promises the page doesn't keep
+  (worksheets, craft instructions, "free printable").
+
+**Placement**: the board, the template and the words all say the same audience: kids' pages on paper/purple to
+Christmas, Sunday School or Easter; verse art to Scripture; black-template pages are adult-style and stay rare
+outside the adult board.
+
 ### 3.4 Timing and cadence
 - **One Pin a day, boards taking turns** stays. The papers give no reason to post more and a clear reason not to
   post weaker (1.4). Raise it only if save rate per impression holds steady for 60 days at the current pace.
