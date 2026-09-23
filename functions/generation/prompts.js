@@ -314,6 +314,7 @@ const buildVerseBriefPrompt = (verseText, referenceString, words, layout, font) 
 
 const buildVerseArtistPrompt = (brief) => `
     Create a BIBLE VERSE COLORING PAGE with decorative typography.
+    The attached image is a LETTERING STYLE reference only: do not copy its words, its verse, its layout, its decorations or its signature/watermark.
 
     THE VERSE TEXT TO RENDER (EXACT spelling required):
     "${brief.verse_text}"
@@ -332,13 +333,26 @@ const buildVerseArtistPrompt = (brief) => `
     5. Decorative elements go AROUND text, never overlapping
     6. Pure BLACK and WHITE only - no gray, no shading
     7. All shapes must be CLOSED PATHS for bucket-fill coloring
+    8. Render ONLY the verse text above and its reference: no other words, no repeated words
+    9. NO signature, copyright notice, watermark or artist name anywhere on the page
 
     NEGATIVE PROMPT: ${brief.negative_prompt}, ${VERSE_NEGATIVES}
   `;
 
-const buildVerseCriticPrompt = (criteria) => `
+const buildVerseCriticPrompt = (criteria, verseText, referenceString) => `
     ROLE: Quality Assurance Bot for Bible Verse Coloring Pages.
     TASK: Validate this TYPOGRAPHY-BASED coloring page.
+
+    THE PAGE MUST SHOW EXACTLY THIS VERSE:
+    "${verseText}"
+    - ${referenceString}
+
+    STEP 1: Transcribe every word written anywhere on the page, in reading order, exactly as drawn
+    (including small text in corners and along the edges). Do not correct it toward the verse.
+    STEP 2: Compare your transcription with the verse word by word. Ignore capitalization, punctuation,
+    line breaks and "&" for "and". The reference (${referenceString}) is expected and is not an extra word.
+    FAIL if any word is missing, added, repeated, swapped or misspelled, or if text from another verse appears.
+    FAIL if there is any signature, copyright mark (©), watermark, artist name, logo or URL.
 
     CRITERIA LIST:
     ${criteria.map((c, i) => `${i + 1}. ${c}`).join('\n')}
@@ -356,9 +370,12 @@ const buildVerseCriticPrompt = (criteria) => `
     - Solid black filled letters (Must be hollow/outline).
     - Text missing or illegible.
     - Grayscale shading.
+    - Large solid black areas anywhere (behind the lettering, in the background or in the decorations).
+    - Wrong words (STEP 2) or a signature/copyright/artist name.
 
     OUTPUT JSON:
     {
+      "transcription": "string",
       "passed": boolean,
       "failure_reason": "string or null"
     }

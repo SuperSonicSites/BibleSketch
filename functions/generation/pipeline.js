@@ -127,13 +127,13 @@ const runVerse = async (gemini, { reference, font }) => {
     const page = await img.postProcess(art.image);
     let verdict = { passed: true };
     try {
-      const c = await gemini(P.MODELS.FLASH, [{ text: P.buildVerseCriticPrompt(brief.validation_criteria) }, imagePart(await img.toPng(page))], { responseMimeType: 'application/json' });
+      const c = await gemini(P.MODELS.FLASH, [{ text: P.buildVerseCriticPrompt(brief.validation_criteria, verseText, referenceString) }, imagePart(await img.toPng(page))], { responseMimeType: 'application/json' });
       verdict = parseJson(c.text || '{}');
     } catch (e) {
       console.warn('[verse critic] error, assuming pass:', e.message); // fails open, as live
     }
     if (verdict.passed !== false || attempt === 2) return { page, verseText };
-    brief.positive_prompt += ` (CRITICAL FIX: ${verdict.failure_reason}. Ensure all letters are HOLLOW/OUTLINE with white interior.)`;
+    brief.positive_prompt += ` (CRITICAL FIX: ${verdict.failure_reason}. Render the verse text exactly, with HOLLOW/OUTLINE letters and no solid black areas.)`;
   }
 };
 
