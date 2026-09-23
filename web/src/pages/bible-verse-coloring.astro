@@ -42,7 +42,7 @@ const schema = jsonLd({
 ---
 <Base title={title} description={description} canonical={canonical} image={`${ORIGIN}/examples/verse-example.webp`} imageAlt="Bible verse coloring page example" ogType="website" schemas={[schema]}>
   <main class="max-w-7xl mx-auto px-4 mt-8 md:mt-16">
-    <div class="text-center mb-10">
+    <div class="text-center mb-10" data-form-only>
       <h1 class="font-display text-4xl md:text-6xl font-bold text-[#1F2937] leading-tight mb-4">
         Create Bible Verse <br class="hidden md:block" />
         <span class="relative inline-block">Coloring Pages<span class="absolute left-0 right-0 bottom-1 h-3 bg-[#FCD34D]/70 -z-10 rounded" aria-hidden="true"></span></span>
@@ -56,8 +56,8 @@ const schema = jsonLd({
     </div>
 
     <div class="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
-      <div class="xl:col-span-7"><Generator client:load kind="verse" /></div>
-      <div class="hidden xl:block xl:col-span-5">
+      <div class="xl:col-span-7" data-gen-col><Generator client:load kind="verse" /></div>
+      <div class="hidden xl:block xl:col-span-5" data-form-only>
         <figure class="bg-white rounded-3xl shadow-xl border border-gray-100 p-4 -rotate-2">
           <div class="relative">
             <img src="/examples/verse-example.webp" alt="Bible verse coloring page example" width="1000" height="1339" loading="lazy" class="w-full aspect-[3/4] object-cover rounded-2xl" />
@@ -70,7 +70,7 @@ const schema = jsonLd({
   </main>
 
   {verses.length > 0 && (
-    <section class="max-w-7xl mx-auto px-4 py-16" aria-labelledby="community-verse">
+    <section data-form-only class="max-w-7xl mx-auto px-4 py-16" aria-labelledby="community-verse">
       <h2 id="community-verse" class="font-display text-3xl font-bold text-gray-800 mb-2">Community Verse Art</h2>
       <p class="text-gray-500 mb-8">Explore beautiful Bible verse coloring pages created by the community. Bless your favorites or save them to your collection.</p>
       <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">

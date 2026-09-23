@@ -156,6 +156,8 @@ export default function Generator({ kind }: { kind: Kind }) {
     scrollTo({ top: 0, behavior: 'smooth' });
     if (fresh) { setCelebrate(true); setTimeout(() => setCelebrate(false), 4000); }
   };
+  // The page's hero, example and community grid hide while a result is shown (global.css).
+  useEffect(() => { document.body.toggleAttribute('data-result', Boolean(result)); }, [result]);
   const back = () => {
     setResult(null);
     history.replaceState(null, '', location.pathname);

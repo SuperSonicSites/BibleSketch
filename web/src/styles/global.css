@@ -9,6 +9,9 @@ h1, h2, h3, h4, h5, h6, .font-display, .font-friendly { font-family: Quicksand, 
 html, body { overflow-x: clip; }
 /* Scripts toggle `hidden` on elements that also carry a display utility (flex, block): hidden must win. */
 [hidden] { display: none !important; }
+/* Generator result view: the result takes the whole page (the bundle swapped the page for `qP`). */
+body[data-result] [data-form-only] { display: none !important; }
+body[data-result] [data-gen-col] { grid-column: 1 / -1; }
 
 /* The live app's readability overrides of the small text sizes (verbatim from the live stylesheet). */
 @media (max-width: 767px) {

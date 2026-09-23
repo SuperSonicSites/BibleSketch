@@ -65,7 +65,7 @@ export default function SketchOwnerView({ sketch, onSwitch, onChange, onDelete }
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
       <div className="lg:col-span-7">
         <div className="relative bg-white rounded-3xl shadow-xl border border-gray-100 p-4">
-          <img src={sketch.imageUrl} alt={`${ref} coloring page`} className="w-full aspect-[3/4] object-contain rounded-2xl bg-white" />
+          <img src={sketch.imageUrl} alt={`${ref} coloring page`} className="w-full aspect-[3/4] max-h-[80vh] object-contain rounded-2xl bg-white" />
           {busy && (
             <div className="absolute inset-0 bg-white/80 backdrop-blur-sm rounded-3xl flex flex-col items-center justify-center gap-3" role="status">
               <div className="w-12 h-12 border-4 border-purple-200 border-t-[#7C3AED] rounded-full animate-spin" />
