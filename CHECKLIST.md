@@ -17,8 +17,6 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
 - [ ] Monitoring alerts for generation failures (ROADMAP S1) — until then, try one generation on the live site each week.
 
 ### Cloudflare (Astro rebuild)
-- [ ] **Purge secret + URL for `onSketchWritten`** (phase 2 is live; until this is done a sketch made private or retagged can stay visible in the Worker cache for up to a day). Agents are blocked from writing secrets and `functions/.env`, so: (1) set a fresh shared secret on both sides (commands in docs/deploying.md, "Phase 2"); (2) in the seo-fixes worktree add `WORKER_PURGE_URL=https://biblesketch.app/api/purge` to `functions/.env` and commit; (3) tell an agent to deploy `functions:onSketchWritten`.
-- [ ] (Optional, purge check 2c) After rollout phase 2 ships the trigger: make one of your own sketches private in the app, check its `/coloring-page/…` URL 404s within seconds, then make it public again.
 
 ### Zoho
 - [ ] Make the customer "User ID" custom field read-only in the customer portal (ROADMAP S5).
@@ -28,6 +26,7 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
 - [ ] **2-4 weeks after 2026-09-22:** Search Console > Pages and Sitemaps: soft 404s and duplicate-canonical counts should fall; the sitemap should show 338 discovered URLs with no errors.
 
 ## Done
+- [x] 2026-09-23: Purge secret + WORKER_PURGE_URL set, `onSketchWritten` deployed; private → 404 → public test passed on a live sketch.
 - [x] 2026-09-23: Live auth tested by the owner on phase 1 pages (sign-up and login work). Phase 2 cutover approved and live (coloring pages, tags, profiles, /api).
 - [x] 2026-09-23: Phase 1 cutover approved and live (about, privacy, terms, verified, blog on the Worker).
 - [x] 2026-09-23: Phase 0 /labs probe routes deleted in the Cloudflare dashboard (`_astro/*` and `img/*` kept for phase 1).
