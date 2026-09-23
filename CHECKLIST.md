@@ -17,7 +17,9 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
 - [ ] Monitoring alerts for generation failures (ROADMAP S1) — until then, try one generation on the live site each week.
 
 ### Cloudflare (Astro rebuild)
-- [ ] **Delete the 4 Phase 0 probe routes** of Worker `biblesketch-web`: Workers & Pages > biblesketch-web > Settings > Domains & Routes: `biblesketch.app/labs`, `biblesketch.app/labs/*`, `biblesketch.app/_astro/*`, `biblesketch.app/img/*`. Harmless meanwhile (the live site uses none of these paths), but wrangler can't remove them.
+- [ ] **Delete the 2 Phase 0 probe routes** of Worker `biblesketch-web`: Workers & Pages > biblesketch-web > Settings > Domains & Routes: `biblesketch.app/labs` and `biblesketch.app/labs/*` (wrangler can't remove routes; they now return a 404 page from the Worker). Keep `biblesketch.app/_astro/*` and `biblesketch.app/img/*`: rollout phase 1 needs them.
+- [ ] **Review the phase 1 copy changes** in [docs/copy-review-phase1.md](docs/copy-review-phase1.md) (About, Privacy, Terms) and answer its ❓ items. The cutover waits for this.
+- [ ] **Approve the phase 1 cutover** (ROADMAP 1, phase 1 plan step 5): the Worker takes `/about`, `/privacy`, `/terms`, `/verified`, `/blog*` on biblesketch.app. Preview everything first on https://biblesketch-web.supersonicworkers.workers.dev (it talks to production Firebase: logging in with an existing account works there, but sign-up and Google sign-in only work on biblesketch.app).
 - [ ] (Optional, purge check 2c) After rollout phase 2 ships the trigger: make one of your own sketches private in the app, check its `/coloring-page/…` URL 404s within seconds, then make it public again.
 
 ### Zoho

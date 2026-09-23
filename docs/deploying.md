@@ -39,6 +39,34 @@ Rollback: `firebase hosting:clone biblesketch-5104c@<version> biblesketch-5104c:
 
 `node scripts/optimize-sketch-images.mjs` (dry run), then `--apply`: gives new full-size sketch originals `Cache-Control: private, max-age=31536000, immutable`. Idempotent; run monthly.
 
+## Astro Worker (`web/`, branch astro-rebuild)
+
+Worker `biblesketch-web` on Cloudflare (account "Supersonic Sites Master Account"). It answers only the route
+patterns bound on the `biblesketch.app` zone; everything else still goes to Firebase Hosting.
+
+Before any deploy, from `web/`, with the emulators running (`scripts/emulators.cmd` in the seo-fixes worktree)
+and `npx astro preview --port 4321` on a fresh build:
+1. `node scripts/check-sketch.mjs`, `node scripts/check-pages.mjs`, `node scripts/e2e-auth.mjs`: all pass.
+2. Stop the preview (Windows locks `dist/`), `npm run build`, `npx wrangler deploy`.
+3. On workers.dev: `node scripts/lighthouse.mjs https://biblesketch-web.supersonicworkers.workers.dev 3 --paths=...`
+   (in Git Bash prefix `MSYS_NO_PATHCONV=1`, or `/about` is rewritten to a Windows path).
+
+Every deploy starts from a cold Workers Cache (it is keyed by Worker version), so no purge is needed after one.
+
+### Taking routes (owner-approved, one phase at a time)
+1. In `wrangler.jsonc` add the phase's patterns to `routes` (each `{ "pattern": "biblesketch.app/<path>*",
+   "zone_name": "biblesketch.app" }`; a trailing `*` also catches query strings, which an exact route misses)
+   and its paths to `vars.LIVE_PREFIXES` (comma-separated; e.g. `/about,/privacy,/terms,/verified,/blog`).
+   Paths the patterns catch but LIVE_PREFIXES doesn't list (e.g. `/aboutus`) are passed to Firebase.
+   Static files in `web/public` that a pattern catches must exist there (`/about-Renaud.webp`, `/blog-images/*`).
+2. Deploy, then check every URL of the phase with `?cb=<random>`: status, `<title>`, no `x-served-by`
+   Firebase headers, and `curl -H 'Accept: text/html'` shows the Zaraz script.
+3. Rollback: remove the prefix from `LIVE_PREFIXES` and deploy (seconds; the Worker passes those paths
+   to Firebase). The route itself can stay. wrangler never deletes routes, even with `"routes": []`: remove
+   them in the dashboard (Workers & Pages > biblesketch-web > Settings > Domains & Routes).
+
+Phase 1 patterns: `about*`, `privacy*`, `terms*`, `verified*`, `blog*` (plus the existing `_astro/*`, `img/*`).
+
 ## History: SEO fixes rollout (2026-09-22, done)
 
 Deployed wave by wave from tags: `wave-1` (no-op Hosting release), `wave-3` (404 page, fonts, og.png), `wave-4a` / `wave-4b` / `wave-4c` (renderers), sitemap from `wave-4c`, `wave-6` (Storage headers), then `wave-4c2` and `wave-4c3` (template follow-ups). Live renderers = `wave-4c3`. Rollback per wave: 4a → `wave-1`; 4b → `wave-4a`; 4c → `wave-4b`; sitemap → `wave-1` (`functions:sitemap` only); each followed by a CDN flush.
