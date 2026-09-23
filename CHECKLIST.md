@@ -7,7 +7,13 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
 ### Decisions
 - [x] **Unpaid premium/credits accounts.** 8 accounts have premium or credits without any payment (beta-week sign-ups, Nov 24-28, 2025; one orphan doc `EIV569…` with no Auth user). Keep or revoke? - ANSWER: KEEP
 - [x] **Bucket CORS.** Allow GET from `https://biblesketch.app` on the Storage bucket now, or wait for the rebuild (needed before any browser-side image editing; see ROADMAP 1.1). - ANSWER: ENABLED 2026-09-23 (verified: GET from biblesketch.app returns Access-Control-Allow-Origin)
-- [ ] **"Remove Color" pricing.** Free (rate-limited) or 1 credit (ROADMAP 1.1).
+- [x] **"Remove Color" pricing.** Free (rate-limited) or 1 credit (ROADMAP 1.1). - ANSWER: 1 CREDIT (2026-09-23)
+
+### Astro rebuild, phases 3-5
+- [ ] **Test the new pages on https://biblesketch-web.supersonicworkers.workers.dev** (log in with email + password; Google sign-in only works on biblesketch.app): make one Scene Art page and one Verse Art page, try Make changes, Remove Color and Add Ref on the result, publish one, check My Gallery and Saved on /gallery, open /pricing (don't buy). Each generation or paid edit uses 1 of your credits; failures are refunded.
+- [ ] **Approve cutover step 1** (`/gallery`, `/pricing`), then **step 2** (`/` and `/bible-verse-coloring`, the `biblesketch.app/*` route). After step 2: one real purchase test is worth it (the cheapest pack), to see the credits land.
+- [ ] Firebase console > Authentication > Sign-in method: disable **Anonymous** (owner decision; nothing uses it).
+- [ ] (Optional) Cloudflare Cache Rule: ignore the query string for `/` and `/bible-verse-coloring` in the cache key, so ad clicks (`?utm_…`, `?gclid`, `?fbclid`, `?epik`) share one cached page. Not needed for correctness.
 - [x] **Thumbnail palette PNGs** (optional). Firebase console > Extensions > Resize Images (0.3.0) > Reconfigure: set output options to palette PNG. Smaller thumbnails; slightly lossy where verse text is colored, so check a few by eye.
 
 ### Google Cloud / Firebase console (confirm these were done in the Phase A hotfix)

@@ -86,6 +86,20 @@ npx firebase functions:secrets:set WORKER_PURGE_SECRET --data-file "$env:TEMP\ps
 Remove-Item "$env:TEMP\ps.json", "$env:TEMP\ps.txt"; Remove-Variable s, b
 ```
 
+### Phases 3-4 (gallery, pricing, generators)
+Generation functions (seo-fixes, live since 2026-09-23): `createSketch`, `editSketch`, `refundStaleGenerations`,
+`cleanupDeletedAccounts`. Deploy them only with a quoted `--only` list; they need `GEMINI_API_KEY` (already set).
+In the emulator they use a fake Gemini when `functions/.env.local` has `FAKE_GEMINI=1`. Real-model check without
+the site: run `functions/generation/pipeline.js` from a node one-liner with a key (see ROADMAP "Phases 3-4 result").
+
+Step 1 patterns: `gallery*`, `pricing*`; LIVE_PREFIXES adds `/gallery,/pricing`.
+Step 2 (generators): `/` can't be an exact route (it would miss `/?utm_source=…`), so bind `biblesketch.app/*` and
+add `/,/bible-verse-coloring` to LIVE_PREFIXES; the middleware keeps passing every other path to Firebase. In the
+dashboard, add routes with Worker = **None** for `biblesketch.app/__/*`, `/assets/*`, `/references/*` and
+`/sitemap.xml`, so Firebase Auth's handler, the old bundle's files and the sitemap never depend on the Worker.
+Verify: `/__/auth/handler` 200, Google sign-in on the live site, `/?utm_source=x` served by the Worker,
+`/assets/index-DHKtGwi1.js` still immutable from Firebase, `/sitemap.xml`, an unknown path 404s.
+
 ## History: SEO fixes rollout (2026-09-22, done)
 
 Deployed wave by wave from tags: `wave-1` (no-op Hosting release), `wave-3` (404 page, fonts, og.png), `wave-4a` / `wave-4b` / `wave-4c` (renderers), sitemap from `wave-4c`, `wave-6` (Storage headers), then `wave-4c2` and `wave-4c3` (template follow-ups). Live renderers = `wave-4c3`. Rollback per wave: 4a → `wave-1`; 4b → `wave-4a`; 4c → `wave-4b`; sitemap → `wave-1` (`functions:sitemap` only); each followed by a CDN flush.
