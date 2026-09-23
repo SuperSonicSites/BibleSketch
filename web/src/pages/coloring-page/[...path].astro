@@ -110,7 +110,7 @@ const card = 'flex-1 py-3 rounded-xl border flex items-center justify-center tra
               <img src={thumbUrl(sketch)} alt={`${p.book || 'Bible'} Coloring Page`} data-pin-description={meta.pinDescription}
                 width="400" height="533" fetchpriority="high" decoding="async"
                 class="w-full h-full object-contain relative z-0 bg-white" oncontextmenu="return false" />
-              <div class="absolute inset-0 z-[50] w-full h-full pointer-events-none watermark"></div>
+              <div class="absolute inset-0 z-[50] w-full h-full pointer-events-none watermark" data-owner={sketch.userId}></div>
             </div>
           </div>
         </div>

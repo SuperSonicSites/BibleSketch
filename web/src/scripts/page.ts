@@ -2,6 +2,7 @@
 //   data-open-auth="login|signup"  opens the auth modal
 //   data-guest-only                hidden once someone is signed in
 //   data-copy="<url>"              copies the URL, then shows "Copied!" in its <span>
+//   data-owner="<uid>"             hidden for that signed-in owner (the coloring-page watermark)
 import { $user, openModal, type AuthView } from '../lib/store.ts';
 
 document.addEventListener('click', async (e) => {
@@ -24,4 +25,8 @@ document.addEventListener('click', async (e) => {
   }
 });
 
-$user.subscribe((u) => document.querySelectorAll<HTMLElement>('[data-guest-only]').forEach((n) => (n.hidden = Boolean(u))));
+$user.subscribe((u) => {
+  document.querySelectorAll<HTMLElement>('[data-guest-only]').forEach((n) => (n.hidden = Boolean(u)));
+  // The watermark is for visitors: owners see their own sketch clean (bundle `WP`).
+  document.querySelectorAll<HTMLElement>('[data-owner]').forEach((n) => (n.hidden = Boolean(u && n.dataset.owner === u.uid)));
+});
