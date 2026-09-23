@@ -3,12 +3,14 @@
 //
 // Runs against local emulators only:
 //   functions/.secret.local  GEMINI_API_KEY=<any dummy>  ZOHO_WEBHOOK_SECRET=localtestsecret123
-//   functions/.env.local     ZOHO_ENFORCE_AUTH=true
+//                            WORKER_PURGE_SECRET=localpurgesecret
+//   functions/.env.local     ZOHO_ENFORCE_AUTH=true  WORKER_PURGE_URL=http://127.0.0.1:8788/api/purge
 //   hosting-public/          the live hosting files (functions render the pages)
 //   firebase emulators:start --only auth,firestore,storage,functions,hosting --project biblesketch-5104c
 // Usage: node scripts/security-check.mjs
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
+import http from 'node:http';
 import { initializeApp } from 'firebase/app';
 import { getAuth, connectAuthEmulator, signInWithEmailAndPassword, signInAnonymously } from 'firebase/auth';
 import {
@@ -24,6 +26,8 @@ const FIRESTORE = `http://127.0.0.1:8080/v1/projects/${PROJECT}/databases/(defau
 const FN = `http://127.0.0.1:5001/${PROJECT}/us-central1`;
 const HOSTING = 'http://127.0.0.1:5000';
 const ZOHO_SECRET = 'localtestsecret123';
+const PURGE_SECRET = 'localpurgesecret';
+const PURGE_PORT = 8788; // a fake Worker purge endpoint, started by the purge step
 const run = Date.now().toString(36);
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -462,6 +466,42 @@ await step('sitemap: each URL once, only indexable pages, escaped XML, cacheable
   assert.ok(!locs.some((l) => l.endsWith(`/profile/${bob.uid}`)));
   assert.ok(!locs.includes('https://biblesketch.app/tags/pentecost'), 'empty tag listed');
   for (const bad of ['recent', 'popular', 'constructor']) assert.equal((await fetch(`${HOSTING}/sitemap.xml?type=${bad}`)).status, 404, bad);
+});
+
+// ---------------------------------------------------------------- edge cache purge
+await step('onSketchWritten asks the Worker to purge on publish, retag, unpublish; not on blesses or private edits', async () => {
+  const calls = [];
+  const worker = http.createServer((req, res) => {
+    let body = '';
+    req.on('data', (c) => (body += c));
+    req.on('end', () => { calls.push({ secret: req.headers['x-purge-secret'], ...JSON.parse(body) }); res.end('{}'); });
+  });
+  await new Promise((r) => worker.listen(PURGE_PORT, '127.0.0.1', r));
+  try {
+    const id = `purge-${run}`;
+    const ref1 = doc(alice.db, 'sketches', id);
+    const sketch = { userId: alice.uid, isPublic: true, blessCount: 0, isBookmark: false, type: 'scene', createdAt: serverTimestamp() };
+    // Earlier steps' triggers may still land here; only count this step's sketches.
+    const mine = () => calls.filter((c) => c.ids?.[0]?.startsWith(id));
+    const seen = (n) => waitFor(() => mine().length >= n, `${n} purge call(s)`);
+    await setDoc(ref1, sketch);
+    await seen(1);
+    await updateDoc(doc(bob.db, 'sketches', id), { blessCount: increment(1) }); // no purge
+    await updateDoc(ref1, { tags: ['advent'] });
+    await seen(2);
+    await updateDoc(ref1, { isPublic: false });
+    await seen(3);
+    await deleteDoc(ref1); // already private: no purge
+    const id2 = `${id}-2`;
+    await setDoc(doc(alice.db, 'sketches', id2), sketch);
+    await seen(4);
+    await sleep(1500);
+    assert.deepEqual(mine().map((c) => c.ids), [[id], [id], [id], [id2]]);
+    assert.ok(mine().every((c) => c.secret === PURGE_SECRET), 'secret header');
+    await deleteDoc(doc(alice.db, 'sketches', id2));
+  } finally {
+    worker.close();
+  }
 });
 
 // ---------------------------------------------------------------- storage

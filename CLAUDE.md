@@ -24,7 +24,7 @@ Bible Sketch (https://biblesketch.app) turns Bible verses into printable colorin
 
 ```bash
 scripts/emulators.cmd                    # full emulator suite; app at http://localhost:5000
-node scripts/security-check.mjs          # 33 checks; must all pass
+node scripts/security-check.mjs          # 34 checks; must all pass
 node scripts/check-hosting-public.mjs    # before any Hosting change (add --live before a functions deploy)
 node --check functions/index.js
 ```

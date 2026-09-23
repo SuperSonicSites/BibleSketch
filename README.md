@@ -31,10 +31,10 @@ Windows machine; Node 22+; firebase-tools (global, logged in); JDK 21 for the em
 npm ci --legacy-peer-deps          # react-helmet-async peers React <=18
 cd functions && npm ci && cd ..
 scripts/emulators.cmd              # auth, firestore, storage, functions, hosting on :5000
-node scripts/security-check.mjs    # 33 regression checks against the emulators
+node scripts/security-check.mjs    # 34 regression checks against the emulators
 ```
 
-The emulators need `functions/.secret.local` (dummy `GEMINI_API_KEY`, `ZOHO_WEBHOOK_SECRET=localtestsecret123`) and `functions/.env.local` (`ZOHO_ENFORCE_AUTH=true`). Open the app at `http://localhost:5000`: on any other host the bundle talks to **production** Firebase.
+The emulators need `functions/.secret.local` (dummy `GEMINI_API_KEY`, `ZOHO_WEBHOOK_SECRET=localtestsecret123`, `WORKER_PURGE_SECRET=localpurgesecret`) and `functions/.env.local` (`ZOHO_ENFORCE_AUTH=true`, `WORKER_PURGE_URL=http://127.0.0.1:8788/api/purge`). Open the app at `http://localhost:5000`: on any other host the bundle talks to **production** Firebase.
 
 ## Scripts
 

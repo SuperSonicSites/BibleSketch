@@ -3439,3 +3439,39 @@ exports.onUserDeleted = onDocumentDeleted("users/{uid}", async (event) => {
     deletedAt: FieldValue.serverTimestamp()
   });
 });
+
+// ---------------------------------------------------------
+// 14. EDGE CACHE PURGE (Astro front end on Cloudflare Workers)
+// ---------------------------------------------------------
+// The Worker caches /coloring-page/* for up to a day (stale-while-revalidate). When a sketch is published,
+// made private, deleted or retagged, ask it to drop that page and every page listing it as related.
+// Does nothing while WORKER_PURGE_URL is unset, so it can ship before the Worker takes any route.
+const { onDocumentWritten } = require("firebase-functions/v2/firestore");
+const { defineString } = require("firebase-functions/params");
+const workerPurgeUrl = defineString("WORKER_PURGE_URL", { default: "" });
+const workerPurgeSecret = defineSecret("WORKER_PURGE_SECRET");
+
+// Only public pages are cached; owners can change nothing else a visitor sees (firestore.rules).
+const sketchPageChanged = (before, after) => {
+  if (!before?.isPublic && !after?.isPublic) return false;
+  if (!before || !after) return true;
+  return before.isPublic !== after.isPublic || JSON.stringify(before.tags || []) !== JSON.stringify(after.tags || []);
+};
+
+exports.onSketchWritten = onDocumentWritten({ document: "sketches/{sketchId}", secrets: [workerPurgeSecret] }, async (event) => {
+  const id = event.params.sketchId;
+  if (id.startsWith('bookmark_') || !workerPurgeUrl.value()) return;
+  if (!sketchPageChanged(event.data?.before?.data(), event.data?.after?.data())) return;
+  try {
+    const res = await fetch(workerPurgeUrl.value(), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-purge-secret': workerPurgeSecret.value() },
+      body: JSON.stringify({ ids: [id] }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) console.error('[onSketchWritten] purge failed', id, res.status, await res.text());
+  } catch (e) {
+    // Never throw: a retry storm would not help, and the page expires on its own within a day.
+    console.error('[onSketchWritten] purge error', id, e.message);
+  }
+});
