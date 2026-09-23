@@ -25,7 +25,7 @@ export const GET: APIRoute = async ({ params, cache }) => {
 <guid isPermaLink="false">${esc(e.sketchId)}</guid>
 <pubDate>${new Date(`${e.release}T12:00:00Z`).toUTCString()}</pubDate>
 <enclosure url="${img}" length="0" type="image/png"/>
-<media:content url="${img}" medium="image" type="image/png" width="1000" height="1500"/>
+<media:content url="${img}" medium="image" type="image/png"${e.template === 'plain' ? '' : ' width="1000" height="1500"'}/>
 </item>`;
     });
   } catch (e) {

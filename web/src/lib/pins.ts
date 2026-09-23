@@ -10,7 +10,7 @@ import { ORIGIN, type Sketch } from './sketch.ts';
 // Only the master account's sketches: a user can delete a sketch or make it private, which would leave a dead Pin.
 export const MASTER_UID = 'TiAEiMqWxpWqxCLtoI5OgHAvtf33';
 export const BOARDS = ['sunday-school', 'christmas', 'adult', 'easter', 'scripture'] as const;
-export const TEMPLATES = ['purple', 'black', 'paper'] as const;
+export const TEMPLATES = ['purple', 'black', 'paper', 'plain'] as const; // plain: no banner, trimmed (verse art)
 export const WINDOW_DAYS = 2;
 
 export interface PinEntry {

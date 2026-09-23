@@ -259,7 +259,8 @@ The rules for writing each Pin's title and description. `web/scripts/pins-check.
 prints a snippet for the signed-in tab that writes "Coloring page: <the what-is-drawn sentence>" on every released
 calendar Pin (CHECKLIST, weekly). So sentence 2 of every description must stand alone as a picture description.
 
-**Placement**: the board, the template and the words all say the same audience: kids' pages on paper/purple to
+**Placement**: the board, the template and the words all say the same audience: verse art uses the `plain` template
+(no banner, white margin trimmed); kids' pages on paper/purple to
 Christmas, Sunday School or Easter; verse art to Scripture; black-template pages are adult-style and stay rare
 outside the adult board.
 
