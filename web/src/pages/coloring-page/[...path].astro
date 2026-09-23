@@ -54,7 +54,8 @@ if (!sketch && Astro.response.status !== 503) {
   Astro.cache.set({ maxAge: 3600, tags });
 }
 if (sketch) {
-  Astro.cache.set({ maxAge: 3600, swr: 86400, tags });
+  // related:<id> lets a purge also drop the pages that list a sketch in their related grid.
+  Astro.cache.set({ maxAge: 3600, swr: 86400, tags: [...tags, ...(related?.items ?? []).map((r) => `related:${r.id}`)] });
   Astro.response.headers.set('Cache-Control', 'public, max-age=300');
 }
 
