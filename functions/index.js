@@ -3451,11 +3451,12 @@ const { defineString } = require("firebase-functions/params");
 const workerPurgeUrl = defineString("WORKER_PURGE_URL", { default: "" });
 const workerPurgeSecret = defineSecret("WORKER_PURGE_SECRET");
 
-// Only public pages are cached; owners can change nothing else a visitor sees (firestore.rules).
+// Only public pages are cached. Visitors see visibility, tags and the image (editSketch "addRef" moves it).
 const sketchPageChanged = (before, after) => {
   if (!before?.isPublic && !after?.isPublic) return false;
   if (!before || !after) return true;
-  return before.isPublic !== after.isPublic || JSON.stringify(before.tags || []) !== JSON.stringify(after.tags || []);
+  return before.isPublic !== after.isPublic || before.storagePath !== after.storagePath
+    || JSON.stringify(before.tags || []) !== JSON.stringify(after.tags || []);
 };
 
 exports.onSketchWritten = onDocumentWritten({ document: "sketches/{sketchId}", secrets: [workerPurgeSecret] }, async (event) => {
@@ -3474,4 +3475,250 @@ exports.onSketchWritten = onDocumentWritten({ document: "sketches/{sketchId}", s
     // Never throw: a retry storm would not help, and the page expires on its own within a day.
     console.error('[onSketchWritten] purge error', id, e.message);
   }
+});
+
+// ---------------------------------------------------------
+// 15. SERVER-SIDE GENERATION (Astro front end; ROADMAP 1.1)
+// ---------------------------------------------------------
+// One generation or edit = one credit, charged here before Gemini runs and refunded on any failure.
+// The old bundle never calls these (it uses generateContent and deducts on the client), so both can run
+// side by side without charging anyone twice. Ledger: generations/{uid}_{requestId}
+// {status: charged → done | refunded}; a repeated requestId returns the ledger instead of running again.
+const { onSchedule } = require("firebase-functions/v2/scheduler");
+const functionsV1 = require("firebase-functions/v1");
+const gen = require("./generation/pipeline");
+const GP = require("./generation/prompts");
+const GI = require("./generation/image");
+
+const GENERATION_DEADLINE_MS = 480 * 1000;   // Gemini stops here; the function times out at 540 s
+const STALE_CHARGE_MS = 12 * 60 * 1000;      // the sweeper refunds charges older than this
+const SKETCHES_PREFIX = (uid) => `user_uploads/${uid}/sketches/`;
+
+const verifiedUid = (request) => {
+  const token = request.auth && request.auth.token;
+  if (!token || token.firebase?.sign_in_provider === 'anonymous') {
+    throw new HttpsError('unauthenticated', 'Please sign in to create sketches.');
+  }
+  if (token.email_verified !== true) {
+    throw new HttpsError('permission-denied', 'Please verify your email address first.');
+  }
+  return request.auth.uid;
+};
+
+const intIn = (v, min, max) => Number.isInteger(v) && v >= min && v <= max;
+const validRequestId = (id) => typeof id === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(id);
+
+// Validates createSketch input and returns { reference, promptData, description, type, age, style, font }.
+const parseCreate = (d) => {
+  const { kind, book, chapter, startVerse, endVerse, age, style, font } = d || {};
+  if (!GP.BIBLE_BOOKS.includes(book) || !intIn(chapter, 1, 150) || !intIn(startVerse, 1, 176)) {
+    throw new HttpsError('invalid-argument', 'Invalid Bible reference.');
+  }
+  if (kind === 'scene') {
+    const end = endVerse == null || endVerse === startVerse ? undefined : endVerse;
+    if (end !== undefined && !intIn(end, startVerse + 1, startVerse + 40)) throw new HttpsError('invalid-argument', 'Invalid verse range.');
+    if (!(GP.STYLES_BY_AGE[age] || []).includes(style)) throw new HttpsError('invalid-argument', 'Invalid age or style.');
+    const reference = { book, chapter, startVerse, endVerse: end };
+    return {
+      type: 'scene', reference, age, style,
+      description: `Generated: ${book} ${chapter}`,
+      promptData: { book, chapter, start_verse: startVerse, ...(end ? { end_verse: end } : {}), aspect_ratio: '3:4', age_group: age, art_style: style },
+    };
+  }
+  if (kind === 'verse') {
+    if (!GP.FONT_STYLES.includes(font)) throw new HttpsError('invalid-argument', 'Invalid font style.');
+    return {
+      type: 'verse', reference: { book, chapter, startVerse }, font,
+      description: `Verse Art: ${book} ${chapter}:${startVerse}`,
+      promptData: { book, chapter, start_verse: startVerse, aspect_ratio: '3:4', font_style: font },
+    };
+  }
+  throw new HttpsError('invalid-argument', 'Invalid request.');
+};
+
+const ledgerRef = (uid, requestId) => admin.firestore().collection('generations').doc(`${uid}_${requestId}`);
+const ledgerResult = (l) => l.sketchId ? { status: 'done', sketchId: l.sketchId, imageUrl: l.imageUrl }
+  : l.status === 'refunded' ? { status: 'refunded', error: l.error || 'FAILED' } : { status: 'running' };
+
+// Charges `cost` credits and opens the ledger in one transaction. Returns the existing ledger on a retry.
+const openCharge = (uid, requestId, cost, description) => admin.firestore().runTransaction(async (tx) => {
+  const ref = ledgerRef(uid, requestId);
+  const userRef = admin.firestore().collection('users').doc(uid);
+  const [existing, user] = [await tx.get(ref), await tx.get(userRef)];
+  if (existing.exists) return existing.data();
+  if (!user.exists) throw new HttpsError('failed-precondition', 'NO_PROFILE');
+  if (!(user.get('credits') >= cost)) throw new HttpsError('failed-precondition', 'INSUFFICIENT_CREDITS');
+  tx.update(userRef, { credits: FieldValue.increment(-cost), updatedAt: FieldValue.serverTimestamp() });
+  tx.create(userRef.collection('transactions').doc(), {
+    userId: uid, amount: -cost, description, type: 'usage', timestamp: FieldValue.serverTimestamp(),
+  });
+  tx.create(ref, { uid, requestId, status: 'charged', cost, description, createdAt: FieldValue.serverTimestamp() });
+  return null;
+});
+
+// Gives the credit back once: only a ledger still 'charged' is refunded (the catch block and the sweeper
+// can both try). Never throws.
+const refundCharge = async (ref, error) => {
+  try {
+    await admin.firestore().runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists || snap.get('status') !== 'charged') return;
+      const { uid, cost, description } = snap.data();
+      const userRef = admin.firestore().collection('users').doc(uid);
+      if ((await tx.get(userRef)).exists) {
+        tx.update(userRef, { credits: FieldValue.increment(cost), updatedAt: FieldValue.serverTimestamp() });
+        tx.create(userRef.collection('transactions').doc(), {
+          userId: uid, amount: cost, description: `Refund: ${description}`, type: 'refund', timestamp: FieldValue.serverTimestamp(),
+        });
+      }
+      tx.update(ref, { status: 'refunded', error, updatedAt: FieldValue.serverTimestamp() });
+    });
+  } catch (e) {
+    console.error('[refund] failed', ref.id, e.message);
+  }
+};
+
+// Uploads a PNG the way the bundle's client did (dS/P8), with a download token so the URL works.
+const uploadSketchPng = async (uid, png) => {
+  const ts = Date.now();
+  const storagePath = `${SKETCHES_PREFIX(uid)}${ts}.png`;
+  const bucket = admin.storage().bucket();
+  const token = crypto.randomUUID();
+  await bucket.file(storagePath).save(png, {
+    resumable: false,
+    contentType: 'image/png',
+    metadata: {
+      cacheControl: 'private, max-age=31536000, immutable',
+      contentDisposition: 'attachment; filename="bible-sketch.png"',
+      metadata: { firebaseStorageDownloadTokens: token },
+    },
+  });
+  const host = process.env.FIREBASE_STORAGE_EMULATOR_HOST
+    ? `http://${process.env.FIREBASE_STORAGE_EMULATOR_HOST}` : 'https://firebasestorage.googleapis.com';
+  return {
+    storagePath,
+    // The Resize Images extension writes this thumbnail a few seconds later (predicted path, as the bundle).
+    thumbnailPath: `${SKETCHES_PREFIX(uid)}${ts}_400x533.png`,
+    imageUrl: `${host}/v0/b/${bucket.name}/o/${encodeURIComponent(storagePath)}?alt=media&token=${token}`,
+  };
+};
+
+const deleteSketchFiles = async (storagePath) => {
+  const base = storagePath.replace(/\.[a-z]+$/, '');
+  const bucket = admin.storage().bucket();
+  await Promise.all([`${base}.`, `${base}_`].map((prefix) => bucket.deleteFiles({ prefix }).catch((e) => console.warn('[files] delete', prefix, e.message))));
+};
+
+// Runs `work` (returns a Jimp page) under a charge: saves it as a private sketch, or refunds on any failure.
+const chargedGeneration = async ({ uid, requestId, cost, description, work, sketch }) => {
+  const ref = ledgerRef(uid, requestId);
+  const existing = await ref.get();
+  if (existing.exists) return ledgerResult(existing.data());
+  await reserveDailyCall(uid, 'image');
+  const prior = await openCharge(uid, requestId, cost, description);
+  if (prior) return ledgerResult(prior);
+  try {
+    const page = await work(gen.makeGemini(gen.FAKE ? '' : geminiApiKey.value().trim(), Date.now() + GENERATION_DEADLINE_MS));
+    const qa = gen.measure(page.bitmap);
+    const files = await uploadSketchPng(uid, await GI.toPng(page));
+    const sketchRef = admin.firestore().collection('sketches').doc();
+    await admin.firestore().runTransaction(async (tx) => {
+      // Refunded meanwhile by the sweeper (a very slow run): still deliver the page, keep the refund.
+      const charged = (await tx.get(ref)).get('status') === 'charged';
+      tx.create(sketchRef, {
+        userId: uid, ...files, isPublic: false, blessCount: 0, isBookmark: false,
+        createdAt: FieldValue.serverTimestamp(), qa, generationId: ref.id, ...sketch,
+      });
+      tx.update(ref, { ...(charged ? { status: 'done' } : {}), sketchId: sketchRef.id, imageUrl: files.imageUrl, updatedAt: FieldValue.serverTimestamp() });
+    });
+    console.log(`[generation] done uid=${uid} sketch=${sketchRef.id} ${description} qa=${JSON.stringify(qa)}`);
+    return { status: 'done', sketchId: sketchRef.id, imageUrl: files.imageUrl };
+  } catch (e) {
+    const code = ['INVALID_REFERENCE', 'VERSE_TOO_LONG', 'BLOCKED'].includes(e.code) ? e.code : 'FAILED';
+    console.error(`[generation] ${code} uid=${uid} ${description}:`, e.message);
+    await refundCharge(ref, code);
+    return { status: 'refunded', error: code };
+  }
+};
+
+const GENERATION_OPTS = { secrets: [geminiApiKey], cors: true, timeoutSeconds: 540, memory: "1GiB" };
+
+// { requestId, kind: 'scene'|'verse', book, chapter, startVerse, endVerse?, age, style | font }
+// → { status: 'done', sketchId, imageUrl } | { status: 'refunded', error } | { status: 'running' }
+exports.createSketch = onCall(GENERATION_OPTS, async (request) => {
+  const uid = verifiedUid(request);
+  const { requestId } = request.data || {};
+  if (!validRequestId(requestId)) throw new HttpsError('invalid-argument', 'Invalid request.');
+  const p = parseCreate(request.data);
+  return chargedGeneration({
+    uid, requestId, cost: 1, description: p.description,
+    sketch: { type: p.type, promptData: p.promptData },
+    work: async (gemini) => p.type === 'scene'
+      ? gen.runScene(gemini, { reference: p.reference, age: p.age, style: p.style })
+      : (await gen.runVerse(gemini, { reference: p.reference, font: p.font })).page,
+  });
+});
+
+// { requestId, sketchId, op: 'refine' | 'removeColor' | 'addRef', instruction? }
+// refine / removeColor: 1 credit, the result is a new private sketch (the source is the caller's own or public).
+// addRef: free, draws "Book ch:v" on the caller's own sketch in place (new file path, old files deleted).
+exports.editSketch = onCall(GENERATION_OPTS, async (request) => {
+  const uid = verifiedUid(request);
+  const { requestId, sketchId, op, instruction } = request.data || {};
+  if (typeof sketchId !== 'string' || !/^[A-Za-z0-9_-]{1,200}$/.test(sketchId)) throw new HttpsError('invalid-argument', 'Invalid request.');
+  const snap = await admin.firestore().collection('sketches').doc(sketchId).get();
+  const s = snap.exists ? snap.data() : null;
+  if (!s || (s.userId !== uid && s.isPublic !== true) || !s.storagePath) throw new HttpsError('not-found', 'Sketch not found.');
+  // A bookmark is a copy pointing at someone else's file; edit the original instead.
+  const source = await admin.storage().bucket().file(s.storagePath).download().then(([b]) => b)
+    .catch(() => { throw new HttpsError('not-found', 'Sketch image not found.'); });
+
+  if (op === 'addRef') {
+    if (s.userId !== uid || s.isBookmark) throw new HttpsError('permission-denied', 'Only the owner can change this sketch.');
+    const pd = s.promptData || {};
+    const text = GP.formatReference({ book: GP.displayBook(pd.book || ''), chapter: pd.chapter, startVerse: pd.start_verse, endVerse: pd.end_verse });
+    const files = await uploadSketchPng(uid, await GI.toPng(await GI.addCaption(source, text)));
+    await snap.ref.update({ ...files, updatedAt: FieldValue.serverTimestamp() });
+    await deleteSketchFiles(s.storagePath);
+    return { status: 'done', sketchId, imageUrl: files.imageUrl };
+  }
+
+  if (!validRequestId(requestId)) throw new HttpsError('invalid-argument', 'Invalid request.');
+  let text;
+  if (op === 'removeColor') text = GP.REMOVE_COLOR_INSTRUCTION;
+  else if (op === 'refine' && typeof instruction === 'string' && instruction.trim() && instruction.length <= 500) text = instruction.trim();
+  else throw new HttpsError('invalid-argument', 'Invalid request.');
+  return chargedGeneration({
+    uid, requestId, cost: 1, description: op === 'removeColor' ? 'Remove Color' : 'Refined Sketch',
+    sketch: { type: s.type || 'scene', promptData: s.promptData || {}, ...(s.tags ? { tags: s.tags } : {}), editedFrom: sketchId },
+    work: (gemini) => gen.runEdit(gemini, source, text),
+  });
+});
+
+// Refunds charges whose function instance died (timeout, crash, deploy) before it could refund itself.
+exports.refundStaleGenerations = onSchedule({ schedule: "every 10 minutes", timeoutSeconds: 120 }, async () => {
+  const cutoff = Timestamp.fromMillis(Date.now() - STALE_CHARGE_MS);
+  const stale = await admin.firestore().collection('generations')
+    .where('status', '==', 'charged').where('createdAt', '<', cutoff).limit(100).get();
+  for (const doc of stale.docs) await refundCharge(doc.ref, 'TIMEOUT');
+  if (!stale.empty) console.warn(`[refundStaleGenerations] refunded ${stale.size}`);
+});
+
+// Account deletion (Auth, so it runs only when the account is really gone): the user's sketches and
+// bookmarks, other users' bookmarks of them, and every file under user_uploads/{uid}/.
+exports.onAuthUserDeleted = functionsV1.auth.user().onDelete(async (user) => {
+  const db = admin.firestore();
+  const refs = [];
+  for (const field of ['userId', 'originalOwnerId']) {
+    const snap = await db.collection('sketches').where(field, '==', user.uid).select().get();
+    refs.push(...snap.docs.map((d) => d.ref));
+  }
+  for (let i = 0; i < refs.length; i += 400) {
+    const batch = db.batch();
+    refs.slice(i, i + 400).forEach((r) => batch.delete(r));
+    await batch.commit();
+  }
+  await admin.storage().bucket().deleteFiles({ prefix: `user_uploads/${user.uid}/` })
+    .catch((e) => console.warn('[onAuthUserDeleted] files', e.message));
+  console.log(`[onAuthUserDeleted] ${user.uid}: ${refs.length} sketch docs deleted`);
 });
