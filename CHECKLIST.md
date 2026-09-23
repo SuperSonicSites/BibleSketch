@@ -16,6 +16,10 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
 - [ ] Auth > Authorized domains: remove the stale `bible-sketch-platform-267611631790.us-west1.run.app`.
 - [ ] Monitoring alerts for generation failures (ROADMAP S1) — until then, try one generation on the live site each week.
 
+### Cloudflare (Astro rebuild)
+- [ ] **Delete the 4 Phase 0 probe routes** of Worker `biblesketch-web`: Workers & Pages > biblesketch-web > Settings > Domains & Routes: `biblesketch.app/labs`, `biblesketch.app/labs/*`, `biblesketch.app/_astro/*`, `biblesketch.app/img/*`. Harmless meanwhile (the live site uses none of these paths), but wrangler can't remove them.
+- [ ] (Optional, purge check 2c) After rollout phase 2 ships the trigger: make one of your own sketches private in the app, check its `/coloring-page/…` URL 404s within seconds, then make it public again.
+
 ### Zoho
 - [ ] Make the customer "User ID" custom field read-only in the customer portal (ROADMAP S5).
 
@@ -24,5 +28,6 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
 - [ ] **2-4 weeks after 2026-09-22:** Search Console > Pages and Sitemaps: soft 404s and duplicate-canonical counts should fall; the sitemap should show 338 discovered URLs with no errors.
 
 ## Done
+- [x] 2026-09-23: Workers Paid confirmed active on the Cloudflare account; Phase 0 zone probe routes approved.
 - [x] 2026-09-22: Cloudflare purge of `/og.png`, `/logo.png`, Christmas blog cover; Email Obfuscation off; Bot Fight Mode decided.
 - [x] 2026-09-22: Sitemap resubmitted in Search Console.

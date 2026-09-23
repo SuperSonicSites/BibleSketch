@@ -8,6 +8,7 @@ This branch is the front-end rebuild (ROADMAP 1): Astro 7 + React islands on Clo
 - Production stays on `seo-fixes` in `C:\Users\renau\Coding\BibleSketch-recovered-prod`. Hotfixes and all Firebase deploys happen there, not here. Merge `seo-fixes` into this branch regularly so `functions/` doesn't drift.
 - Don't change `functions/`, `hosting-public/` or the rules here. If a phase needs a backend change, make it on `seo-fixes` first, then merge.
 - `coloring-page-quality` is ported (prompts, models, references), not merged (ROADMAP 1.0).
+- Phase 0 passed (ROADMAP 1, "Phase 0 result"). In `web/`: `npm run build`, `npx astro preview` (workerd, http://localhost:4321; stop it before rebuilding, Windows locks `dist/`), `npx wrangler deploy` (Worker `biblesketch-web`, no zone routes yet), `node scripts/check-sketch.mjs` (parity with 3 live pages), `node scripts/lighthouse.mjs <origin> [runs] [--cold]`. `npm install` needs `npm approve-scripts` for new packages with install scripts. The purge secret is the Worker secret `PURGE_SECRET`; the Firebase side is `WORKER_PURGE_SECRET` (same value, set at phase 2).
 
 ## Facts you can't infer from the code
 

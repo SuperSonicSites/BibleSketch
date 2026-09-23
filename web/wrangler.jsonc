@@ -6,6 +6,8 @@
   "compatibility_flags": ["nodejs_compat"],
   "assets": { "directory": "./dist", "binding": "ASSETS" },
   "workers_dev": true,
+  // No zone routes yet (rollout phase 1 adds them). Keep this key: omitting it leaves old routes in place.
+  "routes": [],
   "observability": { "enabled": true },
   // Cloudflare Images binding: WebP thumbnails for /img/* (src/pages/img/[...path].ts).
   "images": { "binding": "IMAGES" }

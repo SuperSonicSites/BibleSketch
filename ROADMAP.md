@@ -10,7 +10,28 @@ Status 2026-09-23. Production = branch `seo-fixes`. The SEO/performance fixes th
 
 **Fallback:** React Router v8 framework mode on Firebase Hosting + one SSR function (more code reuse, one vendor, but every page hydrates about 100 KB of JS).
 
-**Pin at start:** `astro` 7.3.x, `@astrojs/react` 6.0.x (7.0 is days old), `@astrojs/cloudflare` 14.3.x, React 19.3, Tailwind 3 (same classes as the bundle).
+**Pinned** (`web/package.json`, exact versions): `astro` 7.3.4, `@astrojs/cloudflare` 14.3.3, `@astrojs/react` 6.0.6 (7.0 shipped 2026-09-22; revisit in a month), React 19.3.0, `wrangler` 4.136.3, `firebase` 12.19.0, Tailwind 3.4.19 through a plain `postcss.config.js` (`@astrojs/tailwind` only supports Astro ≤ 5; Tailwind 4 would change the bundle's classes).
+
+### Phase 0 result (2026-09-23): GO
+All four checks passed; the Worker `biblesketch-web` runs on `https://biblesketch-web.supersonicworkers.workers.dev/coloring-page/<slug>/<id>`. Code in `web/`, trigger on `seo-fixes` (not deployed).
+
+| Check | Result |
+|---|---|
+| Lighthouse mobile ≥ 95 (`web/scripts/lighthouse.mjs`) | **100 / 100 / 100** on 3 URLs, cold and warm cache (LCP 1.3-1.5 s, TBT 0, CLS 0). Production today: 62-72 (LCP 8-10 s). On the zone with Zaraz: 99. |
+| Private-sketch purge | `onSketchWritten` → `POST /api/purge` (secret) → gone. Live: HIT → purge (0.3 s) → MISS. Emulator: `security-check.mjs` step 34. |
+| Zaraz on Worker HTML | Auto-injected on the zone, same as origin pages. No manual tag. |
+| `/_astro/*` and exact routes | `/_astro/*` needs its own route and serves immutable. Fall-through to Firebase works. **An exact route does not match the same path with a query string** (`/labs?utm_source=x` went to Firebase). |
+
+Decisions and facts for the rollout:
+- **Caching:** Workers Cache (Astro `cacheCloudflare()`), `max-age` 1 h + `swr` 1 day. Tags: `sketch:<id>` on the page, its redirects and its 404; `related:<id>` for each sketch in the related grid. The purge drops both, so a sketch made private also leaves other pages' related grids. Each deploy starts from a cold cache (the cache is keyed by Worker version), so cached HTML never points at deleted `/_astro` files.
+- **Data:** Firestore REST without auth (`web/src/lib/firestore.ts`); a private or missing sketch both read as 403 → 404 (cached, tagged, purged on publish).
+- **Images:** `/img/<thumb path>` serves the `_400x533` thumbnail as first-party WebP through the Images binding (58 KB → 22 KB), cached a year. Needs its own route on the zone.
+- **Auth in islands:** `initializeAuth` with IndexedDB persistence, never `getAuth` (it loads gapi + `/__/auth/iframe`, ~140 KB, on every page); pass `browserPopupRedirectResolver` only to the sign-in popup call. Import Firebase on idle.
+- **Scroll-snap carousels need `scroll-padding` equal to their padding.** Otherwise Chrome snaps on first layout, counts it as a scroll, and records no LCP (Lighthouse then falls back to a pessimistic ~94).
+- **`/` in phase 4:** an exact `biblesketch.app/` route would miss `/?utm_source=…` (ads, Pinterest). Plan: bind `biblesketch.app/*` and `fetch(request)` to the origin for paths not ported yet (proven in the probe), instead of per-path routes.
+- **wrangler never deletes routes** it created, even with `"routes": []`: remove them in the dashboard (CHECKLIST).
+- **Parity:** the page reproduces the live bundle's title, description, canonical, H1, subtitle and related list (`web/scripts/check-sketch.mjs` against 3 captured live pages). Tags and related cards are now real links; the head is rendered once, on the server.
+- **Phase 0 shortcuts to finish in rollout phase 2:** header shows the guest state only (Log In links to `/`); Print/Download/Save are read-only placeholders (quota shown); no owner controls (private sketches render only in the SPA); the guest CTA links to `/` instead of opening the auth modal.
 
 ### Phase 0: go/no-go prototype (2-3 days)
 Coloring page only, deployed to a `workers.dev` URL, reading public production data through the Firestore REST API (rules allow unauthenticated reads of public sketches; `firebase-admin` does not run on Workers). It must show:
