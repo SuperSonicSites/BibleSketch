@@ -6,8 +6,20 @@
   "compatibility_flags": ["nodejs_compat"],
   "assets": { "directory": "./dist", "binding": "ASSETS" },
   "workers_dev": true,
-  // No zone routes yet (rollout phase 1 adds them). Keep this key: omitting it leaves old routes in place.
-  "routes": [],
+  // Zone routes, one rollout phase at a time (docs/deploying.md). wrangler adds routes but never removes them:
+  // delete a route in the dashboard; to take a path back to Firebase quickly, drop it from LIVE_PREFIXES.
+  // Phase 1 (live 2026-09-23): about, privacy, terms, verified, blog (+ /blog-images, /about-Renaud.webp files).
+  "routes": [
+    { "pattern": "biblesketch.app/_astro/*", "zone_name": "biblesketch.app" },
+    { "pattern": "biblesketch.app/img/*", "zone_name": "biblesketch.app" },
+    { "pattern": "biblesketch.app/about*", "zone_name": "biblesketch.app" },
+    { "pattern": "biblesketch.app/privacy*", "zone_name": "biblesketch.app" },
+    { "pattern": "biblesketch.app/terms*", "zone_name": "biblesketch.app" },
+    { "pattern": "biblesketch.app/verified*", "zone_name": "biblesketch.app" },
+    { "pattern": "biblesketch.app/blog*", "zone_name": "biblesketch.app" }
+  ],
+  // Paths the Worker answers on biblesketch.app; anything else its routes catch goes to Firebase (middleware).
+  "vars": { "LIVE_PREFIXES": "/about,/privacy,/terms,/verified,/blog,/img" },
   "observability": { "enabled": true },
   // Cloudflare Images binding: WebP thumbnails for /img/* (src/pages/img/[...path].ts).
   "images": { "binding": "IMAGES" }

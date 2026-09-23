@@ -17,7 +17,7 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
 - [ ] Monitoring alerts for generation failures (ROADMAP S1) — until then, try one generation on the live site each week.
 
 ### Cloudflare (Astro rebuild)
-- [ ] **Approve the phase 1 cutover** (ROADMAP 1, phase 1 plan step 5): the Worker takes `/about`, `/privacy`, `/terms`, `/verified`, `/blog*` on biblesketch.app. Preview everything first on https://biblesketch-web.supersonicworkers.workers.dev (it talks to production Firebase: logging in with an existing account works there, but sign-up and Google sign-in only work on biblesketch.app).
+- [ ] **Test auth on the live phase 1 pages** (open https://biblesketch.app/about, use the header buttons): sign up with a new email, click the verification link (lands on /verified), log in, sign in with Google, open Profile Settings. The header buttons on these pages are the new code; the rest of the site is still the old app. Anything wrong: tell an agent to drop the prefix from `LIVE_PREFIXES` and redeploy (rollback in a minute).
 - [ ] **Approve the phase 2 cutover** (after phase 1): the Worker takes `/coloring-page*`, `/tags*`, `/profile*` and `/api/*`, and `onSketchWritten` is deployed (secret + URL first, docs/deploying.md).
 - [ ] (Optional, purge check 2c) After rollout phase 2 ships the trigger: make one of your own sketches private in the app, check its `/coloring-page/…` URL 404s within seconds, then make it public again.
 
@@ -29,6 +29,7 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
 - [ ] **2-4 weeks after 2026-09-22:** Search Console > Pages and Sitemaps: soft 404s and duplicate-canonical counts should fall; the sitemap should show 338 discovered URLs with no errors.
 
 ## Done
+- [x] 2026-09-23: Phase 1 cutover approved and live (about, privacy, terms, verified, blog on the Worker).
 - [x] 2026-09-23: Phase 0 /labs probe routes deleted in the Cloudflare dashboard (`_astro/*` and `img/*` kept for phase 1).
 - [x] 2026-09-23: Phase 1 copy changes approved as drafted (docs/copy-review-phase1.md). Set LAST_UPDATED in privacy/terms to the go-live date at cutover.
 - [x] 2026-09-23: Workers Paid confirmed active on the Cloudflare account; Phase 0 zone probe routes approved.
