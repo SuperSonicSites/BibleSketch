@@ -5,15 +5,15 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
 ## Open
 
 ### Decisions
-- [ ] **Unpaid premium/credits accounts.** 8 accounts have premium or credits without any payment (beta-week sign-ups, Nov 24-28, 2025; one orphan doc `EIV569…` with no Auth user). Keep or revoke?
-- [ ] **Bucket CORS.** Allow GET from `https://biblesketch.app` on the Storage bucket now, or wait for the rebuild (needed before any browser-side image editing; see ROADMAP 1.1).
+- [x] **Unpaid premium/credits accounts.** 8 accounts have premium or credits without any payment (beta-week sign-ups, Nov 24-28, 2025; one orphan doc `EIV569…` with no Auth user). Keep or revoke? - ANSWER: KEEP
+- [x] **Bucket CORS.** Allow GET from `https://biblesketch.app` on the Storage bucket now, or wait for the rebuild (needed before any browser-side image editing; see ROADMAP 1.1). - ANSWER: ENABLED 2026-09-23 (verified: GET from biblesketch.app returns Access-Control-Allow-Origin)
 - [ ] **"Remove Color" pricing.** Free (rate-limited) or 1 credit (ROADMAP 1.1).
-- [ ] **Thumbnail palette PNGs** (optional). Firebase console > Extensions > Resize Images (0.3.0) > Reconfigure: set output options to palette PNG. Smaller thumbnails; slightly lossy where verse text is colored, so check a few by eye.
+- [x] **Thumbnail palette PNGs** (optional). Firebase console > Extensions > Resize Images (0.3.0) > Reconfigure: set output options to palette PNG. Smaller thumbnails; slightly lossy where verse text is colored, so check a few by eye.
 
 ### Google Cloud / Firebase console (confirm these were done in the Phase A hotfix)
 - [ ] Gemini API: per-model quota caps and a billing budget alert.
-- [ ] Old Gemini keys deleted at the source; old secret versions disabled; current key restricted to the Generative Language API (API restriction only, no referrer restriction).
-- [ ] Auth > Authorized domains: remove the stale `bible-sketch-platform-267611631790.us-west1.run.app`.
+- [x] Old Gemini keys deleted at the source; old secret versions disabled; current key restricted to the Generative Language API (API restriction only, no referrer restriction).
+- [x] Auth > Authorized domains: remove the stale `bible-sketch-platform-267611631790.us-west1.run.app`.
 - [ ] Monitoring alerts for generation failures (ROADMAP S1) — until then, try one generation on the live site each week.
 
 ### Cloudflare (Astro rebuild)
