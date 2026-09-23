@@ -12,6 +12,7 @@
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import http from 'node:http';
+import { execFileSync } from 'node:child_process';
 import { initializeApp } from 'firebase/app';
 import { getAuth, connectAuthEmulator, signInWithEmailAndPassword, signInAnonymously } from 'firebase/auth';
 import {
@@ -618,10 +619,26 @@ await step('deleting an account removes its sketches, others\' bookmarks of them
     userId: bob.uid, isBookmark: true, isPublic: false, blessCount: 0, createdAt: serverTimestamp(),
     originalSketchId: made.sketchId, originalOwnerId: creator.uid, imageUrl: s.get('imageUrl'),
   }), 'bob bookmarks it');
+  // The client's order: user doc (tombstone), then the Auth account. The hourly job runs here directly.
+  await allowed(deleteDoc(doc(creator.db, 'users', creator.uid)), 'delete user doc');
+  await waitFor(() => adminDocExists(`deletedUsers/${creator.uid}`), 'tombstone');
+  const cleanup = () => execFileSync(process.execPath, ['-e', "require('./index.js').cleanupDeletedAccounts.run({}).then(() => process.exit(0))"], {
+    cwd: 'functions', stdio: 'pipe',
+    env: { ...process.env, FIRESTORE_EMULATOR_HOST: '127.0.0.1:8080', FIREBASE_AUTH_EMULATOR_HOST: '127.0.0.1:9099',
+      FIREBASE_STORAGE_EMULATOR_HOST: '127.0.0.1:9199', GCLOUD_PROJECT: PROJECT,
+      FIREBASE_CONFIG: JSON.stringify({ projectId: PROJECT, storageBucket: `${PROJECT}.firebasestorage.app` }) },
+  });
+  await fetch(`${FIRESTORE}/deletedUsers/${creator.uid}?updateMask.fieldPaths=deletedAt`, {
+    method: 'PATCH', headers: { 'content-type': 'application/json', authorization: 'Bearer owner' },
+    body: JSON.stringify({ fields: { deletedAt: { timestampValue: '2020-01-01T00:00:00Z' } } }),
+  });
+  cleanup();
+  assert.ok(await adminDocExists(`sketches/${made.sketchId}`), 'kept while the Auth account still exists');
   await fetch(`${AUTH}/identitytoolkit.googleapis.com/v1/projects/${PROJECT}/accounts:delete`, {
     method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer owner' },
     body: JSON.stringify({ localId: creator.uid }),
   });
+  cleanup();
   await waitFor(async () => !(await adminDocExists(`sketches/${made.sketchId}`)), 'sketch deleted');
   await waitFor(async () => !(await adminDocExists(`sketches/${bm}`)), 'bookmark deleted');
   await waitFor(() => getBytes(ref(bob.storage, s.get('storagePath'))).then(() => false, () => true), 'files deleted');

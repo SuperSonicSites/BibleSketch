@@ -3485,7 +3485,6 @@ exports.onSketchWritten = onDocumentWritten({ document: "sketches/{sketchId}", s
 // side by side without charging anyone twice. Ledger: generations/{uid}_{requestId}
 // {status: charged → done | refunded}; a repeated requestId returns the ledger instead of running again.
 const { onSchedule } = require("firebase-functions/v2/scheduler");
-const functionsV1 = require("firebase-functions/v1");
 const gen = require("./generation/pipeline");
 const GP = require("./generation/prompts");
 const GI = require("./generation/image");
@@ -3705,13 +3704,16 @@ exports.refundStaleGenerations = onSchedule({ schedule: "every 10 minutes", time
   if (!stale.empty) console.warn(`[refundStaleGenerations] refunded ${stale.size}`);
 });
 
-// Account deletion (Auth, so it runs only when the account is really gone): the user's sketches and
-// bookmarks, other users' bookmarks of them, and every file under user_uploads/{uid}/.
-exports.onAuthUserDeleted = functionsV1.auth.user().onDelete(async (user) => {
+// Account deletion: the client deletes users/{uid} (onUserDeleted writes deletedUsers/{uid}) and then the Auth
+// account. Once the Auth account is really gone (deleteUser can fail with requires-recent-login, and the same
+// person may sign back in), remove their sketches and bookmarks, other users' bookmarks of them, and every
+// file under user_uploads/{uid}/. Scheduled rather than an Auth trigger: those are 1st gen, which has no Node 24.
+const ACCOUNT_CLEANUP_DELAY_MS = 10 * 60 * 1000;
+const cleanupDeletedAccount = async (uid) => {
   const db = admin.firestore();
   const refs = [];
   for (const field of ['userId', 'originalOwnerId']) {
-    const snap = await db.collection('sketches').where(field, '==', user.uid).select().get();
+    const snap = await db.collection('sketches').where(field, '==', uid).select().get();
     refs.push(...snap.docs.map((d) => d.ref));
   }
   for (let i = 0; i < refs.length; i += 400) {
@@ -3719,7 +3721,24 @@ exports.onAuthUserDeleted = functionsV1.auth.user().onDelete(async (user) => {
     refs.slice(i, i + 400).forEach((r) => batch.delete(r));
     await batch.commit();
   }
-  await admin.storage().bucket().deleteFiles({ prefix: `user_uploads/${user.uid}/` })
-    .catch((e) => console.warn('[onAuthUserDeleted] files', e.message));
-  console.log(`[onAuthUserDeleted] ${user.uid}: ${refs.length} sketch docs deleted`);
+  await admin.storage().bucket().deleteFiles({ prefix: `user_uploads/${uid}/` })
+    .catch((e) => console.warn('[cleanupDeletedAccounts] files', uid, e.message));
+  return refs.length;
+};
+
+exports.cleanupDeletedAccounts = onSchedule({ schedule: "every 60 minutes", timeoutSeconds: 300 }, async () => {
+  const cutoff = Timestamp.fromMillis(Date.now() - ACCOUNT_CLEANUP_DELAY_MS);
+  const tombstones = await admin.firestore().collection('deletedUsers').where('deletedAt', '<', cutoff).limit(200).get();
+  for (const t of tombstones.docs) {
+    if (t.get('sketchesCleanedAt')) continue;
+    try {
+      await admin.auth().getUser(t.id);
+      continue; // the account still exists (deletion failed, or they signed back in): keep everything
+    } catch (e) {
+      if (e.code !== 'auth/user-not-found') { console.error('[cleanupDeletedAccounts]', t.id, e.message); continue; }
+    }
+    const n = await cleanupDeletedAccount(t.id);
+    await t.ref.update({ sketchesCleanedAt: FieldValue.serverTimestamp() });
+    console.log(`[cleanupDeletedAccounts] ${t.id}: ${n} sketch docs deleted`);
+  }
 });
