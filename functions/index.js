@@ -253,6 +253,10 @@ const ALLOWED_CONFIG_KEYS = ['responseMimeType', 'responseModalities', 'imageCon
 // ponytail: fixed daily caps (client retries count too); raise here if real users hit them.
 const DAILY_LIMITS = { image: 60, text: 300 };
 const GLOBAL_DAILY_IMAGE_LIMIT = 500;
+// Owner decision 2026-09-23: the master account batch-generates the Pinterest pages, so it gets its own higher
+// image cap, outside the global pool (its batches never use up the users' share).
+const MASTER_UID = 'TiAEiMqWxpWqxCLtoI5OgHAvtf33';
+const MASTER_DAILY_IMAGE_LIMIT = 250;
 const MAX_PARTS = 12;
 const MAX_TEXT_CHARS = 60000;
 const MAX_INLINE_CHARS = 9 * 1024 * 1024;
@@ -297,9 +301,10 @@ const reserveDailyCall = async (uid, kind) => {
 
     await db.runTransaction(async (tx) => {
         const userSnap = await tx.get(userRef);
-        const globalSnap = kind === 'image' ? await tx.get(globalRef) : null;
+        const master = uid === MASTER_UID && kind === 'image';
+        const globalSnap = kind === 'image' && !master ? await tx.get(globalRef) : null;
         const userCount = (userSnap.exists && userSnap.get(kind)) || 0;
-        if (userCount >= DAILY_LIMITS[kind]) {
+        if (userCount >= (master ? MASTER_DAILY_IMAGE_LIMIT : DAILY_LIMITS[kind])) {
             throw new HttpsError('resource-exhausted', 'Daily generation limit reached. Please try again tomorrow.');
         }
         if (globalSnap) {

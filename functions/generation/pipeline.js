@@ -111,6 +111,16 @@ const verseLines = (verseText, lines, referenceString = '') => {
   return Array.from({ length: Math.ceil(w.length / 4) }, (_, i) => ({ text: w.slice(i * 4, i * 4 + 4).join(' '), size: 'medium' }));
 };
 
+// WEB text with the divine name as people know it, "the LORD" rather than "Yahweh" (docs/pinterest-scripture-plan.md).
+// Addressing God ("O Yahweh", ", Yahweh!") → "LORD"; "Lord Yahweh" → "Lord GOD"; "Yah" → "the LORD".
+// Check: node scripts/check-verse-name.mjs
+const withLord = (t) => t
+  .replace(/\bLord Yahweh\b/g, 'Lord GOD')
+  .replace(/\bO Yahweh\b|\bYahweh(?=, our Lord\b)/g, (m) => m.replace('Yahweh', 'LORD'))
+  .replace(/, Yahweh(?=[,.!?;:])/g, ', LORD')
+  .replace(/\bYah(weh)?\b/g, 'the LORD')
+  .replace(/(^|[.!?]["”’]?\s+|[“"‘]\s*)the LORD/g, '$1The LORD');
+
 // Verse Art: bible-api (WEB, start verse) → word count/layout → brief → up to 2 × (artist → 85% + threshold → critic).
 // Two rejected drafts = FAILED (refund); a critic error still passes the draft.
 const runVerse = async (gemini, { reference, font }) => {
@@ -120,7 +130,7 @@ const runVerse = async (gemini, { reference, font }) => {
       .catch(() => { throw fail('FAILED', 'Verse lookup failed'); });
     if (res.status === 404) throw fail('INVALID_REFERENCE');
     if (!res.ok) throw fail('FAILED', `Verse lookup ${res.status}`);
-    verseText = ((await res.json()).text || '').trim();
+    verseText = withLord(((await res.json()).text || '').replace(/\s+/g, ' ').trim()); // the API text has line breaks
     if (!verseText) throw fail('INVALID_REFERENCE');
   }
   const words = verseText.split(/\s+/).filter(Boolean).length;
@@ -159,4 +169,4 @@ const runEdit = async (gemini, source, instruction) => {
   return img.thresholdOnly(art.image);
 };
 
-module.exports = { makeGemini, runScene, runVerse, runEdit, verseLines, measure, fail, FAKE };
+module.exports = { makeGemini, runScene, runVerse, runEdit, verseLines, withLord, measure, fail, FAKE };

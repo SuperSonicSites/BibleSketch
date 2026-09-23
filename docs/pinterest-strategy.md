@@ -189,6 +189,8 @@ Our data and the model agree: the account's strength is **kids' Bible story scen
 - **Lead with Toddler and Young Child Sunday School scenes** (36.8 and 13.5 outbound clicks per Pin). Full
   storybook scenes, 1-3 named characters in the key action, setting filling the page: the winner profile already
   recorded in memory and ROADMAP 1.0.
+- **Verse art: see [pinterest-scripture-plan.md](pinterest-scripture-plan.md)** (Trends research, passage tiers,
+  looks, translation, calendar).
 - **Keep verse art as the second line** (best click-through, 0.5-0.7%). It serves a different interest (scripture
   memory, journaling); keep it on its own board.
 - **Adult coloring: pause new Pins.** Adult Pins sit in a different interest cluster from our main audience and
@@ -236,6 +238,8 @@ The rules for writing each Pin's title and description. `web/scripts/pins-check.
   Goliath", "Baby Jesus in the Manger". The first ~40 characters show in the feed, so the main words go first.
 - The ending names the audience the image is for: "for Kids" / "for Toddlers" on kids' pages, "for Adults" or no
   audience on black-template pages. Never a kids' title on an adult-style page, or the reverse (1.2).
+- **Scripture board titles lead with the reference** (people search the passage):
+  `[Reference] Coloring Page: [first words of the verse] | [audience] Bible Verse` (scripture plan §3).
 - After an entry's release date, never change the text before `|`: the Pin image name is built from it.
 
 **Description** 200-350 characters **(checked)**; shorter and focused, one idea per Pin (1.10). In this order:

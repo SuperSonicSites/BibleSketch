@@ -574,6 +574,41 @@ await step('createSketch makes verse art', async () => {
   assert.equal(await credits(creator), 3);
 });
 
+await step('the master account has its own 250 image cap, outside the global pool; others keep 60', async () => {
+  const MASTER_UID = 'TiAEiMqWxpWqxCLtoI5OgHAvtf33'; // functions/index.js
+  const email = `master-${run}@test.local`;
+  const created = await fetch(`${AUTH}/identitytoolkit.googleapis.com/v1/projects/${PROJECT}/accounts`, {
+    method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer owner' },
+    body: JSON.stringify({ localId: MASTER_UID, email, password: 'secret123', emailVerified: true }),
+  });
+  assert.ok(created.ok || (await created.text()).includes('DUPLICATE'), 'master user created');
+  const master = clientApp('master');
+  await signInWithEmailAndPassword(master.auth, email, 'secret123').catch(async () => {
+    // A rerun on the same emulators: the uid exists with an older email; reset it.
+    await fetch(`${AUTH}/identitytoolkit.googleapis.com/v1/projects/${PROJECT}/accounts:update`, {
+      method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer owner' },
+      body: JSON.stringify({ localId: MASTER_UID, email, password: 'secret123', emailVerified: true }),
+    });
+    await signInWithEmailAndPassword(master.auth, email, 'secret123');
+  });
+  await allowed(setDoc(doc(master.db, 'users', MASTER_UID), liveProfile({ uid: MASTER_UID, email })), 'create');
+  const day = new Date().toISOString().slice(0, 10);
+  const setCount = (n) => fetch(`${FIRESTORE}/rateLimits/${MASTER_UID}_${day}?updateMask.fieldPaths=image`, {
+    method: 'PATCH', headers: { 'content-type': 'application/json', authorization: 'Bearer owner' },
+    body: JSON.stringify({ fields: { image: { integerValue: String(n) } } }),
+  });
+  const globalCount = async () => {
+    const r = await fetch(`${FIRESTORE}/rateLimits/global_${day}`, { headers: { authorization: 'Bearer owner' } });
+    return r.ok ? Number((await r.json()).fields?.image?.integerValue ?? 0) : 0;
+  };
+  await setCount(60);
+  const before = await globalCount();
+  assert.equal((await master.fn('createSketch', scene())).status, 'done', 'the 61st call runs');
+  assert.equal(await globalCount(), before, 'not counted in the global pool');
+  await setCount(250);
+  await callFails(master.fn('createSketch', scene()), 'resource-exhausted', 'the 251st call');
+});
+
 await step('two simultaneous generations with one credit: exactly one runs', async () => {
   const last = await makeUser('last');
   await allowed(setDoc(doc(last.db, 'users', last.uid), liveProfile(last)), 'create');
