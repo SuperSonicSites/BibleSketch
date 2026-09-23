@@ -74,6 +74,18 @@ fresh), put `WORKER_PURGE_URL=https://biblesketch.app/api/purge` in `functions/.
 `firebase deploy --only "functions:onSketchWritten" --project biblesketch-5104c`. Check: make a test sketch
 private and its page 404s within seconds (CHECKLIST, purge check 2c).
 
+Phase 2 routes went live 2026-09-23; the secrets are an owner step (agents are blocked from secret stores).
+PowerShell, from `C:\Users\renau\Coding\BibleSketch-astro\web` (writes the value to two temp files, then deletes them;
+`secret bulk` and `--data-file` avoid the newline a PowerShell pipe would add):
+
+```powershell
+$b = New-Object byte[] 32; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); $s = ($b | ForEach-Object { $_.ToString('x2') }) -join ''
+@{ PURGE_SECRET = $s } | ConvertTo-Json | Set-Content -Encoding ascii "$env:TEMP\ps.json"; Set-Content -NoNewline -Encoding ascii "$env:TEMP\ps.txt" $s
+npx wrangler secret bulk "$env:TEMP\ps.json"
+npx firebase functions:secrets:set WORKER_PURGE_SECRET --data-file "$env:TEMP\ps.txt" --project biblesketch-5104c
+Remove-Item "$env:TEMP\ps.json", "$env:TEMP\ps.txt"; Remove-Variable s, b
+```
+
 ## History: SEO fixes rollout (2026-09-22, done)
 
 Deployed wave by wave from tags: `wave-1` (no-op Hosting release), `wave-3` (404 page, fonts, og.png), `wave-4a` / `wave-4b` / `wave-4c` (renderers), sitemap from `wave-4c`, `wave-6` (Storage headers), then `wave-4c2` and `wave-4c3` (template follow-ups). Live renderers = `wave-4c3`. Rollback per wave: 4a → `wave-1`; 4b → `wave-4a`; 4c → `wave-4b`; sitemap → `wave-1` (`functions:sitemap` only); each followed by a CDN flush.
