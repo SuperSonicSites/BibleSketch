@@ -84,7 +84,7 @@ for (const b of BOARDS) {
       const gap = (Date.parse(y.release) - Date.parse(x.release)) / 864e5;
       if (x.ref === y.ref && gap < 30) warn(y, `same passage as ${x.sketchId} only ${gap} days apart`);
     }
-    if (i && list[i].title.split(':')[0] === list[i - 1].title.split(':')[0]) warn(list[i], 'same title opener as the previous Pin on this board');
+    if (i && list[i].title.split(': ')[0] === list[i - 1].title.split(': ')[0]) warn(list[i], 'same title opener as the previous Pin on this board');
   }
 }
 

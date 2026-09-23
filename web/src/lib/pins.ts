@@ -32,7 +32,7 @@ const slug = (s: string) => s.toLowerCase().replace(/&/g, 'and').replace(/[^a-z0
 // the opener and the reference ("Sunday School Crafts: Three Wise Men Follow the Star | Matthew 2:1-2" →
 // three-wise-men-follow-the-star). The template is in the name because the image is cached for a year.
 export function pinFile(e: PinEntry): string {
-  const moment = e.title.split('|')[0].split(':').slice(1).join(':') || e.title;
+  const moment = e.title.split('|')[0].split(': ').slice(1).join(': ') || e.title; // ': ' so a leading "Psalm 23:1" stays whole
   return `${e.ref}-${slug(moment).replace(/-coloring-page$/, '')}-coloring-page-${e.sketchId.slice(0, 8)}-${e.template}`;
 }
 

@@ -241,8 +241,8 @@ CRITICAL TYPOGRAPHY RULES FOR BIBLE VERSE COLORING:
 
 const formatReference = (r) =>
   `${r.book} ${r.chapter}:${r.startVerse}${r.endVerse && r.endVerse > r.startVerse ? '-' + r.endVerse : ''}`;
-// Bundle Mc: "Psalm 23:1", "Proverb 3:5".
-const displayBook = (book) => (book === 'Psalms' ? 'Psalm' : book === 'Proverbs' ? 'Proverb' : book);
+// "Psalm 23:1" (one psalm), but "Proverbs 3:5": the old bundle's "Proverb" was printed on pages and is wrong.
+const displayBook = (book) => (book === 'Psalms' ? 'Psalm' : book);
 
 const buildBriefPrompt = (reference, ageGroup, artStyle, passage) => `
 ROLE: Biblical art director for a coloring book.
