@@ -9,6 +9,10 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
 - [x] **Bucket CORS.** Allow GET from `https://biblesketch.app` on the Storage bucket now, or wait for the rebuild (needed before any browser-side image editing; see ROADMAP 1.1). - ANSWER: ENABLED 2026-09-23 (verified: GET from biblesketch.app returns Access-Control-Allow-Origin)
 - [x] **"Remove Color" pricing.** Free (rate-limited) or 1 credit (ROADMAP 1.1). - ANSWER: 1 CREDIT (2026-09-23)
 
+### Pinterest auto-publish (ROADMAP 1.5)
+- [ ] After the Worker deploy, connect the feeds (Pinterest > Settings > Bulk create Pins > Auto-publish > Connect RSS feed > pick the board > Save): `https://biblesketch.app/pins/christmas.xml` → Christmas Coloring Pages & Nativity Printables; `https://biblesketch.app/pins/scripture.xml` → Scripture Coloring Sheets | Bible Verse Coloring. Connect `sunday-school.xml`, `easter.xml` and `adult.xml` only when their pages are in the calendar.
+- [ ] Old Pin "Joshua 1:9 Memory Verse" (385 saves) has no link and no matching page on the site. Owner choice: leave it (a new linked Joshua 1:9 Pin will go out through RSS) or add a link to `/coloring-page/joshua-1-9/WrFh8ilVdsYQzrxmChsO` (resets its stats).
+
 ### Astro rebuild, phases 3-5
 - [x] ~~**Let the preview site sign in**~~ Not needed: the owner chose to test on the live site (2026-09-23). (the browser API key only accepts biblesketch.app): Google Cloud console > APIs & Services > Credentials > the Firebase browser key (`AIzaSyAxrH…`) > Website restrictions: add `https://biblesketch-web.supersonicworkers.workers.dev/*`, Save (up to 5 min to apply). For Google sign-in there too: Firebase console > Authentication > Settings > Authorized domains: add `biblesketch-web.supersonicworkers.workers.dev`. **Remove both after cutover step 2.**
 - [ ] **Test the new pages on https://biblesketch.app** (live since 2026-09-23): make one Scene Art page and one Verse Art page, try Make changes, Remove Color and Add Ref on the result, publish one, check My Gallery and Saved on /gallery, open /pricing (don't buy). Each generation or paid edit uses 1 of your credits; failures are refunded.

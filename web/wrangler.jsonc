@@ -30,7 +30,7 @@
     { "pattern": "biblesketch.app/*", "zone_name": "biblesketch.app" }
   ],
   // Paths the Worker answers on biblesketch.app; anything else its routes catch goes to Firebase (middleware).
-  "vars": { "LIVE_PREFIXES": "/about,/privacy,/terms,/verified,/blog,/img,/coloring-page,/tags,/profile,/api,/gallery,/pricing,/,/bible-verse-coloring" },
+  "vars": { "LIVE_PREFIXES": "/about,/privacy,/terms,/verified,/blog,/img,/coloring-page,/tags,/profile,/api,/gallery,/pricing,/,/bible-verse-coloring,/pins,/pin-img" },
   "observability": { "enabled": true },
   // Cloudflare Images binding: WebP thumbnails for /img/* (src/pages/img/[...path].ts).
   "images": { "binding": "IMAGES" }
