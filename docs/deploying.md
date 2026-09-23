@@ -92,7 +92,7 @@ Generation functions (seo-fixes, live since 2026-09-23): `createSketch`, `editSk
 In the emulator they use a fake Gemini when `functions/.env.local` has `FAKE_GEMINI=1`. Real-model check without
 the site: run `functions/generation/pipeline.js` from a node one-liner with a key (see ROADMAP "Phases 3-4 result").
 
-Step 1 patterns: `gallery*`, `pricing*`; LIVE_PREFIXES adds `/gallery,/pricing`.
+Both steps went live 2026-09-23. Step 1 patterns: `gallery*`, `pricing*`; LIVE_PREFIXES adds `/gallery,/pricing`.
 Step 2 (generators): `/` can't be an exact route (it would miss `/?utm_source=…`), so bind `biblesketch.app/*` and
 add `/,/bible-verse-coloring` to LIVE_PREFIXES; the middleware keeps passing every other path to Firebase. In the
 dashboard, add routes with Worker = **None** for `biblesketch.app/__/*`, `/assets/*`, `/references/*` and

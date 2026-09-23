@@ -1,0 +1,12 @@
+# Same caching as Firebase Hosting gave these files (firebase.json: images and fonts immutable for a year).
+# A changed file needs a new name. The adapter adds its own /_astro/* rule to this file at build time.
+/fonts/*
+  Cache-Control: public, max-age=31536000, immutable
+/blog-images/*
+  Cache-Control: public, max-age=31536000, immutable
+/examples/*
+  Cache-Control: public, max-age=31536000, immutable
+/*.png
+  Cache-Control: public, max-age=31536000, immutable
+/*.webp
+  Cache-Control: public, max-age=31536000, immutable

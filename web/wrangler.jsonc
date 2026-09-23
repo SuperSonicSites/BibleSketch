@@ -21,10 +21,16 @@
     { "pattern": "biblesketch.app/coloring-page*", "zone_name": "biblesketch.app" },
     { "pattern": "biblesketch.app/tags*", "zone_name": "biblesketch.app" },
     { "pattern": "biblesketch.app/profile*", "zone_name": "biblesketch.app" },
-    { "pattern": "biblesketch.app/api/*", "zone_name": "biblesketch.app" }
+    { "pattern": "biblesketch.app/api/*", "zone_name": "biblesketch.app" },
+    // Phase 3 (live 2026-09-23): gallery, pricing.
+    { "pattern": "biblesketch.app/gallery*", "zone_name": "biblesketch.app" },
+    { "pattern": "biblesketch.app/pricing*", "zone_name": "biblesketch.app" },
+    // Phase 4 (live 2026-09-23): everything, because an exact "/" route misses "/?utm_source=…". Paths not in
+    // LIVE_PREFIXES ("/" is exact there) pass through to Firebase: /__/auth, /assets, /references, /sitemap.xml.
+    { "pattern": "biblesketch.app/*", "zone_name": "biblesketch.app" }
   ],
   // Paths the Worker answers on biblesketch.app; anything else its routes catch goes to Firebase (middleware).
-  "vars": { "LIVE_PREFIXES": "/about,/privacy,/terms,/verified,/blog,/img,/coloring-page,/tags,/profile,/api" },
+  "vars": { "LIVE_PREFIXES": "/about,/privacy,/terms,/verified,/blog,/img,/coloring-page,/tags,/profile,/api,/gallery,/pricing,/,/bible-verse-coloring" },
   "observability": { "enabled": true },
   // Cloudflare Images binding: WebP thumbnails for /img/* (src/pages/img/[...path].ts).
   "images": { "binding": "IMAGES" }
