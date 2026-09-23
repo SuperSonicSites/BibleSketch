@@ -58,10 +58,11 @@ const REFERENCE_MAP = {
   'Adult_Doodles': ['adult-doodle.jpg', 'adult-doodle-2.jpg'],
 };
 const VERSE_REFERENCE_MAP = {
-  'Elegant Script': ['verse-elegant.jpg'],
-  'Modern Brush': ['verse-modern.jpg'],
-  Playful: ['verse-playful.jpg'],
-  'Classic Serif': ['verse-classic.jpg'],
+  // Bible Sketch's own verse pages (Scripture board Pins), two verses per font so no single text dominates.
+  'Elegant Script': ['verse-elegant-a.jpg', 'verse-elegant-b.jpg'],
+  'Modern Brush': ['verse-modern-a.jpg', 'verse-modern-b.jpg'],
+  Playful: ['verse-playful-a.jpg', 'verse-playful-b.jpg'],
+  'Classic Serif': ['verse-classic-a.jpg', 'verse-classic-b.jpg'],
 };
 
 // Line work + composition per audience. Keep these free of "white background" wording:
@@ -314,7 +315,7 @@ const buildVerseBriefPrompt = (verseText, referenceString, words, layout, font) 
 
 const buildVerseArtistPrompt = (brief) => `
     Create a BIBLE VERSE COLORING PAGE with decorative typography.
-    The attached image is a LETTERING STYLE reference only: do not copy its words, its verse, its layout, its decorations or its signature/watermark.
+    The attached images are LETTERING STYLE references only: do not copy their words, verses, layouts, decorations or any signature/watermark.
 
     THE VERSE TEXT TO RENDER (EXACT spelling required):
     "${brief.verse_text}"

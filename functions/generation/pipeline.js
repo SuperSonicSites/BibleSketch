@@ -100,6 +100,7 @@ const runScene = async (gemini, { reference, age, style }) => {
 };
 
 // Verse Art: bible-api (WEB, start verse) → word count/layout → brief → up to 2 × (artist → 85% + threshold → critic).
+// Two rejected drafts = FAILED (refund); a critic error still passes the draft.
 const runVerse = async (gemini, { reference, font }) => {
   let verseText = 'Fake verse text for tests';
   if (!FAKE) {
@@ -132,7 +133,8 @@ const runVerse = async (gemini, { reference, font }) => {
     } catch (e) {
       console.warn('[verse critic] error, assuming pass:', e.message); // fails open, as live
     }
-    if (verdict.passed !== false || attempt === 2) return { page, verseText };
+    if (verdict.passed !== false) return { page, verseText };
+    if (attempt === 2) throw fail('FAILED', `Verse critic rejected both drafts: ${verdict.failure_reason}`); // refunded, user asked to retry
     brief.positive_prompt += ` (CRITICAL FIX: ${verdict.failure_reason}. Render the verse text exactly, with HOLLOW/OUTLINE letters and no solid black areas.)`;
   }
 };
