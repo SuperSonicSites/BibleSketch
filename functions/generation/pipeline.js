@@ -99,6 +99,18 @@ const runScene = async (gemini, { reference, age, style }) => {
   return img.postProcess(art.image);
 };
 
+// The brief's line split (minus a reference line it may add), used only if it has exactly the verse's words
+// in order; else 4 words a line.
+const wordsOf = (s) => s.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(Boolean).join(' ');
+const verseLines = (verseText, lines, referenceString = '') => {
+  if (Array.isArray(lines)) lines = lines.filter((l) => wordsOf(String(l?.text ?? '')) !== wordsOf(referenceString));
+  const ok = Array.isArray(lines) && lines.length && lines.every((l) => typeof l?.text === 'string')
+    && wordsOf(lines.map((l) => l.text).join(' ')) === wordsOf(verseText);
+  if (ok) return lines.map((l) => ({ text: l.text.trim(), size: ['large', 'medium', 'small'].includes(l.size) ? l.size : 'medium' }));
+  const w = verseText.replace(/\s+/g, ' ').trim().split(' ');
+  return Array.from({ length: Math.ceil(w.length / 4) }, (_, i) => ({ text: w.slice(i * 4, i * 4 + 4).join(' '), size: 'medium' }));
+};
+
 // Verse Art: bible-api (WEB, start verse) → word count/layout → brief → up to 2 × (artist → 85% + threshold → critic).
 // Two rejected drafts = FAILED (refund); a critic error still passes the draft.
 const runVerse = async (gemini, { reference, font }) => {
@@ -114,12 +126,13 @@ const runVerse = async (gemini, { reference, font }) => {
   const words = verseText.split(/\s+/).filter(Boolean).length;
   if (words >= P.VERSE_LAYOUT_RULES.MAX_WORDS) throw fail('VERSE_TOO_LONG', `${words} words`);
   const layout = P.layoutFor(words);
+  const composition = P.pickComposition(layout);
   const referenceString = `${P.displayBook(reference.book)} ${reference.chapter}:${reference.startVerse}`;
-  const briefRes = await gemini(P.MODELS.FLASH, [{ text: P.buildVerseBriefPrompt(verseText, referenceString, words, layout, font) }], { responseMimeType: 'application/json' });
+  const briefRes = await gemini(P.MODELS.FLASH, [{ text: P.buildVerseBriefPrompt(verseText, referenceString, words, layout, font, composition) }], { responseMimeType: 'application/json' });
   const b = parseJson(briefRes.text || '');
   const brief = {
-    verse_text: verseText, reference_string: referenceString, layout_type: layout,
-    positive_prompt: b.positive_prompt || '', negative_prompt: b.negative_prompt || '', validation_criteria: b.validation_criteria || [],
+    verse_text: verseText, reference_string: referenceString, composition, lines: verseLines(verseText, b.lines, referenceString),
+    positive_prompt: b.positive_prompt || '', negative_prompt: b.negative_prompt || '',
   };
   const refs = refParts(P.VERSE_REFERENCE_MAP[font]);
   for (let attempt = 1; attempt <= 2; attempt++) {
@@ -128,7 +141,7 @@ const runVerse = async (gemini, { reference, font }) => {
     const page = await img.postProcess(art.image);
     let verdict = { passed: true };
     try {
-      const c = await gemini(P.MODELS.FLASH, [{ text: P.buildVerseCriticPrompt(brief.validation_criteria, verseText, referenceString) }, imagePart(await img.toPng(page))], { responseMimeType: 'application/json' });
+      const c = await gemini(P.MODELS.FLASH, [{ text: P.buildVerseCriticPrompt(verseText, referenceString) }, imagePart(await img.toPng(page))], { responseMimeType: 'application/json' });
       verdict = parseJson(c.text || '{}');
     } catch (e) {
       console.warn('[verse critic] error, assuming pass:', e.message); // fails open, as live
@@ -146,4 +159,4 @@ const runEdit = async (gemini, source, instruction) => {
   return img.thresholdOnly(art.image);
 };
 
-module.exports = { makeGemini, runScene, runVerse, runEdit, measure, fail, FAKE };
+module.exports = { makeGemini, runScene, runVerse, runEdit, verseLines, measure, fail, FAKE };

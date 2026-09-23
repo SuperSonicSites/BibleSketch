@@ -166,6 +166,31 @@ const VERSE_LAYOUT_RULES = {
   MAX_WORDS: 30,
 };
 
+// One is picked at random per page so verse pages don't all look alike (EMBLEM = short verses, TEXT = the rest).
+const VERSE_COMPOSITIONS = {
+  EMBLEM: [
+    'the words inside a large round medallion with an ornate border',
+    'the words inside a big heart shape with a decorative outline',
+    'the words across one wide ribbon banner, with a few large motifs above and below',
+    'huge full-page lettering with small motifs tucked around the letters',
+    'the words inside a laurel or floral wreath',
+    'the words inside a shield or crest shape',
+  ],
+  TEXT: [
+    'full-page stacked lettering with no inner frame; motifs fill the gaps between lines and the corners',
+    'lettering under a tall arched window or doorway frame',
+    'lettering in the open sky above a wide illustrated landscape across the bottom third of the page',
+    'lettering inside an oval wreath or garland made of the motifs',
+    'lettering on a few ribbon banners of different lengths stacked down the page, motifs between them',
+    'lettering inside an inner panel with ornate corner pieces',
+    'lettering inside an unrolled parchment scroll',
+  ],
+};
+const pickComposition = (layout) => {
+  const list = VERSE_COMPOSITIONS[layout === 'EMBLEM' ? 'EMBLEM' : 'TEXT'];
+  return list[Math.floor(Math.random() * list.length)];
+};
+
 const VERSE_NEGATIVES = [
   'color', 'colored', 'colorful', 'red', 'blue', 'green', 'yellow', 'pink', 'purple', 'orange', 'brown', 'gold', 'silver', 'rainbow',
   'shading', 'grayscale', 'gradient', 'grey', 'shadows', '3d render', 'photo', 'realistic texture',
@@ -188,8 +213,8 @@ CRITICAL TYPOGRAPHY RULES FOR BIBLE VERSE COLORING:
    - The white space inside each letter is where users will color
 
 2. **TEXT HIERARCHY**
-   - KEYWORDS (nouns, verbs, names) = LARGE, prominent
-   - Connector words (the, and, of, in, to, for, a) = smaller, scripted
+   - Emphasis goes on whole LINES: a keyword may get its own large line, the lines around it stay smaller
+   - Never scatter small connector words (the, and, of, for) as separate fragments: keep them in their phrase
    - Bible reference = small, positioned at bottom or corner
 
 3. **LAYOUT REQUIREMENTS**
@@ -205,6 +230,12 @@ CRITICAL TYPOGRAPHY RULES FOR BIBLE VERSE COLORING:
 5. **DECORATIVE ELEMENTS**
    - Florals, vines, geometric patterns SURROUNDING the text
    - All decorations must also be OUTLINE only (hollow, colorable)
+   - NEVER fill an area with black, even for darkness, night, shadows, thorns or storm clouds: draw them as outlines
+   - Decorations contain NO letters, numbers or symbols made of letters (no Alpha/Omega, no Chi-Rho, no labels)
+
+6. **FRAME AND CLOSED SHAPES**
+   - A clean, slim rectangular border runs around the whole page, close to the edges and even on all four sides
+   - Every line ends on another line or on the border: no loose strokes, so every area is closed for bucket-fill
    - Decorations should complement, not compete with, the text
 `;
 
@@ -257,7 +288,7 @@ ${brief.negative_prompt ? `Leave out: ${brief.negative_prompt}` : ''}
 const layoutFor = (words) =>
   words <= VERSE_LAYOUT_RULES.EMBLEM.maxWords ? 'EMBLEM' : words <= VERSE_LAYOUT_RULES.STACK.maxWords ? 'STACK' : 'SCROLL';
 
-const buildVerseBriefPrompt = (verseText, referenceString, words, layout, font) => `
+const buildVerseBriefPrompt = (verseText, referenceString, words, layout, font, composition) => `
     ROLE: Creative Art Director for Bible Verse Typography Coloring Pages.
     TASK: Create a visually stunning, thematically cohesive typography coloring page.
 
@@ -293,8 +324,7 @@ const buildVerseBriefPrompt = (verseText, referenceString, words, layout, font) 
     TECHNICAL SPECIFICATIONS
     ═══════════════════════════════════════════════════════════
     WORD COUNT: ${words} words
-    LAYOUT TYPE: ${layout}
-    LAYOUT RULES: ${VERSE_LAYOUT_RULES[layout].description}
+    COMPOSITION (mandatory, build the page around it): ${composition}
 
     FONT STYLE: ${font}
     FONT RULES: ${FONT_STYLE_LOGIC[font]}
@@ -302,45 +332,59 @@ const buildVerseBriefPrompt = (verseText, referenceString, words, layout, font) 
     ${VERSE_TYPOGRAPHY_RULES}
 
     ═══════════════════════════════════════════════════════════
+    STEP 3: SPLIT THE VERSE INTO LINES
+    ═══════════════════════════════════════════════════════════
+    Split the verse into ${words <= 5 ? '1 to 3' : '3 to 8'} lines, in order. Every word of the verse appears exactly once, spelled
+    exactly as above, with its punctuation. Keep each phrase together (e.g. "for your light has come", not "for your" / "light").
+    A keyword may stand alone on a large line. You may write keywords in CAPITALS.
+
+    ═══════════════════════════════════════════════════════════
     OUTPUT JSON
     ═══════════════════════════════════════════════════════════
     {
       "verse_themes": ["List 2-3 core themes identified in this verse"],
       "decorative_motifs": ["List 3-5 specific decorative elements chosen for THIS verse based on its themes"],
-      "positive_prompt": "Detailed visual description incorporating the thematic decorations. Be specific and vivid.",
-      "negative_prompt": "Specific exclusions including generic unrelated decorations...",
-      "validation_criteria": ["List 3 specific checks for quality"]
+      "lines": [{ "text": "one line of the verse (the verse only, not the reference)", "size": "large | medium | small" }],
+      "positive_prompt": "Vivid description of the composition, the lettering style and the decorations. Do NOT quote or mention any word of the verse or the reference here: the text is given separately.",
+      "negative_prompt": "Specific exclusions including generic unrelated decorations..."
     }
+    Mix the sizes: the key words or phrases get "large" lines (short, 1-3 words), the rest "medium" or "small".
   `;
 
 const buildVerseArtistPrompt = (brief) => `
     Create a BIBLE VERSE COLORING PAGE with decorative typography.
     The attached images are LETTERING STYLE references only: do not copy their words, verses, layouts, decorations or any signature/watermark.
 
-    THE VERSE TEXT TO RENDER (EXACT spelling required):
-    "${brief.verse_text}"
-    - ${brief.reference_string}
+    The lettering is the ${brief.lines.length} quoted lines below, top to bottom, each drawn once and spelled exactly as quoted,
+    followed by the Bible reference in small letters, centered directly under the last line and drawn only there.
+    The words in brackets are sizes, not text to draw. Nothing else on the page is lettering: the page corners stay free of text.
+
+${brief.lines.map((l) => `    [${l.size}] "${l.text}"`).join('\n')}
+    [small] "${brief.reference_string}"
+
+    --- COMPOSITION ---
+    ${brief.composition}
 
     ${brief.positive_prompt}
 
-    --- LAYOUT ---
-    ${VERSE_LAYOUT_RULES[brief.layout_type].prompt}
-
     --- CRITICAL TYPOGRAPHY RULES ---
     1. ALL LETTERS MUST BE HOLLOW/OUTLINE STYLE with white interior space for coloring
-    2. Use DOUBLE OUTLINE technique - every letter has a visible white interior
+    2. Use DOUBLE OUTLINE technique - every letter has a plain white interior (no hatching, stripes or patterns inside letters)
     3. NO solid black filled letters - this is a COLORING PAGE
     4. Text must have MARGINS - do not run off canvas edges
     5. Decorative elements go AROUND text, never overlapping
-    6. Pure BLACK and WHITE only - no gray, no shading
+    6. Pure BLACK and WHITE only - no gray, no shading, no solid black areas (darkness, night and clouds are outlines too)
     7. All shapes must be CLOSED PATHS for bucket-fill coloring
-    8. Render ONLY the verse text above and its reference: no other words, no repeated words
+    8. Render ONLY the lines above and the reference (once): no other words, labels or letters in the decorations, no repeated or missing words
     9. NO signature, copyright notice, watermark or artist name anywhere on the page
+    10. FRAME: a clean, slim rectangular border around the whole page, close to the edges and even on all four sides,
+        outlined (never a solid black band), plain white outside it. Rays, landscapes and decorations stop at the border.
+        Every line ends on another line or on the border, so every area is a closed shape.
 
     NEGATIVE PROMPT: ${brief.negative_prompt}, ${VERSE_NEGATIVES}
   `;
 
-const buildVerseCriticPrompt = (criteria, verseText, referenceString) => `
+const buildVerseCriticPrompt = (verseText, referenceString) => `
     ROLE: Quality Assurance Bot for Bible Verse Coloring Pages.
     TASK: Validate this TYPOGRAPHY-BASED coloring page.
 
@@ -355,12 +399,9 @@ const buildVerseCriticPrompt = (criteria, verseText, referenceString) => `
     FAIL if any word is missing, added, repeated, swapped or misspelled, or if text from another verse appears.
     FAIL if there is any signature, copyright mark (©), watermark, artist name, logo or URL.
 
-    CRITERIA LIST:
-    ${criteria.map((c, i) => `${i + 1}. ${c}`).join('\n')}
-
     VERSE-SPECIFIC VALIDATION (Critical):
     - Text IS present (this is a typography design - text is REQUIRED)
-    - Letters are HOLLOW/OUTLINE style (white interior visible for coloring)
+    - Letters are HOLLOW/OUTLINE style (white interior visible for coloring); the small reference may be plain solid text
     - NO solid black filled letters (they cannot be colored)
     - Background is pure white
     - Text has margins (not running off edges)
@@ -368,7 +409,7 @@ const buildVerseCriticPrompt = (criteria, verseText, referenceString) => `
 
     FAILURES:
     - Color detected (Must be B&W).
-    - Solid black filled letters (Must be hollow/outline).
+    - Solid black filled letters in the verse (Must be hollow/outline). Double outlines are fine.
     - Text missing or illegible.
     - Grayscale shading.
     - Large solid black areas anywhere (behind the lettering, in the background or in the decorations).
@@ -411,6 +452,6 @@ const ARTIST_CONFIG = {
 module.exports = {
   MODELS, AGE_GROUPS, ART_STYLES, FONT_STYLES, STYLES_BY_AGE, BIBLE_BOOKS, REFERENCE_MAP, VERSE_REFERENCE_MAP,
   VERSE_LAYOUT_RULES, ARTIST_CONFIG, REMOVE_COLOR_INSTRUCTION,
-  formatReference, displayBook, layoutFor, buildBriefPrompt, buildArtistPrompt, buildVerseBriefPrompt,
+  formatReference, displayBook, layoutFor, pickComposition, buildBriefPrompt, buildArtistPrompt, buildVerseBriefPrompt,
   buildVerseArtistPrompt, buildVerseCriticPrompt, buildEditPrompt,
 };
