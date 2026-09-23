@@ -16,8 +16,6 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
 - [x] Auth > Authorized domains: remove the stale `bible-sketch-platform-267611631790.us-west1.run.app`.
 - [ ] Monitoring alerts for generation failures (ROADMAP S1) — until then, try one generation on the live site each week.
 
-### Cloudflare (Astro rebuild)
-
 ### Zoho
 - [ ] Make the customer "User ID" custom field read-only in the customer portal (ROADMAP S5).
 
