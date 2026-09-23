@@ -10,7 +10,7 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
 - [x] **"Remove Color" pricing.** Free (rate-limited) or 1 credit (ROADMAP 1.1). - ANSWER: 1 CREDIT (2026-09-23)
 
 ### Pinterest auto-publish (ROADMAP 1.5)
-- [ ] After the Worker deploy, connect the feeds (Pinterest > Settings > Bulk create Pins > Auto-publish > Connect RSS feed > pick the board > Save): `https://biblesketch.app/pins/christmas.xml` → Christmas Coloring Pages & Nativity Printables; `https://biblesketch.app/pins/scripture.xml` → Scripture Coloring Sheets | Bible Verse Coloring. Connect `sunday-school.xml`, `easter.xml` and `adult.xml` only when their pages are in the calendar.
+- [ ] Connect the feeds (Pinterest > Settings > Bulk create Pins > Auto-publish > Connect RSS feed > pick the board > Save). Pinterest refuses an empty feed, so connect each one on a day it has an item: `https://biblesketch.app/pins/christmas.xml` → Christmas Coloring Pages & Nativity Printables (from 2026-09-23); `https://biblesketch.app/pins/scripture.xml` → Scripture Coloring Sheets | Bible Verse Coloring (from 2026-09-24 00:00 UTC). Connect `sunday-school.xml`, `easter.xml` and `adult.xml` on the first day their pages are in the feed.
 - [ ] Old Pin "Joshua 1:9 Memory Verse" (385 saves) has no link and no matching page on the site. Owner choice: leave it (a new linked Joshua 1:9 Pin will go out through RSS) or add a link to `/coloring-page/joshua-1-9/WrFh8ilVdsYQzrxmChsO` (resets its stats).
 
 ### Astro rebuild, phases 3-5
