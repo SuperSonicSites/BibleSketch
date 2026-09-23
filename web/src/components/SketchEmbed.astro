@@ -1,0 +1,37 @@
+---
+// `<<sketch="id">>` in a blog post (bundle `Wte`), rendered on the server with real links. Bless/Save is an
+// island. The page fetches the data (in parallel) and passes it in; missing or private sketches are not rendered.
+import BlessSave from './BlessSave.tsx';
+import { type Sketch, bookDisplay, canonicalPath, thumbUrl } from '../lib/sketch.ts';
+
+interface Props { sketch: Sketch; author?: string }
+const { sketch, author } = Astro.props;
+const p = sketch.promptData;
+const ref = p
+  ? `${bookDisplay(p.book || '')} ${p.chapter}:${p.start_verse}${p.end_verse && p.start_verse !== undefined && p.end_verse > p.start_verse ? `-${p.end_verse}` : ''}`
+  : null;
+// Only what the bookmark copy needs, so the island's props stay small.
+const island: Sketch = {
+  id: sketch.id, userId: sketch.userId, promptData: sketch.promptData, imageUrl: sketch.imageUrl,
+  storagePath: sketch.storagePath, thumbnailPath: sketch.thumbnailPath,
+};
+---
+<div class="not-prose my-4 md:my-8 bg-white rounded-xl border border-purple-100 overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col md:grid md:grid-cols-[1fr_1fr]">
+  <a href={canonicalPath(sketch)} class="block w-full overflow-hidden">
+    <img src={thumbUrl(sketch)} alt={ref ? `${ref} Coloring Page` : 'Bible coloring page'} width="400" height="533" loading="lazy" decoding="async"
+      class="w-full h-full object-cover rounded-t-xl md:rounded-l-xl md:rounded-tr-none" />
+  </a>
+  <div class="p-4 md:p-6 flex flex-col justify-center">
+    <div>
+      {ref && <div class="text-base md:text-lg font-bold text-[#7C3AED] mb-2 md:mb-3">{ref}</div>}
+      {author && <div class="text-sm text-gray-500 mb-4 md:mb-6">By {author}</div>}
+    </div>
+    <div class="flex flex-col gap-2 md:gap-2.5">
+      <BlessSave client:visible sketch={island} blessCount={sketch.blessCount ?? 0} />
+      <a href={canonicalPath(sketch)} class="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-[#7C3AED] text-white font-medium hover:bg-[#6D28D9] transition-colors w-full">
+        <span>View Full Page</span>
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4" aria-hidden="true"><path d="M15 3h6v6"></path><path d="M10 14 21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg>
+      </a>
+    </div>
+  </div>
+</div>

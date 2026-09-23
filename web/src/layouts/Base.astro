@@ -2,44 +2,62 @@
 import '../styles/global.css';
 import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
+import ModalHost from '../components/shell/ModalHost.tsx';
 
 interface Props {
   title: string;
+  ogTitle?: string; // og/twitter title when it differs from <title> (blog posts)
   description?: string;
   canonical?: string;
   image?: string;
+  imageAlt?: string;
   ogType?: string;
+  twitterCard?: 'summary' | 'summary_large_image';
+  robots?: string; // e.g. 'noindex, follow'; default: indexable with large image previews
   schemas?: string[]; // pre-serialized JSON-LD (lib/sketch.ts jsonLd)
 }
-const { title, description, canonical, image, ogType = 'article', schemas = [] } = Astro.props;
+const {
+  title, ogTitle = title, description, canonical, image, imageAlt = description, ogType = 'article',
+  twitterCard = 'summary_large_image', robots = 'max-image-preview:large', schemas = [],
+} = Astro.props;
 ---
 <!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="robots" content="max-image-preview:large" />
+    <meta name="robots" content={robots} />
     <title>{title}</title>
     {description && <meta name="description" content={description} />}
     {canonical && <link rel="canonical" href={canonical} />}
-    <meta property="og:title" content={title} />
+    <meta property="og:title" content={ogTitle} />
     {description && <meta property="og:description" content={description} />}
     <meta property="og:type" content={ogType} />
     <meta property="og:site_name" content="Bible Sketch" />
+    <meta property="og:locale" content="en_US" />
     {canonical && <meta property="og:url" content={canonical} />}
     {image && <meta property="og:image" content={image} />}
-    {image && description && <meta property="og:image:alt" content={description} />}
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content={title} />
+    {image && imageAlt && <meta property="og:image:alt" content={imageAlt} />}
+    <meta name="twitter:card" content={twitterCard} />
+    <meta name="twitter:title" content={ogTitle} />
     {description && <meta name="twitter:description" content={description} />}
     {canonical && <meta name="twitter:url" content={canonical} />}
     {image && <meta name="twitter:image" content={image} />}
+    <slot name="head" />
     {schemas.map((s) => <script type="application/ld+json" set:html={s} />)}
     <link rel="preload" href="/fonts/quicksand-v37-latin.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
     <link rel="manifest" href="/manifest.json" />
+    <script is:inline>
+      // Pinterest click id (bundle `Qte`): the Zaraz Pinterest tool reads the _epik cookie.
+      (function () {
+        var v = new URLSearchParams(location.search).get('epik');
+        if (!v) return;
+        document.cookie = '_epik=' + encodeURIComponent(v) + '; max-age=604800; path=/; SameSite=Lax';
+      })();
+    </script>
   </head>
   <body>
     <noscript><img height="1" width="1" style="display:none;" alt="" src="https://ct.pinterest.com/v3/?event=init&tid=2614149303230&noscript=1" /></noscript>
@@ -50,5 +68,7 @@ const { title, description, canonical, image, ogType = 'article', schemas = [] }
       </div>
       <Footer />
     </div>
+    <ModalHost client:idle />
+    <script>import '../scripts/page.ts';</script>
   </body>
 </html>

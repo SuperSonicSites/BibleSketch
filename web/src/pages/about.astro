@@ -1,0 +1,155 @@
+---
+// Copy from the live About page (bundle `Zte`), corrected 2026-09 with the owner (ROADMAP 1, phase 1):
+// one contact address, no "Download the PDF" promise, generation time as it is today.
+import Page from '../layouts/Page.astro';
+import { ORIGIN, jsonLd } from '../lib/sketch.ts';
+
+const title = 'About Bible Sketch - Our Story & Mission | Free Bible Coloring Pages';
+const description = 'Meet Renaud, founder of Bible Sketch. Learn how we create AI-powered Bible coloring pages for Sunday School, VBS, and homeschooling families.';
+const url = `${ORIGIN}/about`;
+const schema = jsonLd({
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'Person',
+      name: 'Renaud Gagne',
+      jobTitle: 'Founder',
+      description: "Christian father of 4, homeschooling educator, and creator of Bible Sketch. Teaches God's Big Story curriculum at St. Timothy's Anglican Bible Church.",
+      knowsAbout: ['Bible Coloring Pages', 'Christian Education', 'Homeschooling', 'Sunday School', "Children's Ministry", "God's Big Story Curriculum"],
+      worksFor: { '@type': 'Organization', name: 'Bible Sketch', url: ORIGIN },
+    },
+    {
+      '@type': 'Organization',
+      url: ORIGIN,
+      name: 'Bible Sketch',
+      description: 'AI-powered platform for creating custom, printable Bible coloring pages for Sunday School, VBS, and homeschooling families.',
+      founder: { '@type': 'Person', name: 'Renaud Gagne' },
+      logo: { '@type': 'ImageObject', url: `${ORIGIN}/logo.png` },
+      contactPoint: { '@type': 'ContactPoint', email: 'hello@biblesketch.app', contactType: 'Customer Service' },
+    },
+    {
+      '@type': 'WebPage',
+      '@id': url,
+      url,
+      name: 'About Bible Sketch',
+      description,
+      isPartOf: { '@type': 'WebSite', url: ORIGIN, name: 'Bible Sketch' },
+    },
+  ],
+});
+const link = 'text-[#7C3AED] hover:underline';
+const h2 = 'font-display text-2xl font-bold text-[#1F2937] mb-4';
+---
+<Page title={title} ogTitle={"About Bible Sketch - Our Story & Mission"} description={description} canonical={url} ogType="website" image={`${ORIGIN}/logo.png`}
+  imageAlt="Bible Sketch Logo" twitterCard="summary" schemas={[schema]}>
+  <header class="mb-12">
+    <h1 class="font-display text-3xl md:text-4xl font-bold text-[#1F2937] mb-6">About Bible Sketch</h1>
+    <div class="prose prose-lg max-w-none text-gray-700 mb-6">
+      <p class="text-lg font-medium leading-relaxed">
+        <strong>Bible Sketch is an AI-powered platform that generates custom, free printable Bible coloring pages instantly.</strong>
+        Unlike traditional static libraries, it allows parents and ministry leaders to create unique scene art and scripture typography for any Bible verse, specifically tailored for Sunday School, VBS, and personal devotion.
+      </p>
+    </div>
+  </header>
+
+  <div class="prose prose-purple max-w-none text-gray-600 space-y-8 leading-relaxed">
+    <section>
+      <h2 class={h2}>Our Story</h2>
+      <div class="mb-6 md:float-right md:ml-6 md:mb-4 md:max-w-xs not-prose">
+        <img src="/about-Renaud.webp" alt="Renaud Gagne, founder of Bible Sketch" width="800" height="954" loading="lazy" decoding="async" class="w-full h-auto rounded-lg shadow-md" />
+      </div>
+      <p class="mb-4">
+        Hi, I'm <strong>Renaud Gagne</strong>, the founder of Bible Sketch. I'm a Christian, a father of four children (all under age 8), and part of a homeschooling family. If you've ever tried to teach the story of Daniel in the Lions' Den to a room full of energetic six-year-olds, you know the struggle. The wiggles are real. In our house, we call this the "chaos hour."
+      </p>
+      <p class="mb-4">
+        I built Bible Sketch because I needed a way to channel that energy into something focused, quiet, and meaningful—without spending hours prepping the night before. As someone who teaches <a href="https://dioceseofcanada.ca/gods-big-story" target="_blank" rel="noopener noreferrer" class={link}>God's Big Story</a> curriculum at <a href="https://www.sttimothysabc.org/" target="_blank" rel="noopener noreferrer" class={link}>St. Timothy's Anglican Bible Church</a>, I understand firsthand the challenge of finding specific artwork for obscure verses or particular lessons.
+      </p>
+      <p class="mb-4 md:clear-right">
+        My core philosophy is simple: <strong>"Slowness is sacred."</strong> I believe in using imagination to meditate on God's Word. I value "slow theology" over fast consumption. When my 5-year-old colors the word "GRACE" in our Verse Art tool, he isn't just seeing the word; he is physically tracing the shape of it. This builds the fine motor skills needed for handwriting while planting the scripture deep in his memory. It's handwriting practice and theology, all rolled into one.
+      </p>
+    </section>
+
+    <section>
+      <h2 class={h2}>Our Mission</h2>
+      <p class="mb-4">
+        Bible Sketch exists to solve a common problem for ministry leaders and parents: finding specific artwork for specific Bible verses. Rather than searching through limited pre-made collections, users generate fresh content on demand.
+      </p>
+      <p class="mb-4">We designed the platform with two distinct tools to cover different ministry needs:</p>
+      <ul>
+        <li><strong>Scene Art:</strong> Visual storytelling and biblical narrative. Best used for Sunday School lessons, VBS history, and teaching complex stories.</li>
+        <li><strong>Verse Art:</strong> Typography and scripture memorization. These designs are ideal for memory verses, meditation, and relaxation.</li>
+      </ul>
+      <p class="mb-4">
+        Our values center on <strong>biblical accuracy</strong>, <strong>educational development</strong>, and <strong>accessibility</strong>. We believe that every child should have access to quality resources that help them engage with Scripture in meaningful ways.
+      </p>
+    </section>
+
+    <section>
+      <h2 class={h2}>What Makes Bible Sketch Different</h2>
+      <p class="mb-4">
+        The platform utilizes generative AI to interpret biblical text and render it into high-resolution line art suitable for printing. A key feature is the ability to adjust the "complexity level" of the output, ensuring the content is developmentally appropriate:
+      </p>
+      <ul>
+        <li><strong>Toddlers (Ages 2–4):</strong> Produces thick lines and large, simple shapes. Focuses on central characters with minimal background noise.</li>
+        <li><strong>Children (Ages 5–10):</strong> Storybook-style illustrations. Balances character detail with background elements.</li>
+        <li><strong>Teens (Ages 11–17):</strong> Dynamic, graphic-novel style compositions with "Comic Book" aesthetics.</li>
+        <li><strong>Adults (18+):</strong> Intricate, stained glass-style or fine-art detail. Designed for stress relief, meditation, and extended coloring sessions.</li>
+      </ul>
+      <p class="mb-4">
+        Creating a page takes about a minute. You select your tool, enter the scripture, choose the audience and an art style, and generate. Then download or print your page.
+      </p>
+    </section>
+
+    <section>
+      <h2 class={h2}>Trust &amp; Accuracy</h2>
+      <p class="mb-4">
+        Look, I'm a dad, and I'm protective of what my kids see. We've put guardrails on our AI to respect the Bible, but technology isn't perfect. I always tell parents: treat this like a partnership. Generate the image, take a second to look at it (maybe chuckle if Noah has an extra finger), and <em>then</em> hit print. <strong>Trust, but verify.</strong>
+      </p>
+      <p class="mb-4">
+        Our AI is prompted with strict guardrails to respect the context of scripture. However, as with all AI tools, we recommend reviewing the image to ensure it aligns with your theological interpretation before printing. We acknowledge that AI is a non-deterministic technology, and while we implement safety filters, the output may occasionally require review.
+      </p>
+      <p class="mb-4">
+        Content generated on Bible Sketch is cleared for use in non-commercial ministry settings, including Sunday School classes, church bulletins, and VBS packets. Churches can print unlimited copies for their classes.
+      </p>
+    </section>
+
+    <section>
+      <h2 class={h2}>Who Uses Bible Sketch?</h2>
+      <div class="space-y-6">
+        <div>
+          <h3 class="font-bold text-lg text-[#1F2937] mb-2">For Sunday School and VBS</h3>
+          <p class="mb-2">Teachers can generate materials that align perfectly with their specific curriculum. If a curriculum uses a non-standard verse, Bible Sketch creates a matching visual, eliminating the need to use unrelated generic artwork.</p>
+        </div>
+        <div>
+          <h3 class="font-bold text-lg text-[#1F2937] mb-2">For Homeschooling</h3>
+          <p class="mb-2">Parents can integrate art into Bible history or scripture memorization. The Verse Art tool is particularly effective for helping children memorize weekly verses by engaging their visual and kinesthetic learning senses.</p>
+        </div>
+        <div>
+          <h3 class="font-bold text-lg text-[#1F2937] mb-2">For Personal Devotion</h3>
+          <p class="mb-2">Many adults use the tool to create "Bible journaling" pages. Generating a coloring page based on a daily reading allows for quiet reflection and meditation on the text while coloring.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="border-t border-gray-200 pt-8">
+      <h2 class={h2}>Get in Touch</h2>
+      <p class="mb-4">
+        Have questions? We'd love to hear from you. Whether you're a Sunday School teacher looking for specific resources, a homeschooling parent exploring options, or just curious about how Bible Sketch works, we're here to help.
+      </p>
+      <p><strong>Email:</strong> <a href="mailto:hello@biblesketch.app" class={`${link} font-bold`}>hello@biblesketch.app</a></p>
+      <p class="mt-6">
+        You don't need another subscription that you'll forget to use. But if you're like me—tired of searching Google Images at 11 PM on a Saturday night—give the free tool a try first. Print a picture of Jonah for your kids. If it buys you 20 minutes of holy silence? Then we can talk about upgrading.
+      </p>
+    </section>
+
+    <section class="border-t border-gray-200 pt-8">
+      <h2 class={h2}>Ready to Get Started?</h2>
+      <div class="flex flex-wrap gap-4 not-prose">
+        <a href="/" class="px-6 py-3 bg-[#7C3AED] text-white font-medium rounded-lg hover:bg-[#6D28D9] transition-colors">Try Scene Art</a>
+        <a href="/bible-verse-coloring" class="px-6 py-3 bg-white border-2 border-[#7C3AED] text-[#7C3AED] font-medium rounded-lg hover:bg-purple-50 transition-colors">Try Verse Art</a>
+        <a href="/pricing" class="px-6 py-3 bg-white border-2 border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors">View Pricing</a>
+        <a href="/blog" class="px-6 py-3 bg-white border-2 border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors">Read Our Blog</a>
+      </div>
+    </section>
+  </div>
+</Page>

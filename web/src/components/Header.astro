@@ -1,14 +1,22 @@
 ---
-// Live nav markup (guest state) with real links. Log In / Claim Free Credits go to the SPA home, which owns
-// the auth modal until the header becomes an island (rollout phase 1).
+// The bundle's header `a5` with real links and the active item decided on the server. The auth slots are
+// islands (guest state until Firebase restores the session); the mobile menu is a native <details>.
+import AuthControls from './shell/AuthControls.tsx';
+
 const links = [
-  ['/', 'Scene Art'],
-  ['/bible-verse-coloring', 'Verse Art'],
-  ['/gallery', 'Gallery'],
-  ['/pricing', 'Pricing'],
-  ['/blog', 'Blog'],
-  ['/about', 'About'],
+  ['/', 'Scene Art', 'Scene Art'],
+  ['/bible-verse-coloring', 'Verse Art', 'Verse Art'],
+  ['/gallery', 'Gallery', 'Gallery'],
+  ['/pricing', 'Pricing', 'Pricing & Credits'],
+  ['/blog', 'Blog', 'Blog'],
+  ['/about', 'About', 'About'],
 ];
+// Fix: the bundle highlighted "Scene Art" on every page it didn't know (sketches, tags, legal pages).
+const path = Astro.url.pathname;
+const active =
+  path === '/' ? '/'
+  : /^\/(gallery|profile|tags|coloring-page)(\/|$)/.test(path) ? '/gallery'
+  : links.find(([href]) => href !== '/' && (path === href || path.startsWith(`${href}/`)))?.[0];
 ---
 <nav class="w-full sticky top-0 z-50 transition-all duration-300 border-b bg-[#FFF7ED]/95 backdrop-blur-md border-purple-100 py-3 shadow-sm">
   <div class="max-w-7xl mx-auto px-4 md:px-8 flex items-center justify-between">
@@ -20,26 +28,31 @@ const links = [
     </a>
     <div class="hidden md:flex items-center gap-8">
       {links.map(([href, label]) => (
-        <a href={href} class="text-lg font-bold text-gray-500 hover:text-[#7C3AED] transition-colors">{label}</a>
+        <a href={href} aria-current={href === active ? 'page' : undefined}
+          class:list={['text-lg font-bold hover:text-[#7C3AED] transition-colors', href === active ? 'text-[#7C3AED]' : 'text-gray-500']}>{label}</a>
       ))}
-      <a href="/" class="text-lg font-bold text-gray-500 hover:text-[#7C3AED] transition-colors">Log In</a>
-      <a href="/" class="inline-flex items-center justify-center rounded-full transition-all duration-200 bg-[#7C3AED] text-white hover:bg-[#6D28D9] shadow-lg shadow-purple-200 px-6 py-3 text-base font-bold gap-2">
-        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-yellow-300 animate-wiggle" aria-hidden="true"><rect x="3" y="8" width="18" height="4" rx="1"></rect><path d="M12 8v13"></path><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"></path><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5"></path></svg>
-        Claim Free Credits
-      </a>
+      <AuthControls client:idle variant="desktop" />
     </div>
     <div class="md:hidden flex items-center gap-3">
-      <a href="/" class="text-base font-bold text-[#7C3AED] mr-2">Log In</a>
+      <AuthControls client:idle variant="mobile" />
       <details class="relative">
         <summary class="list-none text-gray-700 p-1 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer" aria-label="Open menu">
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-8 h-8" aria-hidden="true"><path d="M4 5h16"></path><path d="M4 12h16"></path><path d="M4 19h16"></path></svg>
         </summary>
-        <div class="absolute right-0 mt-3 w-56 bg-white rounded-2xl shadow-xl border border-purple-100 py-2">
-          {links.map(([href, label]) => (
-            <a href={href} class="block px-5 py-3 text-lg font-bold text-gray-600 hover:text-[#7C3AED] hover:bg-purple-50">{label}</a>
+        <div class="absolute right-0 mt-3 w-64 bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-gray-200 p-4 flex flex-col gap-2">
+          {links.map(([href, , mobile]) => (
+            <a href={href} class:list={['font-bold text-lg p-4 rounded-xl transition-colors', href === active ? 'bg-purple-50 text-[#7C3AED]' : 'text-gray-600 hover:bg-gray-50']}>{mobile}</a>
           ))}
+          <div class="pt-3 mt-1 border-t border-gray-100" data-guest-only>
+            <button type="button" data-open-auth="signup"
+              class="w-full inline-flex items-center justify-center gap-2 rounded-full font-bold bg-[#7C3AED] text-white hover:bg-[#6D28D9] shadow-lg shadow-purple-200 h-12 text-lg">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 text-yellow-300 animate-wiggle" aria-hidden="true"><rect x="3" y="8" width="18" height="4" rx="1"></rect><path d="M12 8v13"></path><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"></path><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5"></path></svg>
+              Claim Free Credits
+            </button>
+          </div>
         </div>
       </details>
     </div>
   </div>
 </nav>
+

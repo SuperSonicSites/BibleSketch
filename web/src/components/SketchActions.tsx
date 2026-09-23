@@ -1,15 +1,9 @@
-// Guest call-to-action on the server; swaps to the signed-in buttons once Firebase Auth has restored the
-// session. Auth is imported when the browser is idle so it never competes with the first paint.
+// Guest call-to-action on the server; swaps to the signed-in buttons once the shared session (lib/session.ts,
+// started by ModalHost) has restored the visitor.
 // ponytail: Phase 0 buttons are read-only (they show the quota). Print/download/save writes land in rollout
 // phase 2 together with the server-side print PDF (ROADMAP 1.2).
-import { useEffect, useState } from 'react';
-import { FIREBASE } from '../lib/config.ts';
-import { getDoc } from '../lib/firestore.ts';
-
-type Viewer = { uid: string; remaining: number; isPremium: boolean } | null;
-
-const idle = (fn: () => void) =>
-  'requestIdleCallback' in window ? requestIdleCallback(fn, { timeout: 3000 }) : setTimeout(fn, 1500);
+import { useStore } from '@nanostores/react';
+import { $profile, $user, requireAuth } from '../lib/store.ts';
 
 const icon = (d: string[]) => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -23,26 +17,10 @@ const BOOKMARK = ['m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z'];
 const CHECK = ['M20 6 9 17l-5-5'];
 
 export default function SketchActions({ ownerId }: { ownerId?: string }) {
-  const [viewer, setViewer] = useState<Viewer>(null);
+  const user = useStore($user);
+  const profile = useStore($profile);
 
-  useEffect(() => {
-    idle(async () => {
-      const [{ initializeApp }, { initializeAuth, indexedDBLocalPersistence, browserLocalPersistence }] =
-        await Promise.all([import('firebase/app'), import('firebase/auth')]);
-      // Not getAuth(): it wires the popup/redirect resolver, which loads gapi + /__/auth/iframe (~140 KB) on
-      // every page. Sign-in popups pass browserPopupRedirectResolver at call time instead.
-      const auth = initializeAuth(initializeApp(FIREBASE), {
-        persistence: [indexedDBLocalPersistence, browserLocalPersistence],
-      });
-      await auth.authStateReady();
-      const u = auth.currentUser;
-      if (!u || u.isAnonymous) return;
-      const doc = await getDoc('users', u.uid);
-      setViewer({ uid: u.uid, remaining: doc?.downloadsRemaining ?? 0, isPremium: Boolean(doc?.isPremium) });
-    });
-  }, []);
-
-  if (!viewer) {
+  if (!user || !profile) {
     const items: [string[], string][] = [
       [PRINTER, 'Print this page (PDF)'],
       [DOWNLOAD, 'Download HD image'],
@@ -65,16 +43,16 @@ export default function SketchActions({ ownerId }: { ownerId?: string }) {
         <div className="bg-white/20 backdrop-blur-sm rounded-lg px-3 py-2 mb-4 text-center">
           <p className="text-white font-bold text-sm">✨ Includes 5 free prints!</p>
         </div>
-        <a href="/" className="block text-center w-full bg-amber-400 hover:bg-amber-300 text-gray-900 font-bold py-3 rounded-xl transition-all animate-pulseGlow">
+        <button type="button" onClick={() => requireAuth(() => {}, 'signup')} className="block text-center w-full bg-amber-400 hover:bg-amber-300 text-gray-900 font-bold py-3 rounded-xl transition-all animate-pulseGlow">
           Create Free Account
-        </a>
+        </button>
         <p className="text-xs text-purple-200 text-center mt-2">No credit card required</p>
       </div>
     );
   }
 
-  const isOwner = viewer.uid === ownerId;
-  const left = !isOwner && !viewer.isPremium ? <span className="ml-1 text-xs opacity-80">({viewer.remaining} left)</span> : null;
+  const isOwner = user.uid === ownerId;
+  const left = !isOwner && !profile.isPremium ? <span className="ml-1 text-xs opacity-80">({profile.downloadsRemaining ?? 0} left)</span> : null;
   const btn = 'inline-flex items-center justify-center rounded-full font-bold transition-all duration-200 w-full gap-2 disabled:opacity-50 disabled:cursor-not-allowed';
   return (
     <div className="space-y-4 mb-10" title="Prototype: actions arrive in rollout phase 2">

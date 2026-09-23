@@ -1,0 +1,44 @@
+---
+// /blog (bundle `NW`): all posts, newest first, as real links. "Load More" is gone: 12 per page never
+// applied with 6 posts. Add real /blog/page/N links if the list outgrows one page.
+import { getCollection } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import { formatDate } from '../../lib/blog.ts';
+import { ORIGIN } from '../../lib/sketch.ts';
+
+const posts = (await getCollection('blog')).sort((a, b) => b.data.date.localeCompare(a.data.date));
+Astro.cache.set({ maxAge: 86400, swr: 604800, tags: ['blog'] });
+Astro.response.headers.set('Cache-Control', 'public, max-age=3600');
+---
+<Base title="Blog - Bible Sketch" description="Latest updates, tutorials, and news from Bible Sketch." canonical={`${ORIGIN}/blog`}
+  ogType="website" image={`${ORIGIN}/logo.png`} imageAlt="Bible Sketch Logo" twitterCard="summary">
+  <main class="max-w-7xl mx-auto px-4 py-12">
+    <h1 class="text-4xl md:text-5xl font-bold text-gray-900 mb-8 md:mb-12 font-serif text-center">Blog</h1>
+    {posts.length === 0 ? (
+      <p class="text-center text-gray-500 text-lg py-20">No blog posts yet. Check back soon!</p>
+    ) : (
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
+        {posts.map(({ id, data }, i) => (
+          <a href={`/blog/${id}`} class="bg-white rounded-xl shadow-sm hover:shadow-md transition-all duration-300 border border-purple-100 overflow-hidden group flex flex-col">
+            <article class="flex flex-col flex-grow">
+              <div class="w-full aspect-[2/1] overflow-hidden bg-gray-100">
+                <img src={`/img/w800${data.cover.src}`} srcset={`/img/w480${data.cover.src} 480w, /img/w800${data.cover.src} 800w`}
+                  sizes="(min-width: 1024px) 400px, (min-width: 768px) 50vw, 100vw" alt={data.title} width={data.cover.width} height={data.cover.height}
+                  loading={i < 3 ? 'eager' : 'lazy'} fetchpriority={i === 0 ? 'high' : undefined} decoding="async"
+                  class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+              </div>
+              <div class="p-4 md:p-6 flex flex-col flex-grow">
+                <div class="text-xs md:text-sm text-purple-600 mb-2 font-medium">
+                  <time datetime={data.date}>{formatDate(data.date)}</time> · {data.minutes} min read
+                </div>
+                <h2 class="text-xl font-bold mb-2 text-gray-900 font-serif group-hover:text-[#7C3AED] transition-colors line-clamp-2">{data.title}</h2>
+                <p class="text-sm md:text-base text-gray-600 mb-3 line-clamp-2 flex-grow">{data.excerpt}</p>
+                <div class="text-xs md:text-sm text-gray-500 mt-auto">By {data.author}</div>
+              </div>
+            </article>
+          </a>
+        ))}
+      </div>
+    )}
+  </main>
+</Base>

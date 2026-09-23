@@ -1,0 +1,24 @@
+---
+// Text pages (about, privacy, terms): the live layout, with a real "Back to Home" link and edge caching.
+// Pages call Astro.cache.set() themselves only if they need something other than this default.
+import Base from './Base.astro';
+
+type Props = Parameters<typeof Base>[0];
+const props = Astro.props as Props;
+Astro.cache.set({ maxAge: 86400, swr: 604800, tags: ['pages'] });
+Astro.response.headers.set('Cache-Control', 'public, max-age=3600');
+---
+<Base {...props}>
+  <slot name="head" slot="head" />
+  <div class="max-w-4xl mx-auto px-4 py-12">
+    <a href="/" class="inline-flex items-center gap-2 text-gray-500 hover:text-[#7C3AED] font-bold mb-8 transition-colors group">
+      <span class="p-2 bg-white rounded-full shadow-sm group-hover:shadow-md border border-gray-100 transition-all">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5" aria-hidden="true"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg>
+      </span>
+      <span>Back to Home</span>
+    </a>
+    <div class="bg-white rounded-3xl shadow-sm border border-gray-200 p-8 md:p-12">
+      <slot />
+    </div>
+  </div>
+</Base>

@@ -1,5 +1,5 @@
 // Phase 0 check 1: Lighthouse mobile performance, median of N runs per URL.
-// Usage: node scripts/lighthouse.mjs <origin> [runs=3] [--cold]
+// Usage: node scripts/lighthouse.mjs <origin> [runs=3] [--cold] [--paths=/a,/b]
 // Default = warm edge cache (what visitors and PageSpeed Insights mostly get): each URL is fetched twice first.
 // --cold adds ?cb=<random> so every run misses the cache and renders from Firestore.
 //   node scripts/lighthouse.mjs https://biblesketch-web.<account>.workers.dev
@@ -15,10 +15,11 @@ const lighthouse = (await import(pathToFileURL(require.resolve('lighthouse')).hr
 
 const args = process.argv.slice(2);
 const cold = args.includes('--cold');
-const [origin, runsArg] = args.filter((a) => a !== '--cold');
+const pathsArg = args.find((a) => a.startsWith('--paths='));
+const [origin, runsArg] = args.filter((a) => !a.startsWith('--'));
 const runs = Number(runsArg ?? 3);
 if (!origin) throw new Error('usage: node scripts/lighthouse.mjs <origin> [runs]');
-const paths = [
+const paths = pathsArg ? pathsArg.slice(8).split(',') : [
   '/coloring-page/genesis-1-3-5/DbZ9PRyfCbwlWoeFMPqe', // scene, Toddler
   '/coloring-page/joshua-1-9/WrFh8ilVdsYQzrxmChsO', // verse art
   '/coloring-page/isaiah-7-14/RZa9lDfB24WNwJBoTLwF', // scene, Toddler

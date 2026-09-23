@@ -1,0 +1,44 @@
+---
+// Continue URL of the Firebase verification email (bundle `Nq`). Visitors arrive signed out (sign-up signs
+// them out until the address is verified), so the page now offers "Log In" next to "Start Creating Now".
+import Base from '../layouts/Base.astro';
+
+Astro.cache.set({ maxAge: 86400, swr: 604800, tags: ['pages'] });
+Astro.response.headers.set('Cache-Control', 'public, max-age=3600');
+Astro.response.headers.set('X-Robots-Tag', 'noindex');
+const perks = [
+  ['🎨', '5 Free Credits', 'To create your own custom coloring pages from any Bible verse.'],
+  ['🖨️', '5 Downloads or Prints', 'High-quality exports of any creation you find on the website.'],
+  ['❤️', 'Bless & Save', 'Like ("Bless") and save your favorite creations to your personal collection.'],
+];
+---
+<Base title="Email Verified | Bible Sketch" robots="noindex" ogType="website">
+  <div class="min-h-[80vh] flex flex-col items-center justify-center p-4 text-center">
+    <div class="max-w-2xl w-full bg-white rounded-3xl shadow-xl p-8 md:p-12 relative overflow-hidden border border-purple-100">
+      <div class="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-[#FCD34D] via-[#7C3AED] to-[#FCD34D]"></div>
+      <div class="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6 text-4xl animate-bounce" aria-hidden="true">🎉</div>
+      <h1 class="text-3xl md:text-4xl font-bold text-[#1F2937] mb-4">Congratulations!</h1>
+      <p class="text-xl text-gray-600 mb-8">Your email has been verified successfully.</p>
+      <div class="bg-[#FFF7ED] rounded-2xl p-6 md:p-8 text-left mb-8 border border-orange-100">
+        <h2 class="text-lg font-bold text-[#7C3AED] mb-4 uppercase tracking-wide text-center">Your Free Account Includes:</h2>
+        <ul class="space-y-4">
+          {perks.map(([emoji, name, text]) => (
+            <li class="flex items-start gap-3">
+              <span class="text-2xl" aria-hidden="true">{emoji}</span>
+              <div><span class="font-bold text-gray-800">{name}</span><p class="text-sm text-gray-600">{text}</p></div>
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div class="flex flex-col md:flex-row gap-4 justify-center">
+        <button type="button" data-open-auth="login" data-guest-only
+          class="w-full md:w-auto px-8 py-4 bg-white border-2 border-[#7C3AED] text-[#7C3AED] text-lg rounded-full font-bold hover:bg-purple-50 transition-all">
+          Log In
+        </button>
+        <a href="/" class="w-full md:w-auto px-8 py-4 bg-[#7C3AED] text-white text-lg rounded-full font-bold hover:bg-[#6D28D9] transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-1">
+          Start Creating Now
+        </a>
+      </div>
+    </div>
+  </div>
+</Base>

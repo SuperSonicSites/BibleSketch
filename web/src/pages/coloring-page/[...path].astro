@@ -189,13 +189,3 @@ const card = 'flex-1 py-3 rounded-xl border flex items-center justify-center tra
   }
 </style>
 
-<script>
-  // Copy Link: the only other client code on the page.
-  document.querySelectorAll<HTMLButtonElement>('[data-copy]').forEach((b) =>
-    b.addEventListener('click', async () => {
-      const label = b.querySelector('span');
-      await navigator.clipboard.writeText(b.dataset.copy!);
-      if (label) { label.textContent = 'Copied!'; setTimeout(() => (label.textContent = 'Copy Link'), 2000); }
-    }),
-  );
-</script>
