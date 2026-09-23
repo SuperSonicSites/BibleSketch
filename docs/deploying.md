@@ -32,6 +32,7 @@ Rollback: `firebase hosting:clone biblesketch-5104c@<version> biblesketch-5104c:
 - Function deploys don't purge the Hosting CDN (pages are cached up to 1 day). Verify with `?cb=<random>`, and flush with a new Hosting release: `firebase hosting:channel:deploy flush-<n> --expires 1d --no-authorized-domains --project biblesketch-5104c`, then `firebase hosting:clone biblesketch-5104c:flush-<n> biblesketch-5104c:live --project biblesketch-5104c`. Cloning the live version onto itself does nothing.
 - Rollback: check out the previous ref, redeploy the same list, flush the CDN. Redeploying an older commit does not undo `minInstances`: deploy once with `minInstances: 0` to remove it.
 - Channels call the live functions, so function changes can only be tested in the emulators.
+- `onSketchWritten` (edge-cache purge for the Astro Worker) is **not deployed yet**; it ships with rollout phase 2 (ROADMAP 1). Before its first deploy: `firebase functions:secrets:set WORKER_PURGE_SECRET --project biblesketch-5104c` (same value as the Worker's `PURGE_SECRET`) and `WORKER_PURGE_URL=https://biblesketch.app/api/purge` in `functions/.env`. With the URL unset it does nothing.
 - The functions predeploy hook runs `check-hosting-public.mjs --live`, which fails if a file `functions/index.html` references isn't live on `biblesketch-5104c.web.app` yet (release Hosting first). For a billing hotfix when web.app is unreachable: `$env:SKIP_LIVE_ASSET_CHECK='1'` (PowerShell), then `Remove-Item Env:SKIP_LIVE_ASSET_CHECK`.
 
 ## Storage
