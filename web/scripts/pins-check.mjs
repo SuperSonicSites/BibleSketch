@@ -44,11 +44,15 @@ for (const e of entries) {
   days.set(e.release, e);
   if (files.has(pinFile(e))) err(e, 'duplicate Pin image name');
   files.add(pinFile(e));
-  if (pinned.has(e.sketchId)) err(e, 'already on Pinterest');
+  // A released entry is on Pinterest by design; only a future one must not be.
+  if (pinned.has(e.sketchId) && e.release > new Date().toISOString().slice(0, 10)) err(e, 'already on Pinterest');
 
   if (e.title.length < 40 || e.title.length > 100) err(e, `title is ${e.title.length} chars (40-100)`);
   if (!e.title.includes('|')) err(e, 'title needs "| <reference>"');
   if (/\bfree\b/i.test(e.title)) err(e, 'no "Free" in titles (weak reach)');
+  // The core search phrase must be in the Pin text (docs/pinterest-strategy.md).
+  if (!/coloring/i.test(e.title)) err(e, 'title needs "Coloring"');
+  if (!/coloring (page|sheet)/i.test(e.description)) err(e, 'description needs "coloring page"');
   if (e.description.length < 250 || e.description.length > 420) err(e, `description is ${e.description.length} chars (250-420)`);
   if (!e.description.endsWith(CTA)) err(e, 'description must end with the free-prints line');
   if (/#\w|[\u{1F300}-\u{1FAFF}]/u.test(e.description)) err(e, 'no hashtags or emojis');

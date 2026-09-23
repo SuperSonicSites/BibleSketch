@@ -117,7 +117,7 @@ Plan: a `GET /api/print/<sketchId>.pdf` endpoint (Worker) that builds a Letter o
 - Clear credit messaging at sign-up (what 5 free credits buy) and after purchase (credits land instantly; show the new balance).
 
 ### 1.5 Pinterest auto-publish (RSS)
-Built 2026-09-23 in `web/`: `src/data/pins.json` (the calendar), `src/lib/pins.ts`, `/pins/<board>.xml` (RSS 2.0) and `/pin-img/<name>.png` (1000x1500, Images binding: sketch 1000x1333 + a 1000x167 banner from `public/pin-banners/`). `node scripts/pins-check.mjs [--backlog]` before every deploy. Owner decisions:
+Built 2026-09-23 in `web/`: `src/data/pins.json` (the calendar), `src/lib/pins.ts`, `/pins/<board>.xml` (RSS 2.0) and `/pin-img/<name>.png` (1000x1500, Images binding: sketch 1000x1333 + a 1000x167 banner from `public/pin-banners/`). `node scripts/pins-check.mjs [--backlog]` before every deploy. Strategy and its reasoning: [docs/pinterest-strategy.md](docs/pinterest-strategy.md). Owner decisions:
 - **One Pin per day for the whole account**, boards taking turns (Oct 15 - Dec 20: Christmas 4 / Sunday School 2 / Scripture 1 per week; Lent/Easter from Feb 1 the same way with Easter). Why: avoid being flagged or ghosted; the Nov-Dec 2025 burst (4-8/day) had no penalty but the account has been idle 9 months.
 - A feed lists only what was released in the last 2 days (`WINDOW_DAYS`), so a late connection or a skipped Pinterest check can never publish a pile.
 - Only public sketches of the master account (`TiAEiMqWxpWqxCLtoI5OgHAvtf33`), never a sketch already on Pinterest, one Pin per sketch.
