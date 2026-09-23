@@ -5,6 +5,7 @@
 //   functions/.secret.local  GEMINI_API_KEY=<any dummy>  ZOHO_WEBHOOK_SECRET=localtestsecret123
 //                            WORKER_PURGE_SECRET=localpurgesecret
 //   functions/.env.local     ZOHO_ENFORCE_AUTH=true  WORKER_PURGE_URL=http://127.0.0.1:8788/api/purge
+//                            FAKE_GEMINI=1 (createSketch/editSketch use a fake Gemini, emulator only)
 //   hosting-public/          the live hosting files (functions render the pages)
 //   firebase emulators:start --only auth,firestore,storage,functions,hosting --project biblesketch-5104c
 // Usage: node scripts/security-check.mjs
@@ -51,7 +52,11 @@ const clientApp = (name) => {
   const db = getFirestore(app); connectFirestoreEmulator(db, '127.0.0.1', 8080);
   const storage = getStorage(app); connectStorageEmulator(storage, '127.0.0.1', 9199);
   const fns = getFunctions(app); connectFunctionsEmulator(fns, '127.0.0.1', 5001);
-  return { auth, db, storage, call: (data) => httpsCallable(fns, 'generateContent')(data) };
+  return {
+    auth, db, storage,
+    call: (data) => httpsCallable(fns, 'generateContent')(data),
+    fn: async (name, data) => (await httpsCallable(fns, name, { timeout: 600000 })(data)).data,
+  };
 };
 
 // Email/password user, verified unless asked otherwise, signed in on its own app instance.
@@ -512,6 +517,114 @@ await step('storage: sketches fetchable by path, folders not listable by others,
   await allowed(getBytes(ref(bob.storage, path)), 'fetch by path');
   await denied(listAll(ref(bob.storage, `user_uploads/${alice.uid}/sketches`)), 'list other user');
   await allowed(listAll(ref(alice.storage, `user_uploads/${alice.uid}`)), 'list own folder');
+});
+
+// ---------------------------------------------------------------- server-side generation (fake Gemini)
+const rid = () => crypto.randomUUID();
+const scene = (over = {}) => ({ requestId: rid(), kind: 'scene', book: 'Daniel', chapter: 6, startVerse: 16, age: 'Young Child', style: 'Sunday School', ...over });
+const txTypes = async (u) => (await getDocs(collection(u.db, 'users', u.uid, 'transactions'))).docs.map((d) => d.get('type'));
+const creator = await makeUser('creator');
+await allowed(setDoc(doc(creator.db, 'users', creator.uid), liveProfile(creator)), 'create creator');
+
+await step('createSketch rejects bad callers and bad input without charging', async () => {
+  const guest = clientApp('guest2');
+  await callFails(guest.fn('createSketch', scene()), 'unauthenticated', 'signed out');
+  const unverified = await makeUser('unverified2', { verified: false });
+  await callFails(unverified.fn('createSketch', scene()), 'permission-denied', 'unverified');
+  await callFails(creator.fn('createSketch', scene({ book: 'Hezekiah' })), 'invalid-argument', 'book');
+  await callFails(creator.fn('createSketch', scene({ age: 'Toddler', style: 'Classic' })), 'invalid-argument', 'style for age');
+  await callFails(creator.fn('createSketch', scene({ requestId: 'x' })), 'invalid-argument', 'requestId');
+  await callFails(creator.fn('createSketch', { ...scene(), kind: 'verse', font: 'Comic Sans' }), 'invalid-argument', 'font');
+  assert.equal(await credits(creator), 5);
+});
+
+let made;
+await step('createSketch charges one credit and saves a private sketch; a repeated requestId never charges again', async () => {
+  const req = scene();
+  made = await creator.fn('createSketch', req);
+  assert.equal(made.status, 'done');
+  const s = await getDoc(doc(creator.db, 'sketches', made.sketchId));
+  assert.equal(s.get('isPublic'), false);
+  assert.equal(s.get('userId'), creator.uid);
+  assert.equal(s.get('type'), 'scene');
+  assert.equal(s.get('promptData').art_style, 'Sunday School');
+  assert.equal(typeof s.get('qa').inkPct, 'number');
+  await allowed(getBytes(ref(creator.storage, s.get('storagePath'))), 'image stored');
+  assert.equal(await credits(creator), 4);
+  const again = await creator.fn('createSketch', req);
+  assert.equal(again.sketchId, made.sketchId);
+  assert.equal(await credits(creator), 4);
+  assert.deepEqual(await txTypes(creator), ['usage']);
+});
+
+await step('a failed generation refunds its credit', async () => {
+  const r = await creator.fn('createSketch', scene({ chapter: 150, startVerse: 1 }));
+  assert.deepEqual(r, { status: 'refunded', error: 'FAILED' });
+  assert.equal(await credits(creator), 4);
+  assert.deepEqual((await txTypes(creator)).sort(), ['refund', 'usage', 'usage']);
+});
+
+await step('createSketch makes verse art', async () => {
+  const r = await creator.fn('createSketch', { requestId: rid(), kind: 'verse', book: 'Psalms', chapter: 23, startVerse: 1, font: 'Playful' });
+  assert.equal(r.status, 'done');
+  const s = await getDoc(doc(creator.db, 'sketches', r.sketchId));
+  assert.equal(s.get('type'), 'verse');
+  assert.equal(s.get('promptData').font_style, 'Playful');
+  assert.equal(await credits(creator), 3);
+});
+
+await step('two simultaneous generations with one credit: exactly one runs', async () => {
+  const last = await makeUser('last');
+  await allowed(setDoc(doc(last.db, 'users', last.uid), liveProfile(last)), 'create');
+  await allowed(updateDoc(doc(last.db, 'users', last.uid), { credits: 1 }), 'spend down to 1');
+  const results = await Promise.allSettled([last.fn('createSketch', scene()), last.fn('createSketch', scene())]);
+  assert.equal(results.filter((r) => r.status === 'fulfilled' && r.value.status === 'done').length, 1);
+  assert.ok(results.some((r) => r.status === 'rejected' && r.reason.code === 'functions/failed-precondition'), 'second is rejected');
+  assert.equal(await credits(last), 0);
+});
+
+await step('editSketch: paid edits make a new private sketch, failures refund, others\' private sketches are off limits', async () => {
+  const c0 = await credits(creator);
+  const removed = await creator.fn('editSketch', { requestId: rid(), sketchId: made.sketchId, op: 'removeColor' });
+  assert.equal(removed.status, 'done');
+  assert.notEqual(removed.sketchId, made.sketchId);
+  assert.equal((await getDoc(doc(creator.db, 'sketches', removed.sketchId))).get('editedFrom'), made.sketchId);
+  assert.equal(await credits(creator), c0 - 1);
+  const failed = await creator.fn('editSketch', { requestId: rid(), sketchId: made.sketchId, op: 'refine', instruction: 'FAIL please' });
+  assert.equal(failed.status, 'refunded');
+  assert.equal(await credits(creator), c0 - 1);
+  await callFails(bob.fn('editSketch', { requestId: rid(), sketchId: made.sketchId, op: 'refine', instruction: 'x' }), 'not-found', 'someone else\'s private sketch');
+  await callFails(creator.fn('editSketch', { requestId: rid(), sketchId: made.sketchId, op: 'refine', instruction: 'x'.repeat(501) }), 'invalid-argument', 'long instruction');
+});
+
+await step('editSketch addRef: free, owner only, moves the image to a new file', async () => {
+  const c0 = await credits(creator);
+  const before = (await getDoc(doc(creator.db, 'sketches', made.sketchId))).get('storagePath');
+  const r = await creator.fn('editSketch', { sketchId: made.sketchId, op: 'addRef' });
+  assert.equal(r.sketchId, made.sketchId);
+  const after = (await getDoc(doc(creator.db, 'sketches', made.sketchId))).get('storagePath');
+  assert.notEqual(after, before);
+  await allowed(getBytes(ref(creator.storage, after)), 'new file');
+  await assert.rejects(getBytes(ref(creator.storage, before)), 'old file deleted');
+  assert.equal(await credits(creator), c0);
+  await allowed(updateDoc(doc(creator.db, 'sketches', made.sketchId), { isPublic: true }), 'publish');
+  await callFails(bob.fn('editSketch', { sketchId: made.sketchId, op: 'addRef' }), 'permission-denied', 'not the owner');
+});
+
+await step('deleting an account removes its sketches, others\' bookmarks of them and its files', async () => {
+  const s = await getDoc(doc(creator.db, 'sketches', made.sketchId));
+  const bm = `bookmark_${bob.uid}_${made.sketchId}`;
+  await allowed(setDoc(doc(bob.db, 'sketches', bm), {
+    userId: bob.uid, isBookmark: true, isPublic: false, blessCount: 0, createdAt: serverTimestamp(),
+    originalSketchId: made.sketchId, originalOwnerId: creator.uid, imageUrl: s.get('imageUrl'),
+  }), 'bob bookmarks it');
+  await fetch(`${AUTH}/identitytoolkit.googleapis.com/v1/projects/${PROJECT}/accounts:delete`, {
+    method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer owner' },
+    body: JSON.stringify({ localId: creator.uid }),
+  });
+  await waitFor(async () => !(await adminDocExists(`sketches/${made.sketchId}`)), 'sketch deleted');
+  await waitFor(async () => !(await adminDocExists(`sketches/${bm}`)), 'bookmark deleted');
+  await waitFor(() => getBytes(ref(bob.storage, s.get('storagePath'))).then(() => false, () => true), 'files deleted');
 });
 
 console.log(`\nAll ${passed} checks passed.`);
