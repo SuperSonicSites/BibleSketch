@@ -89,6 +89,7 @@ It can't ship on its own: the prompts live in the React front end, whose product
 - Continue the lab loop one style per round (`node lab/gen.mjs`, review at `localhost:5199`); `lab/` stays gitignored.
 - `generateContent` already allows `gemini-3.1-flash-image` and `gemini-3.1-pro-preview`, so the backend is ready. Costs: $0.101 per 2K image.
 - Open question: verses whose text contradicts the owner's expectation (Genesis 3:24 "cherubim", plural): ask before adding any rule that overrides the text.
+- Owner decision 2026-09-23 (Pinterest work): where the text is silent, follow beloved tradition (three crowned wise men, ox and donkey at the manger, Jonah's whale, round-topped tablets…; list in `functions/generation/prompts.js` CHRISTIAN_GUIDELINES rule 8, applies to every age and style). Goliath is drawn as a real giant; short adults (Zacchaeus) stay adults. Toddler keeps the frame but becomes a full storybook scene (characters in the story's setting, filling the frame), with our two best Pinterest pages as references (`toddler-sundayschool-a/b.jpg`). Why: Toddler · Sunday School full scenes are the best Pinterest performers (36.8 outbound clicks per Pin vs 5.8 for Adult); the old "one subject, simple setting" prompt produced sparse pages. Tested on 15 passages with the functions pipeline run locally.
 
 ### 1.1 Credit system (fix in the rebuild, before or with phase 4)
 Audit 2026-09-22 (live bundle + prod rules in emulators). Today the **client** deducts credits and the server only checks `credits >= 1`.

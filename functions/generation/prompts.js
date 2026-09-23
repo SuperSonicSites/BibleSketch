@@ -40,7 +40,8 @@ const BIBLE_BOOKS = [
 
 // Files in functions/references/.
 const REFERENCE_MAP = {
-  'Toddler_Sunday School': ['toddler-sundayschool.jpg', 'toddler-sundayschool-2.jpg'],
+  // Our two best Pinterest pages (Genesis 3:24, Genesis 4:3-5; caption cropped): full scenes, not a lone animal.
+  'Toddler_Sunday School': ['toddler-sundayschool-a.jpg', 'toddler-sundayschool-b.jpg'],
   'Young Child_Sunday School': ['child-sundayschool.jpg'],
   'Young Child_Stained Glass': ['child-stainglass.jpg', 'child-stainglass-2.jpg'],
   'Young Child_Iconography': ['child-iconography.jpg'],
@@ -68,7 +69,7 @@ const VERSE_REFERENCE_MAP = {
 const AGE_LOGIC = {
   Toddler: {
     keywords: 'Very bold, simple line art for ages 2-4: ultra-thick outlines as wide as a chunky marker (about 2 mm on the printed page), the same thickness everywhere including the frame. A few large simple shapes, big open areas that are easy to color, almost no small details (no fingers, toes or tiny accessories drawn separately). Friendly rounded forms with natural body proportions (no oversized heads).',
-    subjectFocus: 'One central subject or a simple pair, set in a simple setting (ground line, hills, a few clouds or waves) that fills the frame. Cheerful and iconic. Crowds become 1-2 representative figures. Night is an outlined moon and stars, never a dark sky.',
+    subjectFocus: "A Bible storybook scene: the story's characters (up to 3 main figures, plus the animals or objects the story is known for) doing its key action, with friendly, expressive faces, large in the middle of the page. Around them, the story's place drawn as big simple shapes fills the frame to the border: trees, bushes and flowers, rolling hills, clouds, arches, a stable roof or palace columns. No large empty areas and never a lone figure on blank ground. Crowds become 2-3 representative figures. Night is an outlined moon and stars, never a dark sky.",
   },
   'Young Child': {
     keywords: 'Storybook line art for ages 5-8: consistent medium-thick outlines, clear separation between objects, a readable setting (water, sky, land) divided into large colorable areas.',
@@ -99,15 +100,16 @@ const CHRISTIAN_GUIDELINES = `
    - **Jesus:** Depict as a historical human male (Middle Eastern descent).
    - **Holy Spirit:** Depict as a Dove or Tongues of Fire.
    - **The Angel of the LORD / God's glory appearing** in a bush, fire, cloud or light (e.g. Exodus 3:2): draw only the fire, cloud or light itself, never a figure inside it.
-2. **Subject Count:** Draw EXACTLY the number of characters described.
+2. **Subject Count:** Draw EXACTLY the number of characters the text states. Where the text gives no number, use the traditional one (three wise men).
 3. **Biblical Accuracy:** - **Exodus:** Water walls must be liquid waves, not rock.
    - **Eden:** Serpents on ground/trees only (no wings/legs).
 4. **Chronological Consistency:** - **Pre-Fall (Gen 1-2):** NO SNAKES, NO APPLES, NO THORNS. NO CLOTHING. Use strategic visual modesty: foreground plants/flowers covering lower body, long hair, waist-deep water, or waist-up framing.
    - **After the fall, Genesis 3:7-20:** Adam and Eve wear aprons of fig leaves (3:7).
    - **From Genesis 3:21 on:** Clothing is animal skins (rough), which God made for them.
 5. **Modesty:** Private areas must ALWAYS be concealed. Pre-Fall: use environmental/natural elements (NOT clothing). Post-Fall+: use period-appropriate attire.
-6. **Scale:** Humans should always be depicted in natural, realistic scale. NO GIANT FIGURES.
+6. **Scale:** Humans should always be depicted in natural, realistic scale. NO GIANT FIGURES, except the giants the Bible names: Goliath towers over David, his head near the top of the frame while David's head reaches only Goliath's belt. Adults stay adults even when the text says they are short (Zacchaeus is a small grown man with a beard).
 7. **Digital Safety:** ALL SHAPES MUST BE CLOSED PATHS (for bucket fill).
+8. **Beloved traditions:** where the text is silent, draw what Christian tradition and children's Bibles have made familiar, as long as the text does not contradict it: three wise men with crowns, each offering one gift (gold, frankincense, myrrh); the star shining over Bethlehem; the ox, donkey and sheep at the manger; Mary riding a donkey to Bethlehem; shepherds with crooks and lambs; angels with wings; Jonah's great fish as a whale; the forbidden fruit as an apple (from Genesis 3 on); Noah's animals two by two; David as a shepherd boy with a sling and five smooth stones; Moses with his staff and two round-topped stone tablets; palm branches on the road into Jerusalem; three crosses on the hill; the round stone rolled away from the tomb.
 `;
 
 // Gemini image models have no negative-prompt parameter, and a long list of banned words primes the very
@@ -220,7 +222,7 @@ ART STYLE (${artStyle}): ${STYLE_LOGIC[artStyle]}
 
 RULES:
 1. ${CHRISTIAN_GUIDELINES}
-2. FAITHFUL TO THE TEXT: depict what the passage describes, understood in its context. Include every concrete visual detail it states (who is present, what they hold, what happens, e.g. John 19:34: blood and water flow from Jesus' side) and nothing it contradicts. Do not add named or prominent characters the text does not mention (no extra angels or companions); background figures only where the text or context implies them (a census crowd, a multitude).
+2. FAITHFUL TO THE TEXT: depict what the passage describes, understood in its context. Include every concrete visual detail it states (who is present, what they hold, what happens, e.g. John 19:34: blood and water flow from Jesus' side) and nothing it contradicts. Do not add named or prominent characters the text does not mention (no extra angels or companions), except those rule 1.8's traditions attach to the scene; background figures only where the text or context implies them (a census crowd, a multitude).
    SPEECH PASSAGES: when the passage is mainly words (a prophecy, curse, promise, blessing, teaching, prayer), draw the moment they are spoken: the speaker, the listeners and their reactions, in the place the context gives. Then make the words' meaning visible through who is addressed and one clear symbolic element, never as if the future were already happening (e.g. Genesis 3:15: God's light falls on Eve, her hand on her womb for the promised offspring, while the serpent recoils in the dust at her heel).
    SETTING FROM THE STORY: use the place the text and context give (Bethlehem's hill country, Eden's gate, the palace court). Never invent landmarks such as cliffs, mountains or cities the story doesn't have.
 3. GAZE AND ACTION: characters face and look at what they react to, speak to or act on (e.g. Moses looks at the burning bush), unless the text says otherwise. Actions make contact: the hand grips, the spear touches the side, the crown rests on the head.
