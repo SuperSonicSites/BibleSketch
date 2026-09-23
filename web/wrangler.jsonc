@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "biblesketch-web",
+  "main": "@astrojs/cloudflare/entrypoints/server",
+  "compatibility_date": "2026-09-22",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": { "directory": "./dist", "binding": "ASSETS" },
+  "workers_dev": true,
+  "observability": { "enabled": true },
+  // Cloudflare Images binding: WebP thumbnails for /img/* (src/pages/img/[...path].ts).
+  "images": { "binding": "IMAGES" }
+  // Secret PURGE_SECRET: `npx wrangler secret put PURGE_SECRET` (local dev: .dev.vars).
+}

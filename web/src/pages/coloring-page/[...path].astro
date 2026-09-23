@@ -1,0 +1,200 @@
+---
+// /coloring-page/<id> and /coloring-page/<slug>/<id>. Same contract as sketchRender (functions/index.js):
+// id = last segment, 301 to the canonical slug keeping the query, 404 + noindex when missing or private,
+// 503 on upstream errors. HTML and head match what the live bundle renders after boot.
+import Base from '../../layouts/Base.astro';
+import RelatedGrid from '../../components/RelatedGrid.astro';
+import SketchActions from '../../components/SketchActions.tsx';
+import { getDoc } from '../../lib/firestore.ts';
+import {
+  ORIGIN, TAG_LABELS, type Sketch, ageDisplay, canonicalPath, heading, isDocId, jsonLd, loadRelated, seo, thumbUrl,
+} from '../../lib/sketch.ts';
+
+const id = (Astro.params.path ?? '').split('/').filter(Boolean).at(-1) ?? '';
+// Tagged per sketch so the purge endpoint can drop the page, its redirects and its 404 in one call.
+const tags = [`sketch:${id}`];
+
+let sketch: Sketch | null = null;
+let author = 'A Bible Sketch User';
+let related: Awaited<ReturnType<typeof loadRelated>> = null;
+try {
+  if (isDocId(id)) sketch = (await getDoc('sketches', id)) as Sketch | null;
+  if (sketch && sketch.isPublic === true) {
+    const canon = canonicalPath(sketch);
+    if (Astro.url.pathname !== canon) {
+      Astro.cache.set({ maxAge: 3600, tags });
+      // Short browser TTL: a bare 301 is cached by browsers forever.
+      return new Response(null, {
+        status: 301,
+        headers: { Location: canon + Astro.url.search, 'Cache-Control': 'public, max-age=300' },
+      });
+    }
+    const [user, rel] = await Promise.all([
+      sketch.userId ? getDoc('users', sketch.userId).catch(() => null) : null,
+      loadRelated(sketch).catch((e) => (console.warn('[related]', id, e.message), null)),
+    ]);
+    if (user?.displayName) author = user.displayName;
+    related = rel;
+  } else {
+    sketch = null;
+  }
+} catch (e) {
+  console.error('[coloring-page]', id, e);
+  Astro.cache.set(false);
+  Astro.response.status = 503;
+  Astro.response.headers.set('Retry-After', '120');
+  Astro.response.headers.set('Cache-Control', 'no-store');
+}
+
+if (!sketch && Astro.response.status !== 503) {
+  // Missing and private look the same through the rules (403). Cached, so publishing must purge (onSketchWritten).
+  Astro.response.status = 404;
+  Astro.response.headers.set('X-Robots-Tag', 'noindex');
+  Astro.response.headers.set('Cache-Control', 'public, max-age=0');
+  Astro.cache.set({ maxAge: 3600, tags });
+}
+if (sketch) {
+  Astro.cache.set({ maxAge: 3600, swr: 86400, tags });
+  Astro.response.headers.set('Cache-Control', 'public, max-age=300');
+}
+
+const p = sketch?.promptData ?? {};
+const meta = sketch ? seo(sketch) : null;
+const url = sketch ? ORIGIN + canonicalPath(sketch) : undefined;
+const profileUrl = sketch ? `${ORIGIN}/profile/${sketch.userId}` : '';
+const schemas = sketch && meta ? [
+  jsonLd({
+    '@context': 'https://schema.org', '@type': 'CreativeWork', name: meta.title, headline: meta.title,
+    description: meta.description, image: sketch.imageUrl, url, datePublished: sketch.createdAt,
+    keywords: sketch.tags?.length ? sketch.tags.join(', ') : 'Bible, Coloring Page, Christian Art',
+    genre: p.art_style || 'Religious Art',
+    author: { '@type': 'Person', name: author, url: profileUrl },
+    creator: { '@type': 'Person', name: author, url: profileUrl },
+    copyrightHolder: { '@type': 'Person', name: author },
+  }),
+  jsonLd({
+    '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: `${ORIGIN}/` },
+      { '@type': 'ListItem', position: 2, name: 'Gallery', item: `${ORIGIN}/gallery` },
+      { '@type': 'ListItem', position: 3, name: heading(p), item: url },
+    ],
+  }),
+] : [];
+const date = sketch?.createdAt ? new Date(sketch.createdAt).toLocaleDateString('en-US', { timeZone: 'UTC' }) : '';
+const shareUrl = encodeURIComponent(url ?? '');
+const card = 'flex-1 py-3 rounded-xl border flex items-center justify-center transition-colors gap-2 font-bold text-sm';
+---
+{sketch && meta ? (
+  <Base title={meta.title} description={meta.description} canonical={url} image={sketch.imageUrl} schemas={schemas}>
+    <div class="max-w-7xl mx-auto px-4 py-12">
+      <div class="mb-8">
+        <a class="inline-flex items-center gap-2 text-gray-500 hover:text-[#7C3AED] font-bold transition-colors" href="/gallery">
+          <div class="p-1 bg-white rounded-full border border-gray-200">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 rotate-180" aria-hidden="true"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
+          </div>
+          Back to Gallery
+        </a>
+      </div>
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-12">
+        <div class="lg:col-span-7">
+          <div class="bg-white rounded-3xl shadow-xl border border-gray-100 p-6 md:p-10 bg-[#E5E5E5] flex items-center justify-center overflow-hidden relative">
+            <div class="relative bg-white shadow-2xl w-full max-w-lg aspect-[3/4] select-none">
+              <img src={thumbUrl(sketch)} alt={`${p.book || 'Bible'} Coloring Page`} data-pin-description={meta.pinDescription}
+                width="400" height="533" fetchpriority="high" decoding="async"
+                class="w-full h-full object-contain relative z-0 bg-white" oncontextmenu="return false" />
+              <div class="absolute inset-0 z-[50] w-full h-full pointer-events-none watermark"></div>
+            </div>
+          </div>
+        </div>
+        <div class="lg:col-span-5 flex flex-col">
+          <div class="bg-white rounded-3xl p-8 border border-gray-100 shadow-sm flex-1">
+            <h1 class="font-display text-3xl md:text-4xl font-bold text-gray-800 mb-1">{heading(p)}</h1>
+            <p class="text-base text-gray-500 mb-4">
+              {sketch.type === 'verse'
+                ? `${p.font_style || 'Elegant Script'} verse art coloring page`
+                : `Free printable Bible coloring sheet for ${ageDisplay(p.age_group)}s`}
+            </p>
+            <div class="flex flex-wrap gap-3 text-sm text-gray-500 mb-4">
+              <span class="bg-purple-50 text-[#7C3AED] px-3 py-1 rounded-full font-bold text-xs uppercase tracking-wide">
+                {sketch.type === 'verse' ? p.font_style || 'Verse Art' : ageDisplay(p.age_group)}
+              </span>
+              <span class="flex items-center gap-1">Created by
+                <a class="font-bold hover:text-[#7C3AED] hover:underline transition-colors" href={`/profile/${sketch.userId}`}>{author}</a>
+              </span>
+              <span class="text-gray-300">•</span>
+              <span>{date}</span>
+            </div>
+            {sketch.tags && sketch.tags.length > 0 && (
+              <div class="mb-6">
+                <div class="flex items-center gap-2 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3 h-3" aria-hidden="true"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"></path><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"></circle></svg>
+                  <span>Tags</span>
+                </div>
+                <div class="flex flex-wrap gap-1.5">
+                  {sketch.tags.map((t) => (
+                    <a href={`/tags/${encodeURIComponent(t)}`} class="inline-flex items-center rounded-full font-medium px-3 py-1 text-sm bg-purple-100 text-[#7C3AED] hover:bg-purple-200 transition-colors">{TAG_LABELS[t] ?? t}</a>
+                  ))}
+                </div>
+              </div>
+            )}
+            <SketchActions client:idle ownerId={sketch.userId} />
+            <div class="pt-6 border-t border-gray-100 mb-8">
+              <p class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Share this sketch</p>
+              <div class="flex gap-3">
+                <a href={`https://www.facebook.com/sharer/sharer.php?u=${shareUrl}`} target="_blank" rel="noopener" aria-label="Share on Facebook"
+                  class={`${card} border-blue-100 bg-blue-50 text-blue-600 hover:bg-blue-100 hover:border-blue-200`}>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5" aria-hidden="true"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"></path></svg>
+                  <span class="hidden sm:inline">Facebook</span>
+                </a>
+                <a href={`https://pinterest.com/pin/create/button/?url=${shareUrl}&media=${encodeURIComponent(sketch.imageUrl ?? '')}&description=${encodeURIComponent(meta.description)}`} target="_blank" rel="noopener" aria-label="Share on Pinterest"
+                  class={`${card} border-red-100 bg-red-50 text-red-600 hover:bg-red-100 hover:border-red-200`}>
+                  <svg viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5" aria-hidden="true"><path d="M12.017 0C5.396 0 .029 5.367.029 11.987c0 5.079 3.158 9.417 7.618 11.162-.105-.949-.199-2.403.041-3.439.219-.937 1.406-5.957 1.406-5.957s-.359-.72-.359-1.781c0-1.663.967-2.911 2.168-2.911 1.024 0 1.518.769 1.518 1.688 0 1.029-.653 2.567-.992 3.992-.285 1.193.6 2.165 1.775 2.165 2.128 0 3.768-2.245 3.768-5.487 0-2.861-2.063-4.869-5.008-4.869-3.41 0-5.409 2.562-5.409 5.199 0 1.033.394 2.143.889 2.741.099.12.112.225.085.345-.09.375-.293 1.199-.334 1.363-.053.225-.172.271-.399.165-1.495-.69-2.433-2.878-2.433-4.646 0-3.776 2.748-7.252 7.951-7.252 4.173 0 7.41 2.967 7.41 6.923 0 4.133-2.607 7.462-6.233 7.462-1.214 0-2.354-.629-2.758-1.379l-.749 2.848c-.269 1.045-1.004 2.352-1.498 3.146 1.123.345 2.306.535 3.55.535 6.607 0 11.985-5.365 11.985-11.987C23.97 5.367 18.62 0 12.017 0z"></path></svg>
+                  <span class="hidden sm:inline">Pinterest</span>
+                </a>
+                <button type="button" data-copy={url} class={`${card} border-gray-200 bg-white text-gray-600 hover:bg-gray-50`}>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+                  <span class="hidden sm:inline">Copy Link</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      {related && <RelatedGrid heading={related.heading} items={related.items} />}
+    </div>
+  </Base>
+) : (
+  <Base title={Astro.response.status === 503 ? 'Temporarily unavailable | Bible Sketch' : 'Sketch Not Found | Bible Sketch'}>
+    <div class="max-w-md mx-auto mt-20 px-4 text-center">
+      <h1 class="font-display text-2xl font-bold text-gray-800 mb-2">
+        {Astro.response.status === 503 ? 'Temporarily unavailable' : 'Sketch Not Found'}
+      </h1>
+      <p class="text-gray-500 mb-8">
+        {Astro.response.status === 503
+          ? 'Please try again in a couple of minutes.'
+          : 'This coloring page may have been deleted or is private.'}
+      </p>
+      <a href="/gallery" class="inline-flex items-center justify-center rounded-full font-bold bg-[#7C3AED] text-white hover:bg-[#6D28D9] px-6 py-3">Back to Gallery</a>
+    </div>
+  </Base>
+)}
+
+<style is:global>
+  .watermark {
+    background-image: url("data:image/svg+xml,%3Csvg width='300' height='300' viewBox='0 0 300 300' xmlns='http://www.w3.org/2000/svg'%3E%3Ctext x='150' y='150' font-family='sans-serif' font-weight='900' font-size='40' fill='rgba(0,0,0,0.15)' transform='rotate(-45 150 150)' text-anchor='middle' dominant-baseline='middle'%3EBible Sketch%3C/text%3E%3C/svg%3E");
+    background-repeat: repeat;
+    background-position: center;
+    mix-blend-mode: multiply;
+  }
+</style>
+
+<script>
+  // Copy Link: the only other client code on the page.
+  document.querySelectorAll<HTMLButtonElement>('[data-copy]').forEach((b) =>
+    b.addEventListener('click', async () => {
+      const label = b.querySelector('span');
+      await navigator.clipboard.writeText(b.dataset.copy!);
+      if (label) { label.textContent = 'Copied!'; setTimeout(() => (label.textContent = 'Copy Link'), 2000); }
+    }),
+  );
+</script>

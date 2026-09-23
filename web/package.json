@@ -1,0 +1,33 @@
+{
+  "name": "biblesketch-web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "deploy": "astro build && wrangler deploy",
+    "check": "node scripts/check-sketch.mjs"
+  },
+  "dependencies": {
+    "@astrojs/cloudflare": "14.3.3",
+    "@astrojs/react": "6.0.6",
+    "astro": "7.3.4",
+    "firebase": "12.19.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "autoprefixer": "10.6.1",
+    "postcss": "8.5.28",
+    "tailwindcss": "3.4.19",
+    "wrangler": "4.136.3"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "esbuild@0.28.1": true,
+    "workerd@1.20260921.1": true,
+    "@firebase/util": false,
+    "protobufjs": false
+  }
+}

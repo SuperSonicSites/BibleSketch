@@ -1,0 +1,29 @@
+---
+// Related carousel from the bundle's `mq`, server-rendered with real links (the bundle fetched it on scroll).
+import { type Sketch, canonicalPath, thumbUrl } from '../lib/sketch.ts';
+
+interface Props { heading: string; items: Sketch[] }
+const { heading, items } = Astro.props;
+---
+<section class="mt-16 mb-8">
+  <h2 class="font-display text-2xl md:text-3xl font-bold text-gray-800 mb-6 px-4 md:px-0">{heading}</h2>
+  <div class="related-scroll flex gap-4 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-4 px-4 md:px-0">
+    {items.map((s) => {
+      const p = s.promptData ?? {};
+      const ref = `${p.book} ${p.chapter}:${p.start_verse}`;
+      return (
+        <a href={canonicalPath(s)} class="flex-shrink-0 w-[calc(50%-8px)] md:w-[calc(25%-12px)] snap-start group/card" style="scroll-snap-stop: always;">
+          <article class="bg-white rounded-xl shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-100 overflow-hidden">
+            <div class="relative overflow-hidden bg-gray-100 aspect-[3/4] group-hover/card:scale-105 transition-transform duration-500">
+              <img src={thumbUrl(s)} alt={`${ref} Coloring Page`} width="400" height="533" loading="lazy" decoding="async" class="w-full h-full object-contain" />
+            </div>
+            <div class="p-3">
+              <h3 class="font-bold text-sm text-gray-800 truncate">{ref}</h3>
+              <p class="text-xs text-gray-500 mt-1">{s.type === 'verse' ? p.font_style || 'Verse Art' : p.art_style}</p>
+            </div>
+          </article>
+        </a>
+      );
+    })}
+  </div>
+</section>
