@@ -67,6 +67,13 @@ Every deploy starts from a cold Workers Cache (it is keyed by Worker version), s
 
 Phase 1 patterns: `about*`, `privacy*`, `terms*`, `verified*`, `blog*` (plus the existing `_astro/*`, `img/*`).
 
+Phase 2 patterns: `coloring-page*`, `tags*`, `profile*`, `api/*` (print, download, purge); LIVE_PREFIXES adds
+`/coloring-page,/tags,/profile,/api`. In the same change, deploy the purge trigger from seo-fixes: set the secret
+(`firebase functions:secrets:set WORKER_PURGE_SECRET`, the same value as the Worker's `PURGE_SECRET`; set both
+fresh), put `WORKER_PURGE_URL=https://biblesketch.app/api/purge` in `functions/.env`, then
+`firebase deploy --only "functions:onSketchWritten" --project biblesketch-5104c`. Check: make a test sketch
+private and its page 404s within seconds (CHECKLIST, purge check 2c).
+
 ## History: SEO fixes rollout (2026-09-22, done)
 
 Deployed wave by wave from tags: `wave-1` (no-op Hosting release), `wave-3` (404 page, fonts, og.png), `wave-4a` / `wave-4b` / `wave-4c` (renderers), sitemap from `wave-4c`, `wave-6` (Storage headers), then `wave-4c2` and `wave-4c3` (template follow-ups). Live renderers = `wave-4c3`. Rollback per wave: 4a → `wave-1`; 4b → `wave-4a`; 4c → `wave-4b`; sitemap → `wave-1` (`functions:sitemap` only); each followed by a CDN flush.

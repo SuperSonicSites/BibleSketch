@@ -24,7 +24,7 @@ Astro.response.headers.set('Cache-Control', 'public, max-age=3600');
               <div class="w-full aspect-[2/1] overflow-hidden bg-gray-100">
                 <img src={`/img/w800${data.cover.src}`} srcset={`/img/w480${data.cover.src} 480w, /img/w800${data.cover.src} 800w`}
                   sizes="(min-width: 1024px) 400px, (min-width: 768px) 50vw, 100vw" alt={data.title} width={data.cover.width} height={data.cover.height}
-                  loading={i < 3 ? 'eager' : 'lazy'} fetchpriority={i === 0 ? 'high' : undefined} decoding="async"
+                  loading={i === 0 ? 'eager' : 'lazy'} fetchpriority={i === 0 ? 'high' : undefined} decoding="async"
                   class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
               </div>
               <div class="p-4 md:p-6 flex flex-col flex-grow">

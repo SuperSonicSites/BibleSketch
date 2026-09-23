@@ -6,6 +6,7 @@ import { TriangleAlert } from 'lucide-react';
 import AuthModal from './AuthModal.tsx';
 import AccountModal from './AccountModal.tsx';
 import CompletionModal from './CompletionModal.tsx';
+import PremiumModal from './PremiumModal.tsx';
 import Button from './Button.tsx';
 import Dialog from './Dialog.tsx';
 import { $modal, cancelModal } from '../../lib/store.ts';
@@ -18,6 +19,7 @@ export default function ModalHost() {
   if (modal.name === 'auth') return <AuthModal view={modal.view} />;
   if (modal.name === 'account') return <AccountModal />;
   if (modal.name === 'completion') return <CompletionModal />;
+  if (modal.name === 'premium') return <PremiumModal remaining={modal.remaining} />;
   return (
     <Dialog label={modal.title} onClose={cancelModal} cardClass="max-w-sm p-6 text-center">
       <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4"><TriangleAlert className="w-8 h-8 text-red-500" /></div>

@@ -1,0 +1,13 @@
+---
+// Previous / "Page N of M" / Next as real links (crawlable, shareable), keeping the current filters.
+interface Props { page: number; pages: number; href: (page: number) => string }
+const { page, pages, href } = Astro.props;
+const btn = 'px-4 py-2 rounded-xl border border-gray-200 bg-white text-sm font-bold text-gray-600 hover:border-purple-300 hover:text-[#7C3AED]';
+---
+{pages > 1 && (
+  <nav class="flex items-center justify-center gap-4 mt-10" aria-label="Pages">
+    {page > 1 ? <a class={btn} href={href(page - 1)} rel="prev">Previous</a> : <span class={`${btn} opacity-40`} aria-hidden="true">Previous</span>}
+    <span class="text-sm text-gray-500">Page {page} of {pages}</span>
+    {page < pages ? <a class={btn} href={href(page + 1)} rel="next">Next</a> : <span class={`${btn} opacity-40`} aria-hidden="true">Next</span>}
+  </nav>
+)}

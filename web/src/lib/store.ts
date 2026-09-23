@@ -28,6 +28,7 @@ export type Modal =
   | { name: 'account' }
   | { name: 'completion' }
   | { name: 'error'; title: string; message: string }
+  | { name: 'premium'; remaining: number }
   | null;
 
 // false until Firebase Auth has restored (or ruled out) a session: islands render the guest state until then.

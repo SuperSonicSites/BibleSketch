@@ -1,0 +1,111 @@
+---
+// /tags/<tag> (bundle `Aq`, spec docs/bundle-map/gallery-tags-profile.md). One REST query for the tag's public
+// sketches; filters, sort and pages are applied here and live in the URL. Filtered views are canonical to the
+// unfiltered tag page (owner decision 2026-09-23). Cached with tag:<id> and related:<sketch> for every card.
+import Base from '../../layouts/Base.astro';
+import ListingCard from '../../components/ListingCard.astro';
+import CardIcons from '../../components/CardIcons.astro';
+import FilterForm from '../../components/FilterForm.astro';
+import Pagination from '../../components/Pagination.astro';
+import { query } from '../../lib/firestore.ts';
+import { ORIGIN, TAG_LABELS, audience, jsonLd, loadAuthors, type Sketch } from '../../lib/sketch.ts';
+import { SEASONS, applyFilters, filterQuery, isFiltered, paginate, parseFilters } from '../../lib/listing.ts';
+
+const tagId = Astro.params.tagId ?? '';
+const label = TAG_LABELS[tagId];
+if (!label) return Astro.rewrite('/404');
+const season = SEASONS.has(tagId);
+const f = parseFilters(Astro.url.searchParams, { sort: 'popular' });
+const path = `/tags/${tagId}`;
+
+let all: Sketch[] = [];
+let failed = false;
+try {
+  all = (await query('sketches', [['isPublic', true], ['tags', tagId, 'array-contains']], 300)) as Sketch[];
+} catch (e) {
+  console.error('[tags]', tagId, e);
+  failed = true;
+}
+const matches = applyFilters(all, f);
+const { items, page, pages } = paginate(matches, f.page);
+const authors = await loadAuthors(items);
+
+// Title and copy: the bundle's client rules, with "for young children" instead of "for young childs".
+const phraseParts = [
+  f.age && `for ${audience(f.age).toLowerCase()}`,
+  f.style && `in ${f.style} style`,
+  f.book && `from the book of ${f.book}`,
+].filter(Boolean);
+const phrase = phraseParts.length ? ` ${phraseParts.join(', ')}` : '';
+const h1 = [f.style, `${label} Coloring Pages`, f.age && `For ${audience(f.age)}`, f.book && `From ${f.book}`].filter(Boolean).join(' ');
+const title = [h1, !isFiltered(f) && 'Free Printable Bible Coloring Sheets', 'Bible Sketch'].filter(Boolean).join(' | ');
+const description = season
+  ? `Discover beautiful ${label} coloring pages${phrase} from Bible stories. Perfect for celebrating the ${label} season in Sunday School, VBS, or family devotionals. Free printable Bible coloring sheets.`
+  : `Explore ${label} coloring pages${phrase} from Scripture. These Biblical coloring sheets feature stories and lessons about ${label.toLowerCase()}. Perfect for Sunday School, homeschool, or personal Bible study.`;
+const subtitle = `Browse ${matches.length} ${label} coloring page${matches.length === 1 ? '' : 's'}${phrase} from Bible stories. Perfect for ${season ? `celebrating the ${label} season` : `teaching about ${label.toLowerCase()}`} in your church, Sunday School, or home.`;
+
+if (failed) {
+  Astro.cache.set(false);
+  Astro.response.status = 503;
+  Astro.response.headers.set('Retry-After', '120');
+  Astro.response.headers.set('Cache-Control', 'no-store');
+} else {
+  // Empty tag (no public sketch at all): keep it out of the index, as tagRender does.
+  if (all.length === 0) Astro.response.headers.set('X-Robots-Tag', 'noindex');
+  Astro.cache.set({ maxAge: 3600, swr: 86400, tags: [`tag:${tagId}`, ...items.map((s) => `related:${s.id}`)] });
+  Astro.response.headers.set('Cache-Control', 'public, max-age=300');
+}
+
+const canonical = `${ORIGIN}${path}`;
+const schema = jsonLd({
+  '@context': 'https://schema.org',
+  '@type': 'BreadcrumbList',
+  itemListElement: [
+    { '@type': 'ListItem', position: 1, name: 'Home', item: `${ORIGIN}/` },
+    { '@type': 'ListItem', position: 2, name: 'Gallery', item: `${ORIGIN}/gallery` },
+    { '@type': 'ListItem', position: 3, name: `${label} Coloring Pages`, item: canonical },
+  ],
+});
+---
+<Base title={title} description={description} canonical={canonical} ogType="website" image={`${ORIGIN}/logo.png`}
+  imageAlt="Bible Sketch Logo" twitterCard="summary" schemas={[schema]}>
+  <div class="max-w-7xl mx-auto px-4 py-12">
+    <div class="mb-8">
+      <a href="/gallery" class="inline-flex items-center gap-2 text-gray-500 hover:text-[#7C3AED] font-bold mb-6 transition-colors group">
+        <span class="p-2 bg-white rounded-full shadow-sm group-hover:shadow-md border border-gray-100 transition-all">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5" aria-hidden="true"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg>
+        </span>
+        <span>Back to Gallery</span>
+      </a>
+      <div class="bg-gradient-to-br from-purple-50 to-amber-50 rounded-3xl p-8 border border-purple-100">
+        <div class="flex items-center gap-4 mb-4">
+          <div class="w-16 h-16 rounded-2xl bg-[#7C3AED] flex items-center justify-center shrink-0">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-8 h-8 text-white" aria-hidden="true"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"></path><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"></circle></svg>
+          </div>
+          <div>
+            <h1 class="text-3xl font-display font-bold text-gray-800">{h1}</h1>
+            <p class="text-gray-500 capitalize">{season ? 'season' : 'theme'}</p>
+          </div>
+        </div>
+        <p class="text-gray-600 text-base leading-relaxed">{subtitle}</p>
+      </div>
+    </div>
+
+    <FilterForm filters={f} action={path} defaultSort="popular" />
+
+    {failed ? (
+      <p class="text-center py-16 text-gray-500">These coloring pages are temporarily unavailable. Please try again in a couple of minutes.</p>
+    ) : items.length === 0 ? (
+      <div class="text-center py-16">
+        <h2 class="font-display text-2xl font-bold text-gray-800 mb-2">No sketches found</h2>
+        <p class="text-gray-500">{f.book ? `No ${label} sketches from ${f.book} yet.` : `No sketches tagged with "${label}" yet.`}</p>
+      </div>
+    ) : (
+      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        <CardIcons />
+        {items.map((s) => <ListingCard sketch={s} author={s.userId ? authors.get(s.userId) : undefined} />)}
+      </div>
+    )}
+    <Pagination page={page} pages={pages} href={(n) => path + filterQuery(f, 'popular', n)} />
+  </div>
+</Base>

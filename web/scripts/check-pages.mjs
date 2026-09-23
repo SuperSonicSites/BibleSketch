@@ -10,6 +10,11 @@ const PATHS = [
   '/blog/joshua-1-9-coloring-page-free', '/blog/5-printable-christian-christmas-coloring-pages-for-toddlers',
   '/blog/5-genesis-1-coloring-pages-for-toddlers', '/blog/bible-coloring-pages',
   '/blog/christian-christmas-coloring-pages', '/blog/joshua-jericho-coloring-pages',
+  // phase 2: every tag, and the profiles in the live sitemap
+  ...['advent', 'christmas', 'epiphany', 'lent', 'holy-week', 'easter', 'pentecost', 'ordinary-time', 'creation', 'the-fall',
+    'exile', 'prophets', 'miracles', 'parables', 'resurrection'].map((t) => `/tags/${t}`),
+  ...['xaeS7pQ1HZRfPOIkdNV6LPbmKXC2', 'xeggSuDd2uZae29ONIpJqTEVWly2', 'QUmmtp2Zv0SB9v3OkxNI1PZXqtf2', 'TiAEiMqWxpWqxCLtoI5OgHAvtf33',
+    'ArEgVs05L7fJYzYbA5CpFb6CqSI2', 'lRlBce35zvYPdzUjRs68txidY5W2', 'Zzd57UpTVchrtJ3qxlr0B5MLUWi1', 'EIV569rIHRVDiHYHTzFEKzDPzeg1'].map((u) => `/profile/${u}`),
 ];
 // Deliberate changes (ROADMAP 1, phase 1), as "path field".
 const INTENDED = new Set([
@@ -19,6 +24,9 @@ const INTENDED = new Set([
   '/blog twitter:card', // listing: summary (square logo), was only in the server tags
   // noindex pages now carry the same og/twitter basics as every page (harmless for pages nobody shares)
   '/privacy twitter:card', '/terms twitter:card', '/verified og:title', '/verified twitter:card',
+  // tag pages: one title, the richer one the live client renders after boot (what Google indexes), not the
+  // server's short "<Tag> Coloring Pages | Bible Sketch"
+  ...PATHS.filter((p) => p.startsWith('/tags/')).flatMap((p) => [`${p} title`, `${p} og:title`]),
 ]);
 
 const decode = (s) => s?.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#0?39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\s+/g, ' ').trim();

@@ -1,9 +1,12 @@
-// Guest call-to-action on the server; swaps to the signed-in buttons once the shared session (lib/session.ts,
-// started by ModalHost) has restored the visitor.
-// ponytail: Phase 0 buttons are read-only (they show the quota). Print/download/save writes land in rollout
-// phase 2 together with the server-side print PDF (ROADMAP 1.2).
+// Coloring page actions (bundle `_O`). Guests get the call-to-action (server-rendered); once the shared session
+// has restored a signed-in visitor: Print PDF and Download (server-side, ROADMAP 1.2) and Save to Collection.
+// Owners and premium accounts never spend a download (owner decision 2026-09-23); the server enforces the same.
+import { useEffect, useState } from 'react';
 import { useStore } from '@nanostores/react';
-import { $profile, $user, requireAuth } from '../lib/store.ts';
+import { Bookmark, Check, Download, LoaderCircle, Printer } from 'lucide-react';
+import Button from './shell/Button.tsx';
+import { $profile, $user, openModal, requireAuth } from '../lib/store.ts';
+import type { Sketch } from '../lib/sketch.ts';
 
 const icon = (d: string[]) => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -15,10 +18,23 @@ const PRINTER = ['M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 
 const DOWNLOAD = ['M12 15V3', 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4', 'm7 10 5 5 5-5'];
 const BOOKMARK = ['m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z'];
 const CHECK = ['M20 6 9 17l-5-5'];
+const actions = () => import('../lib/sketch-actions.ts');
 
-export default function SketchActions({ ownerId }: { ownerId?: string }) {
+export default function SketchActions({ sketch }: { sketch: Sketch }) {
   const user = useStore($user);
   const profile = useStore($profile);
+  const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const isOwner = Boolean(user && user.uid === sketch.userId);
+
+  useEffect(() => {
+    if (!user || isOwner) return;
+    let live = true;
+    actions().then(({ isBookmarked }) => isBookmarked(user.uid, sketch.id)).then((b) => live && setSaved(b));
+    return () => {
+      live = false;
+    };
+  }, [user?.uid, sketch.id, isOwner]);
 
   if (!user || !profile) {
     const items: [string[], string][] = [
@@ -51,21 +67,50 @@ export default function SketchActions({ ownerId }: { ownerId?: string }) {
     );
   }
 
-  const isOwner = user.uid === ownerId;
-  const left = !isOwner && !profile.isPremium ? <span className="ml-1 text-xs opacity-80">({profile.downloadsRemaining ?? 0} left)</span> : null;
-  const btn = 'inline-flex items-center justify-center rounded-full font-bold transition-all duration-200 w-full gap-2 disabled:opacity-50 disabled:cursor-not-allowed';
+  const free = isOwner || Boolean(profile.isPremium);
+  const remaining = profile.downloadsRemaining ?? 0;
+  const left = free ? null : <span className="ml-1 text-xs opacity-80">({remaining} left)</span>;
+  const blocked = () => {
+    if (free || remaining > 0) return false;
+    openModal({ name: 'premium', remaining });
+    return true;
+  };
+  const print = () => {
+    if (blocked()) return;
+    // Open the tab inside the click so it isn't treated as a popup; printSketch posts into it by name.
+    window.open('about:blank', `print-${sketch.id}`);
+    actions().then((m) => m.printSketch(sketch.id));
+  };
+  const download = () => {
+    if (!blocked()) actions().then((m) => m.downloadSketch(sketch.id));
+  };
+
+  const toggleSave = async () => {
+    setSaving(true);
+    try {
+      setSaved(await (await actions()).toggleBookmark(user.uid, sketch));
+    } catch (e) {
+      console.error('[save]', e);
+      alert('Failed to save to collection.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
-    <div className="space-y-4 mb-10" title="Prototype: actions arrive in rollout phase 2">
-      <button disabled className={`${btn} bg-[#7C3AED] text-white shadow-lg shadow-purple-100 px-8 py-4 text-lg`}>
-        Print PDF{left}
-      </button>
-      <button disabled className={`${btn} border-2 border-[#7C3AED] text-[#7C3AED] px-6 py-3 text-base`}>
-        Download Image{left}
-      </button>
+    <div className="space-y-4 mb-10">
+      <Button size="lg" className="w-full gap-2 shadow-lg shadow-purple-100" onClick={print}>
+        <Printer className="w-5 h-5" />Print PDF{left}
+      </Button>
+      <Button variant="outline" className="w-full gap-2" onClick={download}>
+        <Download className="w-5 h-5" />Download Image{left}
+      </Button>
       {!isOwner && (
-        <button disabled className={`${btn} border-2 border-[#7C3AED] text-[#7C3AED] px-6 py-3 text-base`}>
-          Save to Collection
-        </button>
+        <Button variant={saved ? 'secondary' : 'outline'} className={`w-full gap-2 ${saved ? 'bg-purple-50 border-purple-100 text-[#7C3AED]' : ''}`}
+          onClick={toggleSave} disabled={saving}>
+          {saving ? <LoaderCircle className="w-5 h-5 animate-spin" /> : saved ? <Check className="w-5 h-5" /> : <Bookmark className="w-5 h-5" />}
+          {saved ? 'Saved to Collection' : 'Save to Collection'}
+        </Button>
       )}
     </div>
   );

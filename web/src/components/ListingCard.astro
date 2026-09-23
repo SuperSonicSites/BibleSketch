@@ -1,0 +1,56 @@
+---
+// A sketch in a listing (bundle gallery/tag card). The image and text are one link to the coloring page; the
+// author, Bless and share controls sit below it (the bundle nested buttons inside the link).
+import BlessButton from './BlessButton.tsx';
+import { type Sketch, ORIGIN, canonicalPath, reference, seo, thumbUrl } from '../lib/sketch.ts';
+import { cardSubtitle } from '../lib/listing.ts';
+
+// Card images are always lazy: on phones the stacked filters push the first row below the fold, and eager
+// images there only competed with the page's first paint (Lighthouse 94 -> 99).
+interface Props { sketch: Sketch; author?: string }
+const { sketch, author } = Astro.props;
+const href = canonicalPath(sketch);
+const ref = sketch.promptData ? reference(sketch.promptData) : 'Bible Scene';
+const url = encodeURIComponent(ORIGIN + href);
+const pin = sketch.promptData
+  ? `https://pinterest.com/pin/create/button/?url=${url}&media=${encodeURIComponent(sketch.imageUrl ?? '')}&description=${encodeURIComponent(seo(sketch).pinDescription)}`
+  : null;
+---
+<article class="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow border border-gray-100 overflow-hidden flex flex-col">
+  <a href={href} class="group flex flex-col flex-1">
+    <div class="relative overflow-hidden bg-gray-100 aspect-[3/4]">
+      <img src={thumbUrl(sketch)} alt={`${ref} Coloring Page`} width="400" height="533" loading="lazy" decoding="async"
+        class="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500" />
+    </div>
+    <div class="px-3 pt-3">
+      <h2 class="font-bold text-sm text-gray-800 truncate">{ref}</h2>
+      <p class="text-xs text-gray-500 truncate mt-1">{cardSubtitle(sketch)}</p>
+    </div>
+  </a>
+  <div class="px-3 pb-3">
+    <div class="flex items-center justify-between mt-3 pt-2 border-t border-gray-50">
+      {sketch.userId ? (
+        <a href={`/profile/${encodeURIComponent(sketch.userId)}`} title={author}
+          class="flex items-center gap-1.5 text-xs font-bold text-gray-500 hover:text-[#7C3AED] transition-colors min-w-0">
+          <span class="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center border border-gray-200 shrink-0" aria-hidden="true">
+            <svg class="w-3 h-3"><use href="#i-user" /></svg>
+          </span>
+          <span class="truncate max-w-[100px]">{author ?? 'Artist'}</span>
+        </a>
+      ) : <span />}
+      <BlessButton client:visible sketchId={sketch.id} count={sketch.blessCount ?? 0} />
+    </div>
+    <div class="flex gap-2 mt-3 pt-3 border-t border-gray-50">
+      <a href={`https://www.facebook.com/sharer/sharer.php?u=${url}`} target="_blank" rel="noopener" aria-label="Share on Facebook"
+        class="flex-1 py-2 rounded-lg bg-blue-50 text-blue-500 hover:bg-blue-100 flex items-center justify-center transition-colors border border-blue-100">
+        <svg class="w-4 h-4" aria-hidden="true"><use href="#i-facebook" /></svg>
+      </a>
+      {pin && (
+        <a href={pin} target="_blank" rel="noopener" aria-label="Share on Pinterest"
+          class="flex-1 py-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 flex items-center justify-center transition-colors border border-red-100">
+          <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pinterest" /></svg>
+        </a>
+      )}
+    </div>
+  </div>
+</article>

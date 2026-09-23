@@ -167,5 +167,13 @@ export async function loadRelated(s: Sketch) {
   return items.length ? { heading: q.heading, items } : null;
 }
 
+// Display names for the authors of a listing: one users/<uid> read per distinct author, in parallel.
+export async function loadAuthors(sketches: Sketch[]): Promise<Map<string, string>> {
+  const uids = [...new Set(sketches.map((s) => s.userId).filter(Boolean) as string[])];
+  const { getDoc } = await import('./firestore.ts');
+  const names = await Promise.all(uids.map((uid) => getDoc('users', uid).then((u) => u?.displayName as string | undefined).catch(() => undefined)));
+  return new Map(uids.flatMap((uid, i) => (names[i] ? [[uid, names[i]!] as [string, string]] : [])));
+}
+
 // JSON for <script type="application/ld+json">: `<` escaped so user text can't close the tag (jsonLd()).
 export const jsonLd = (o: unknown) => JSON.stringify(o).replace(/</g, '\\u003c');

@@ -5,6 +5,8 @@
 import Base from '../../layouts/Base.astro';
 import RelatedGrid from '../../components/RelatedGrid.astro';
 import SketchActions from '../../components/SketchActions.tsx';
+import OwnerControls from '../../components/OwnerControls.tsx';
+import OwnerPrivate from '../../components/OwnerPrivate.tsx';
 import { getDoc } from '../../lib/firestore.ts';
 import {
   ORIGIN, TAG_LABELS, type Sketch, ageDisplay, canonicalPath, heading, isDocId, jsonLd, loadRelated, seo, thumbUrl,
@@ -83,6 +85,11 @@ const schemas = sketch && meta ? [
 ] : [];
 const date = sketch?.createdAt ? new Date(sketch.createdAt).toLocaleDateString('en-US', { timeZone: 'UTC' }) : '';
 const shareUrl = encodeURIComponent(url ?? '');
+// What the islands need (no server-only fields such as _updateTime).
+const island: Sketch | null = sketch && {
+  id: sketch.id, userId: sketch.userId, isPublic: sketch.isPublic, tags: sketch.tags, promptData: sketch.promptData,
+  imageUrl: sketch.imageUrl, storagePath: sketch.storagePath, thumbnailPath: sketch.thumbnailPath,
+};
 const card = 'flex-1 py-3 rounded-xl border flex items-center justify-center transition-colors gap-2 font-bold text-sm';
 ---
 {sketch && meta ? (
@@ -138,7 +145,7 @@ const card = 'flex-1 py-3 rounded-xl border flex items-center justify-center tra
                 </div>
               </div>
             )}
-            <SketchActions client:idle ownerId={sketch.userId} />
+            <SketchActions client:idle sketch={island!} />
             <div class="pt-6 border-t border-gray-100 mb-8">
               <p class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Share this sketch</p>
               <div class="flex gap-3">
@@ -158,6 +165,7 @@ const card = 'flex-1 py-3 rounded-xl border flex items-center justify-center tra
                 </button>
               </div>
             </div>
+            <OwnerControls client:idle sketch={island!} />
           </div>
         </div>
       </div>
@@ -176,6 +184,7 @@ const card = 'flex-1 py-3 rounded-xl border flex items-center justify-center tra
           : 'This coloring page may have been deleted or is private.'}
       </p>
       <a href="/gallery" class="inline-flex items-center justify-center rounded-full font-bold bg-[#7C3AED] text-white hover:bg-[#6D28D9] px-6 py-3">Back to Gallery</a>
+      {Astro.response.status === 404 && isDocId(id) && <OwnerPrivate client:idle sketchId={id} />}
     </div>
   </Base>
 )}

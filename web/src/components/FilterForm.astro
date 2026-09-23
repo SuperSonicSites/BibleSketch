@@ -1,0 +1,63 @@
+---
+// Listing filters as a plain GET form (works without JavaScript; a few lines of script submit on change).
+// Options are the full lists, or what the listing contains when `available` is given (profile pages).
+import { AGE_GROUPS, ART_STYLES, BIBLE_BOOKS, type Filters } from '../lib/listing.ts';
+import { TAG_LABELS } from '../lib/sketch.ts';
+
+interface Props {
+  filters: Filters;
+  action: string;
+  showTag?: boolean;
+  defaultSort: 'popular' | 'newest';
+  available?: { books: string[]; ages: string[]; styles: string[]; tags: string[] };
+}
+const { filters, action, showTag = false, available, defaultSort } = Astro.props;
+const books = available?.books ?? BIBLE_BOOKS;
+const ages = available?.ages ?? AGE_GROUPS;
+const styles = available?.styles ?? ART_STYLES;
+const tags = available?.tags ?? Object.keys(TAG_LABELS);
+const select = 'appearance-none w-full px-4 py-2.5 pr-10 rounded-xl text-sm font-medium cursor-pointer transition-all border bg-white border-gray-200 text-gray-700 hover:border-purple-300 hover:bg-purple-50 focus:outline-none focus:ring-2 focus:ring-purple-500';
+const chevron = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`;
+const style = `background-image:${chevron};background-repeat:no-repeat;background-position:right .75rem center;background-size:1rem`;
+const active = filters.book || filters.age || filters.style || filters.tag;
+---
+<form method="get" action={action} data-default-sort={defaultSort} class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-8" data-auto-submit>
+  <div class="flex flex-col md:flex-row gap-3">
+    <select name="book" aria-label="Filter by book" class={select} style={style}>
+      <option value="">All Books</option>
+      {books.map((b) => <option value={b} selected={filters.book === b}>{b}</option>)}
+    </select>
+    <select name="age" aria-label="Filter by age group" class={select} style={style}>
+      <option value="">All Ages</option>
+      {ages.map((a) => <option value={a} selected={filters.age === a}>{a}</option>)}
+    </select>
+    <select name="style" aria-label="Filter by art style" class={select} style={style}>
+      <option value="">All Styles</option>
+      {styles.map((s) => <option value={s} selected={filters.style === s}>{s}</option>)}
+    </select>
+    {showTag && (
+      <select name="tag" aria-label="Filter by tag" class={select} style={style}>
+        <option value="">All Tags</option>
+        {tags.map((t) => <option value={t} selected={filters.tag === t}>{TAG_LABELS[t] ?? t}</option>)}
+      </select>
+    )}
+    <select name="sort" aria-label="Sort sketches by" style={style}
+      class="appearance-none w-full px-4 py-2.5 pr-10 rounded-xl text-sm font-medium cursor-pointer transition-all bg-amber-50 border border-amber-200 text-amber-700 hover:border-amber-300 hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-purple-500">
+      <option value="popular" selected={filters.sort === 'popular'}>Most Popular</option>
+      <option value="newest" selected={filters.sort === 'newest'}>Newest First</option>
+    </select>
+    <noscript><button type="submit" class="px-4 py-2.5 rounded-xl text-sm font-bold bg-[#7C3AED] text-white">Apply</button></noscript>
+    {active && <a href={action} class="px-4 py-2.5 rounded-xl text-sm font-bold text-gray-500 hover:text-[#7C3AED] whitespace-nowrap self-center">Clear</a>}
+  </div>
+</form>
+
+<script>
+  // Submit on change, leaving empty fields (and the default sort) out of the URL.
+  document.querySelectorAll<HTMLFormElement>('form[data-auto-submit]').forEach((form) =>
+    form.addEventListener('change', () => {
+      const q = new URLSearchParams();
+      for (const [k, v] of new FormData(form)) if (v && !(k === 'sort' && v === form.dataset.defaultSort)) q.set(k, String(v));
+      location.href = form.action.split('?')[0] + (q.size ? `?${q}` : '');
+    }),
+  );
+</script>
