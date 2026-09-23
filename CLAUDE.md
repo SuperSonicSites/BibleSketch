@@ -2,6 +2,13 @@
 
 Bible Sketch (https://biblesketch.app) turns Bible verses into printable coloring pages. Solo owner, production app with paying customers. Firebase project `biblesketch-5104c` behind Cloudflare. This worktree's branch `seo-fixes` **is production**. Roadmap: [ROADMAP.md](ROADMAP.md). Owner-only tasks: [CHECKLIST.md](CHECKLIST.md). Deploys: [docs/deploying.md](docs/deploying.md).
 
+## This worktree: `astro-rebuild` (C:\Users\renau\Coding\BibleSketch-astro)
+
+This branch is the front-end rebuild (ROADMAP 1): Astro 7 + React islands on Cloudflare Workers, in `web/` (its own package.json and wrangler config). Start with Phase 0, the coloring-page prototype on a `workers.dev` URL, and its four go/no-go checks.
+- Production stays on `seo-fixes` in `C:\Users\renau\Coding\BibleSketch-recovered-prod`. Hotfixes and all Firebase deploys happen there, not here. Merge `seo-fixes` into this branch regularly so `functions/` doesn't drift.
+- Don't change `functions/`, `hosting-public/` or the rules here. If a phase needs a backend change, make it on `seo-fixes` first, then merge.
+- `coloring-page-quality` is ported (prompts, models, references), not merged (ROADMAP 1.0).
+
 ## Facts you can't infer from the code
 
 - **The production front-end source is lost.** Live = the minified bundle `hosting-public/assets/index-DHKtGwi1.js` (React 19.2, react-router 6, react-helmet-async). Root `App.tsx`, `components/`, `services/` are an **older** version: read them to understand behaviour, grep the bundle for what production actually does. Features that exist only in the bundle: blog, About, Verse Art pipeline, profile-completion modal, tag URL filters, Zaraz tracking. Front-end changes wait for the Astro rebuild (ROADMAP 1).
