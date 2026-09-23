@@ -3459,6 +3459,18 @@ const sketchPageChanged = (before, after) => {
     || JSON.stringify(before.tags || []) !== JSON.stringify(after.tags || []);
 };
 
+// Listing pages (Worker cache tags) a public sketch appears on, so a newly published one shows up right away.
+const listsFor = (before, after) => {
+  const pub = [before, after].filter((d) => d?.isPublic);
+  const lists = new Set(['gallery']);
+  for (const d of pub) {
+    lists.add(d.type === 'verse' ? 'verse' : 'home');
+    if (d.userId) lists.add(`profile:${d.userId}`);
+    for (const t of d.tags || []) lists.add(`tag:${t}`);
+  }
+  return [...lists].slice(0, 20);
+};
+
 exports.onSketchWritten = onDocumentWritten({ document: "sketches/{sketchId}", secrets: [workerPurgeSecret] }, async (event) => {
   const id = event.params.sketchId;
   if (id.startsWith('bookmark_') || !workerPurgeUrl.value()) return;
@@ -3467,7 +3479,7 @@ exports.onSketchWritten = onDocumentWritten({ document: "sketches/{sketchId}", s
     const res = await fetch(workerPurgeUrl.value(), {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-purge-secret': workerPurgeSecret.value() },
-      body: JSON.stringify({ ids: [id] }),
+      body: JSON.stringify({ ids: [id], lists: listsFor(event.data?.before?.data(), event.data?.after?.data()) }),
       signal: AbortSignal.timeout(10000),
     });
     if (!res.ok) console.error('[onSketchWritten] purge failed', id, res.status, await res.text());
@@ -3690,7 +3702,8 @@ exports.editSketch = onCall(GENERATION_OPTS, async (request) => {
   else throw new HttpsError('invalid-argument', 'Invalid request.');
   return chargedGeneration({
     uid, requestId, cost: 1, description: op === 'removeColor' ? 'Remove Color' : 'Refined Sketch',
-    sketch: { type: s.type || 'scene', promptData: s.promptData || {}, ...(s.tags ? { tags: s.tags } : {}), editedFrom: sketchId },
+    // An edit keeps what the source image already shows (e.g. the Add Ref caption), so keep its flag too.
+    sketch: { type: s.type || 'scene', promptData: s.promptData || {}, ...(s.tags ? { tags: s.tags } : {}), ...(s.refAdded ? { refAdded: true } : {}), editedFrom: sketchId },
     work: (gemini) => gen.runEdit(gemini, source, text),
   });
 });
