@@ -93,7 +93,12 @@ export default function AuthModal({ view }: { view: AuthView }) {
           doneModal();
         } catch (err) {
           if (code(err) === 'auth/email-not-verified') go('verification_sent');
-          else setError('Password or Email Incorrect');
+          // Only real credential errors say so; anything else (blocked domain, network, too many attempts) shows
+          // its reason instead of sending the user after a password that is fine.
+          else if (/invalid-credential|wrong-password|user-not-found|invalid-email/.test(code(err))) setError('Password or Email Incorrect');
+          else setError(code(err) === 'auth/too-many-requests'
+            ? 'Too many attempts. Please wait a few minutes and try again.'
+            : `We couldn't sign you in right now (${code(err) || 'network error'}). Please try again.`);
         }
       }
     });
