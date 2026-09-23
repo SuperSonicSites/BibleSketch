@@ -129,6 +129,14 @@ Already scheduled and kept: Joshua 1:9 (x2; the kids one moved to Sunday School)
 Luke 1:37, Isaiah 60:1, John 1:5, Matthew 1:23, Luke 2:14. The WEB "Yahweh" pages among them stay: they are the
 comparison group for the translation test (§5).
 
+**Done 2026-09-23:** 62 verse pages generated, reviewed, published and scheduled (`web/src/data/pins.json` is the
+source of truth). Verse art prints one verse under 30 words, so 13 entries below were swapped for a short verse on
+the same theme: Fruit of the Spirit → Galatians 6:9 and Matthew 5:16; Ecclesiastes 3:11 → 3:1; Isaiah 40:31 →
+40:8; Deuteronomy 31:6 → 2 Timothy 1:7; Psalm 28:7 → 46:1; Isaiah 41:10 → 41:13; Philippians 4:8 → Psalm 100:4;
+Isaiah 9:6 → Matthew 1:21 and 2:10; Romans 12:2 → 12:12 and Psalm 90:12; Zephaniah 3:17 → Psalm 37:4; Isaiah
+43:2 → 26:3; Armor of God → Ephesians 6:10 and 6:11; ranges → their best single verse. Fonts: S = Elegant Script /
+Classic Serif, M = Modern Brush, D = Playful. 14 of 76 generated pages were rejected in review and regenerated.
+
 ### Posting calendar, Oct 6 - Dec 20 (62 new pages)
 All adult looks: S = script and botanicals, M = bold modern lettering, D = doodle. Dates marked * are already scheduled (existing pages).
 Generation order = this order. New verse pages wait for the Verse Art fix (wrong text, copied signatures) to be merged
