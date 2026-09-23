@@ -30,9 +30,12 @@
     { "pattern": "biblesketch.app/*", "zone_name": "biblesketch.app" }
   ],
   // Paths the Worker answers on biblesketch.app; anything else its routes catch goes to Firebase (middleware).
-  "vars": { "LIVE_PREFIXES": "/about,/privacy,/terms,/verified,/blog,/img,/coloring-page,/tags,/profile,/api,/gallery,/pricing,/,/bible-verse-coloring,/pins,/pin-img" },
+  "vars": { "LIVE_PREFIXES": "/about,/privacy,/terms,/verified,/blog,/img,/coloring-page,/tags,/profile,/api,/gallery,/pricing,/,/bible-verse-coloring,/pins,/pin-img", "PINTEREST_APP_ID": "1615048", "PINTEREST_ENV": "sandbox" },
   "observability": { "enabled": true },
   // Cloudflare Images binding: WebP thumbnails for /img/* (src/pages/img/[...path].ts).
-  "images": { "binding": "IMAGES" }
+  "images": { "binding": "IMAGES" },
+  // Pinterest API (src/lib/pinterest.ts): encrypted OAuth tokens and published-Pin markers. PINTEREST_ENV
+  // becomes "production" once the app has Standard access. Secrets: PINTEREST_APP_SECRET, PINTEREST_TOKEN_KEY.
+  "kv_namespaces": [{ "binding": "PINTEREST", "id": "944b03ce0f58499c92672d833a199194" }]
   // Secret PURGE_SECRET: `npx wrangler secret put PURGE_SECRET` (local dev: .dev.vars).
 }
