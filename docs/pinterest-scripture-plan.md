@@ -135,7 +135,7 @@ the same theme: Fruit of the Spirit → Galatians 6:9 and Matthew 5:16; Ecclesia
 40:8; Deuteronomy 31:6 → 2 Timothy 1:7; Psalm 28:7 → 46:1; Isaiah 41:10 → 41:13; Philippians 4:8 → Psalm 100:4;
 Isaiah 9:6 → Matthew 1:21 and 2:10; Romans 12:2 → 12:12 and Psalm 90:12; Zephaniah 3:17 → Psalm 37:4; Isaiah
 43:2 → 26:3; Armor of God → Ephesians 6:10 and 6:11; ranges → their best single verse. Fonts: S = Elegant Script /
-Classic Serif, M = Modern Brush, D = Playful. 14 of 76 generated pages were rejected in review and regenerated.
+Classic Serif, M = Modern Brush, D = Playful. 12 of 74 generated pages were rejected in review and regenerated (plus 1 run refunded by the critic).
 
 ### Posting calendar, Oct 6 - Dec 20 (62 new pages)
 All adult looks: S = script and botanicals, M = bold modern lettering, D = doodle. Dates marked * are already scheduled (existing pages).
