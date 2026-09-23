@@ -11,6 +11,7 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
 
 ### Pinterest auto-publish (ROADMAP 1.5)
 - [ ] Connect the feeds (Pinterest > Settings > Bulk create Pins > Auto-publish > Connect RSS feed > pick the board > Save). Pinterest refuses an empty feed, so connect each one on a day it has an item. Done: `christmas.xml` (2026-09-23, Luke 2:15-16 published). Next: `https://biblesketch.app/pins/scripture.xml` → Scripture Coloring Sheets | Bible Verse Coloring after 2026-09-24 00:00 UTC (8 pm EDT on the 23rd); `https://biblesketch.app/pins/sunday-school.xml` → Sunday School Activities & Bible Coloring Lessons after 2026-09-25 00:00 UTC (8 pm EDT on the 24th). `easter.xml` from Feb 1; `adult.xml` stays unconnected (paused).
+- [ ] Weekly (Claude can do it): alt text on the Pins RSS published that week. In `web/`: `node scripts/pins-alt.mjs`, then run the printed snippet in the signed-in Pinterest tab (DevTools console, or ask Claude). Idempotent.
 - [x] Old Pin "Joshua 1:9 Memory Verse" (385 saves) had no link: linked on 2026-09-23 to `/coloring-page/joshua-1-9/5SISdcUP4jxzkCc7qUXw` (a different Joshua 1:9 page than the RSS one, so each page keeps one Pin). Its creator stats (22,469 impressions, 385 saves) were intact after the edit; watch its analytics for a few days.
 
 ### Astro rebuild, phases 3-5

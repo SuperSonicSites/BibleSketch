@@ -12,7 +12,7 @@ Bible Sketch (https://biblesketch.app) turns Bible verses into printable colorin
 ## Pinterest
 
 - Plan: [docs/pinterest-strategy.md](docs/pinterest-strategy.md) (built from Pinterest's own recommender papers). Execution: ROADMAP 1.5, calendar `web/src/data/pins.json`, feeds `/pins/<board>.xml`.
-- Before writing or editing any Pin title or description, read the Pin copy rules (§3.3a of the plan) and run `node scripts/pins-check.mjs` in `web/`. One reviewed Pin a day for the whole account; never change a released entry's title before `|` (it names the Pin image).
+- Before writing or editing any Pin title or description, read the Pin copy rules (§3.3a of the plan) and run `node scripts/pins-check.mjs` in `web/`. Pacing is a ramp (1 Pin a day from 2026-09-24, +1 each week, up to 5; pins-check enforces it), and every page is reviewed up close before it enters the calendar. After Pins publish, set their alt text with `node scripts/pins-alt.mjs` (RSS can't carry it). Never change a released entry's title before `|` (it names the Pin image).
 
 ## Facts you can't infer from the code
 

@@ -1,7 +1,7 @@
 // Checks src/data/pins.json (the Pinterest calendar, src/lib/pins.ts) before a deploy. Read-only.
 //   node scripts/pins-check.mjs            validate the calendar; exit 1 on any error
 //   node scripts/pins-check.mjs --backlog  also list public master sketches that are neither on Pinterest nor in the calendar
-// Errors: one release per day for the whole account, sketch public + owned by the master account, slug matches,
+// Errors: more releases on a day than the ramp allows (dailyCap), sketch public + owned by the master account, slug matches,
 // never already on Pinterest, copy rules. Warnings: similar copy on a board, same passage on a board within 30 days.
 import { entries, BOARDS, TEMPLATES, MASTER_UID, pinFile } from '../src/lib/pins.ts';
 import { getDoc, query } from '../src/lib/firestore.ts';
@@ -30,6 +30,11 @@ for (const b of PINTEREST_BOARDS) {
 }
 
 const seen = new Map(), days = new Map(), files = new Set();
+const today = new Date().toISOString().slice(0, 10);
+
+// Posting ramp (ROADMAP 1.5): 1 Pin a day in the week from RAMP_START, 2 a day the next week, and so on up to 5.
+const RAMP_START = '2026-09-24';
+const dailyCap = (d) => (d < RAMP_START ? 1 : Math.min(5, 1 + Math.floor((Date.parse(d) - Date.parse(RAMP_START)) / 6048e5)));
 const words = (s) => new Set(s.toLowerCase().match(/[a-z']+/g));
 const firstSentence = (s) => s.split(/(?<=[.!?])\s/)[0];
 
@@ -40,12 +45,12 @@ for (const e of entries) {
   if (typeof e.approved !== 'boolean') err(e, 'approved must be true or false');
   if (seen.has(e.sketchId)) err(e, 'sketch listed twice');
   seen.set(e.sketchId, e);
-  if (days.has(e.release)) err(e, `second release on ${e.release} (also ${days.get(e.release).sketchId}): one Pin per day for the account`);
-  days.set(e.release, e);
+  days.set(e.release, (days.get(e.release) ?? 0) + 1);
+  if (days.get(e.release) > dailyCap(e.release)) err(e, `more than ${dailyCap(e.release)} releases on ${e.release} (posting ramp)`);
   if (files.has(pinFile(e))) err(e, 'duplicate Pin image name');
   files.add(pinFile(e));
   // A released entry is on Pinterest by design; only a future one must not be.
-  if (pinned.has(e.sketchId) && e.release > new Date().toISOString().slice(0, 10)) err(e, 'already on Pinterest');
+  if (pinned.has(e.sketchId) && e.release > today) err(e, 'already on Pinterest');
 
   if (e.title.length < 40 || e.title.length > 100) err(e, `title is ${e.title.length} chars (40-100)`);
   if (!e.title.includes('|')) err(e, 'title needs "| <reference>"');
@@ -53,7 +58,8 @@ for (const e of entries) {
   // The core search phrase must be in the Pin text (docs/pinterest-strategy.md).
   if (!/coloring/i.test(e.title)) err(e, 'title needs "Coloring"');
   if (!/coloring (page|sheet)/i.test(e.description)) err(e, 'description needs "coloring page"');
-  if (e.description.length < 250 || e.description.length > 420) err(e, `description is ${e.description.length} chars (250-420)`);
+  // 200-350 since 2026-09-23 (docs/pinterest-strategy.md 1.10); released entries keep what they went out with.
+  if (e.release > today && (e.description.length < 200 || e.description.length > 350)) err(e, `description is ${e.description.length} chars (200-350)`);
   if (!e.description.endsWith(CTA)) err(e, 'description must end with the free-prints line');
   if (/#\w|[\u{1F300}-\u{1FAFF}]/u.test(e.description)) err(e, 'no hashtags or emojis');
 

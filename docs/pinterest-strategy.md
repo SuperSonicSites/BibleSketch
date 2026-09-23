@@ -117,6 +117,48 @@ Rich Pins, or a creator-level quality score. TransAct V2's ranker does take "cre
 account itself carries features, but the paper does not say which. Treat any claim on those topics as folklore
 until our own data says otherwise.
 
+### 1.10 Industry data: Tailwind's 2025 benchmark (1.2M Pins, 17k accounts)
+Source: Tailwind, "2025 Pinterest Marketing Best Practices Benchmark Report", parts 1 and 2 (Nov-Dec 2024; data
+Jul-Oct 2024). It measures outcomes, where the papers describe mechanisms. Read it with three caveats: it is
+correlational, Tailwind sells a scheduler (its "Pins published via Tailwind do better" finding is self-serving and
+ignored here), and its accounts are mostly English-language e-commerce and bloggers, not church and education.
+
+What it adds or confirms:
+- **Pinterest is evergreen.** Over 60% of saves in a 90-day window went to Pins over a year old, 40% to Pins over
+  two years old; Pins peak in their **second year**. Day-30 and day-90 reads are early signals, not verdicts; the
+  payoff of a Pin comes in year 1-2, and last season's Christmas Pins will circulate again this December. Matches
+  our Easter Pin (82k impressions, still earning) and 1.3.
+- **Fresh Pins get the traffic.** Over 90% of traffic to creators' sites came from their own new Pins ("Creates");
+  re-saves of an existing Pin are rarely shown. Confirms 1.6-1.7 and the one-Pin-per-sketch rule.
+- **Winners take almost everything.** Top 1% of fresh Pins = over 50% of impressions and clicks; bottom 80% = under
+  10%. Ours: top 10 Pins = 43% of clicks. Pinterest itself recommends 5-25 fresh Pins a day (see 3.4).
+- **Engagement drives reach**; image Pins are 89% of the most viral (video 8%): no need for video.
+- **Vertical 2:3, lots of white.** 87 of the top 100 dominant colors in viral Pins were white or light grey; only 4%
+  of viral designed Pins used the brand's own palette. Coloring pages are white by nature (good), and it is a point
+  for the neutral `paper` banner over `purple` in our template test.
+- **Titles:** ~80% of viral Pins have the target keyword in the title, often with a qualifier ("easy", "kid
+  friendly"); only the first 35-45 characters show in the feed.
+- **Descriptions: short and focused.** Viral Pins averaged 220-232 characters, with 5 or fewer keywords, and
+  Tailwind's reading matches 1.1: too many ideas in one description blurs what the Pin is about.
+- **Alt text:** Pins with alt text had 25% more impressions and 123% more outbound clicks (correlation, cause
+  unknown). Our hand-made Pins have alt text; **RSS-published Pins have none** (Pinterest's RSS import has no alt
+  field).
+- **Hashtags** carry no penalty and seem to be read as keywords. We keep them out anyway: no evidence they help.
+- Best posting time is account-specific; shopping features don't apply to us.
+
+Part 3 (Mar 2025, "What is Fresh?"):
+- **Freshness is a spectrum.** Pins with a new image pointing to an already-pinned page kept 64% of their reach even
+  on the 11th-25th Pin to that page; the same image and page re-pinned kept 11%. New image > new text > nothing new.
+  For us: a second Pin to a strong page is fine when the image is genuinely different (another sketch of the
+  scene), never the same sketch in another banner (1.7).
+- **Holding period.** Most new Pins get no impressions for the first couple of days; ~20% still had none after a
+  week. Distribution then grows over the first 90 days, in step with saves and outbound clicks. Matches 1.6.
+- **How to benchmark:** ignore week 1 entirely; look for week-over-week growth over the first 2-3 months; compare
+  each month's new Pins with your own previous months, not with other accounts.
+- Tailwind also warns that platforms are "likely" learning to spot and demote AI-generated content (no data given).
+  Our pages are AI-generated line art: another reason for the close-up review of every page, and a risk to watch
+  in the day-30 numbers.
+
 ---
 
 ## 2. Principles
@@ -132,7 +174,8 @@ until our own data says otherwise.
 5. **New images only.** One Pin per sketch, never a re-post. Distinct scenes from one story, not near-copies. (1.6, 1.7)
 6. **Name things the way searchers and board-makers do.** Titles, descriptions and board names use the words people
    type and the names they give their own boards. (1.5, 1.8)
-7. **Judge at day 30 and day 90.** Before 30 days the Pin runs on content scores; judging earlier measures noise. (1.6)
+7. **Judge at day 30 and day 90, value at year 1-2.** Before 30 days the Pin runs on content scores; judging
+   earlier measures noise. Pins peak in their second year, so never delete a Pin for a slow start. (1.6, 1.10)
 
 The current ROADMAP 1.5 rules already follow 2 and 5 (one reviewed Pin a day, one Pin per sketch, a 2-day feed
 window). The changes below cover the rest.
@@ -195,7 +238,7 @@ The rules for writing each Pin's title and description. `web/scripts/pins-check.
   audience on black-template pages. Never a kids' title on an adult-style page, or the reverse (1.2).
 - After an entry's release date, never change the text before `|`: the Pin image name is built from it.
 
-**Description** 250-420 characters **(checked)**, in this order:
+**Description** 200-350 characters **(checked)**; shorter and focused, one idea per Pin (1.10). In this order:
 1. A hook that speaks to the teacher or parent ("Picture your Sunday school class coloring…", a question, a
    one-line story fact). A different first sentence from every other Pin on the board (warned).
 2. What is drawn and nothing else: who, doing what, where; then the reference in parentheses.
@@ -208,13 +251,21 @@ The rules for writing each Pin's title and description. `web/scripts/pins-check.
 - No hashtags or emojis **(checked)**, no keyword lists, no "AI generated", and no promises the page doesn't keep
   (worksheets, craft instructions, "free printable").
 
+**Alt text**: RSS can't carry it, so it is set on Pinterest after each Pin publishes: `node scripts/pins-alt.mjs`
+prints a snippet for the signed-in tab that writes "Coloring page: <the what-is-drawn sentence>" on every released
+calendar Pin (CHECKLIST, weekly). So sentence 2 of every description must stand alone as a picture description.
+
 **Placement**: the board, the template and the words all say the same audience: kids' pages on paper/purple to
 Christmas, Sunday School or Easter; verse art to Scripture; black-template pages are adult-style and stay rare
 outside the adult board.
 
 ### 3.4 Timing and cadence
-- **One Pin a day, boards taking turns** stays. The papers give no reason to post more and a clear reason not to
-  post weaker (1.4). Raise it only if save rate per impression holds steady for 60 days at the current pace.
+- **Ramp to 5 a day** (owner decision 2026-09-23): 1 a day from Sept 24, +1 each week, 5 a day from Oct 22,
+  boards taking turns. Why: winners are a lottery (top 1% of Pins = half of all reach, 1.10), Pinterest recommends
+  5-25 fresh Pins a day, and our Nov-Dec 2025 burst of 4-8 a day drew no penalty. What does not change: every Pin
+  is a reviewed page, because a weak Pin is still a vote against us (1.4). The ceiling is a ceiling; supply of
+  reviewed pages is the real limit. Watch the day-30 save rate per impression by week: if it falls as volume rises,
+  hold the ramp where it was.
 - **Christmas: front-load.** The peak is mid-December; a Pin released after about Nov 15 reaches the peak still
   inside its 28-day "new Pin" window (1.6). The calendar today has 9 Christmas Pins in October, 17 in November and
   11 in December. Move the strongest December pages into late October / early November, and use December for
@@ -268,7 +319,7 @@ Rules:
 | This week | Connect `christmas.xml` and `scripture.xml` (CHECKLIST). Add links to the two linkless Pins. |
 | By Oct 10 | Regenerate Matthew 2:9-10. Make and review Sunday School pages for their slots, starting with story series (David and Goliath, Jonah, Noah: 3-4 scenes each). Connect `sunday-school.xml` on its first day. |
 | By Oct 15 | Rebalance the calendar: move the best December Christmas pages into late Oct / early Nov (3.4). |
-| Oct 15 - Dec 20 | One Pin a day. Monthly analytics pull (section 4). |
+| Sept 24 - Dec 20 | Posting ramp, 1 to 5 a day (3.4). Weekly alt text (3.3a). Monthly analytics pull (section 4). |
 | Mid-Nov | First day-30 read on the October Pins: save rate and CTR by board and template. |
 | Jan | Build and review the Lent/Easter calendar; core Holy Week scenes scheduled for February. |
 | Mid-Feb | Template test verdict; decide the adult board and whether to raise cadence. |

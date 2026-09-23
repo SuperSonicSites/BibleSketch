@@ -1,6 +1,6 @@
 // Pinterest auto-publish (RSS). src/data/pins.json is the hand-approved calendar; the feeds and Pin images are
 // built from it at request time. Pinterest reads each feed about once a day and publishes new items oldest first.
-// Pacing lives in the calendar: one release per day for the whole account, boards taking turns
+// Pacing lives in the calendar: a daily ramp from 1 to 5 releases for the whole account, boards taking turns
 // (scripts/pins-check.mjs enforces it). A feed only lists what was released in the last WINDOW_DAYS days, so a
 // late feed connection or a skipped Pinterest check can never publish a pile at once.
 import calendar from '../data/pins.json' with { type: 'json' };
@@ -36,7 +36,14 @@ export function pinFile(e: PinEntry): string {
   return `${e.ref}-${slug(moment).replace(/-coloring-page$/, '')}-coloring-page-${e.sketchId.slice(0, 8)}-${e.template}`;
 }
 
-export const pageUrl = (e: PinEntry) => `${ORIGIN}/coloring-page/${e.ref}/${encodeURIComponent(e.sketchId)}`;
+// Alt text for the Pin (RSS can't carry it, so it is set on Pinterest after publishing: scripts/pins-alt.mjs):
+// the description's "what is drawn" sentence, the one ending with the reference in parentheses.
+export function altText(e: PinEntry): string {
+  const drawn = e.description.split(/(?<=[.!?])\s/).find((s) => /\([^)]*\d+:\d+[^)]*\)\.$/.test(s));
+  return `Coloring page: ${drawn ?? e.title}`.slice(0, 500);
+}
+
+export const pageUrl =(e: PinEntry) => `${ORIGIN}/coloring-page/${e.ref}/${encodeURIComponent(e.sketchId)}`;
 
 // The sketch as a signed-out visitor sees it: null unless it is public and the master account's.
 export async function masterSketch(id: string): Promise<Sketch | null> {
