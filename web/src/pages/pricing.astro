@@ -1,0 +1,143 @@
+---
+// Pricing (bundle `fq`, docs/bundle-map/pricing-billing.md). Static and edge-cached; the plan buttons,
+// the premium state and the return from Zoho checkout are handled by src/scripts/pricing.ts.
+// Prices are USD (owner, 2026-09-23); the tracking values in pricing.ts match them.
+import Base from '../layouts/Base.astro';
+import { buttonClass } from '../components/shell/Button.tsx';
+import { Crown, Check, Sparkles, Flame, CircleCheck, CircleHelp } from 'lucide-react';
+import { ORIGIN } from '../lib/sketch.ts';
+
+Astro.cache.set({ maxAge: 86400, swr: 604800, tags: ['pages'] });
+Astro.response.headers.set('Cache-Control', 'public, max-age=3600');
+
+const title = 'Pricing - Affordable Bible Coloring Page Credits | Bible Sketch';
+const description = 'Get credits to create custom Bible coloring pages. Subscribe monthly or pay once — your credits never expire. Perfect for Sunday School teachers, homeschool families, and church ministries. Plans start at $4.99.';
+const packs = [
+  { id: 'spark', name: 'The Spark', price: 4.99, credits: 20, perImage: 0.25, savings: null, audience: 'For a single lesson series', variant: 'outline', label: 'Get Spark Pack', Icon: Sparkles, highlight: false },
+  { id: 'torch', name: 'The Torch', price: 14.99, credits: 80, perImage: 0.19, savings: '25%', audience: 'For families & devotionals', variant: 'primary', label: 'Get Torch Pack', Icon: Flame, highlight: true },
+  { id: 'beacon', name: 'The Beacon', price: 29.99, credits: 200, perImage: 0.15, savings: '40%', audience: 'For Ministry Directors', variant: 'secondary', label: 'Get Beacon Pack', Icon: Crown, highlight: false },
+] as const;
+const premiumPerks = ['Unlimited Downloads & Prints', '10 Credits Per Month Included', 'High-Res PDF Download', 'No Watermark'];
+const packPerks = ['High-Res PDF Download', 'No Watermark', 'Private Mode', 'Commercial Rights'];
+const faq = [
+  ['Do these credits expire?', 'No! Your purchased credits never expire. You can buy a pack today and use it next year for Easter.'],
+  ['Can I print these for my whole Sunday School class?', 'Yes! Once you generate an image, you own the rights to print it as many times as you need for your class or ministry.'],
+  ['Should I subscribe or buy a credit pack?', "If you teach regularly (weekly Sunday School, homeschool), Premium gives you the best value with unlimited downloads and 10 monthly credits. If you only need images occasionally (VBS, special events), credit packs let you pay once and use whenever you're ready."],
+];
+const faqSchema = JSON.stringify({
+  '@context': 'https://schema.org', '@type': 'FAQPage',
+  mainEntity: faq.map(([q, a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })),
+});
+---
+<Base title={title} description={description} canonical={`${ORIGIN}/pricing`} image={`${ORIGIN}/logo.png`} ogType="website" twitterCard="summary" schemas={[faqSchema]}>
+  <div class="max-w-7xl mx-auto px-4 py-12 md:py-20">
+    <div id="pricing-success" hidden class="mb-8 bg-green-50 border border-green-200 rounded-2xl p-6 flex items-center gap-4" role="status">
+      <div class="p-3 bg-green-100 rounded-full"><CircleCheck className="w-6 h-6 text-green-600" aria-hidden="true" /></div>
+      <div><h3 class="font-bold text-green-800" data-title></h3><p class="text-green-600 text-sm" data-subtitle></p></div>
+    </div>
+    <div id="pricing-member" hidden class="mb-8 bg-purple-50 border border-purple-200 rounded-2xl p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div class="flex items-center gap-4">
+        <div class="p-3 bg-purple-100 rounded-full"><Crown className="w-6 h-6 text-purple-600" aria-hidden="true" /></div>
+        <div><h3 class="font-bold text-purple-800">You're a Premium Member!</h3><p class="text-purple-600 text-sm">Enjoy unlimited downloads &amp; prints.</p></div>
+      </div>
+      <a href="https://billing.zohosecure.ca/portal/biblesketch" target="_blank" rel="noopener noreferrer" class="text-purple-600 hover:text-purple-800 font-medium text-sm underline whitespace-nowrap">Manage Subscription →</a>
+    </div>
+
+    <a href="/" class="inline-flex items-center gap-2 text-gray-500 hover:text-[#7C3AED] font-bold mb-8 transition-colors group">
+      <span class="p-2 bg-white rounded-full shadow-sm group-hover:shadow-md border border-gray-100 transition-all">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5" aria-hidden="true"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg>
+      </span>
+      <span>Back to Home</span>
+    </a>
+
+    <div class="text-center mb-16 md:mb-24">
+      <h1 class="font-display text-4xl md:text-5xl font-bold text-[#1F2937] mb-6">Pricing That Fits Your Needs</h1>
+      <p class="text-lg md:text-xl text-gray-500 max-w-2xl mx-auto leading-relaxed">Subscribe monthly or buy credits once — either way,<br class="hidden md:block" /> your credits never expire.</p>
+    </div>
+
+    <div class="w-full mb-16">
+      <div class="relative bg-gradient-to-br from-purple-600 to-purple-800 rounded-3xl p-8 md:p-10 text-white shadow-2xl shadow-purple-300/50 border-4 border-purple-300">
+        <div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-[#FCD34D] text-purple-900 text-xs font-bold uppercase tracking-widest py-2 px-5 rounded-full shadow-lg border-2 border-white whitespace-nowrap">Best Value</div>
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+          <div class="flex-1">
+            <div class="flex items-center gap-3 mb-3">
+              <div class="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center"><Crown className="w-6 h-6 text-[#FCD34D]" aria-hidden="true" /></div>
+              <div><h2 class="font-display text-2xl md:text-3xl font-bold">Premium Plan</h2><p class="text-purple-200 text-sm">For dedicated teachers &amp; ministries</p></div>
+            </div>
+            <div class="flex items-baseline gap-2 mb-4"><span class="text-4xl md:text-5xl font-bold">$4.99</span><span class="text-purple-200 font-medium">/ month</span></div>
+            <ul class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {premiumPerks.map((p, i) => (
+                <li class="flex items-center gap-2 text-sm">
+                  <span class="p-0.5 bg-[#FCD34D] rounded-full"><Check className="w-3 h-3 text-purple-900" strokeWidth={4} aria-hidden="true" /></span>
+                  <span class:list={[i < 2 && 'font-medium']}>{p}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div class="md:text-right">
+            <button type="button" data-plan="premium" class={buttonClass('outline', 'lg', 'w-full md:w-auto bg-white text-purple-700 hover:bg-purple-50 border-2 border-white font-bold shadow-lg')}>Get Premium</button>
+            <p class="text-xs text-purple-200 mt-2" data-premium-caption>Cancel anytime</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-4 max-w-md mx-auto mb-12">
+      <div class="flex-1 h-px bg-gray-200"></div>
+      <h2 class="text-sm font-bold text-gray-400 uppercase tracking-wider">Or Pay As You Go</h2>
+      <div class="flex-1 h-px bg-gray-200"></div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-8 lg:gap-12 mb-24 px-2 items-stretch">
+      {packs.map((x) => (
+        <div class:list={['relative bg-white rounded-3xl p-8 flex flex-col h-full transition-all duration-300',
+          x.highlight ? 'md:-mt-8 z-10 border-2 border-[#7C3AED] shadow-2xl shadow-purple-200/50 scale-100 md:scale-110' : 'border border-gray-100 shadow-lg hover:shadow-xl']}>
+          {x.highlight && <div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-[#FCD34D] text-[#7C3AED] text-xs font-bold uppercase tracking-widest py-2 px-4 rounded-full shadow-md border border-white whitespace-nowrap">Most Popular</div>}
+          <div class="mb-6">
+            <div class:list={['w-12 h-12 rounded-2xl flex items-center justify-center mb-4', x.highlight ? 'bg-purple-100 text-[#7C3AED]' : 'bg-gray-50 text-gray-400']}><x.Icon className="w-6 h-6" aria-hidden="true" /></div>
+            <h3 class="font-display text-2xl font-bold text-gray-800">{x.name}</h3>
+            <p class="text-sm text-gray-500 italic mt-1 min-h-[1.25rem]">{x.audience}</p>
+          </div>
+          <div class="mb-6">
+            <div class="flex items-baseline gap-1"><span class="text-4xl font-bold text-gray-900">${x.price}</span><span class="text-gray-400 font-medium">/ one-time</span></div>
+            <div class="flex flex-wrap items-center gap-2 mt-2">
+              <span class="text-sm font-bold text-[#7C3AED] bg-purple-50 px-2 py-1 rounded-md">{x.credits} Credits</span>
+              <span class="text-xs font-semibold text-amber-700 bg-amber-50 px-2 py-1 rounded-md border border-amber-200">+ {x.credits} Free Prints ✨</span>
+            </div>
+            <span class="text-xs text-gray-400 mt-1 block">(${x.perImage.toFixed(2)} / image)</span>
+          </div>
+          <div class:list={['mb-6 text-sm font-bold py-2 px-3 rounded-lg text-center', x.savings ? 'bg-green-50 text-green-700' : 'bg-transparent text-transparent select-none']} aria-hidden={x.savings ? undefined : 'true'}>{x.savings ? `Save ${x.savings} instantly` : 'Save 0% instantly'}</div>
+          <ul class="space-y-4 mb-8 flex-1">
+            {packPerks.map((p) => (
+              <li class="flex items-center gap-3 text-sm text-gray-600">
+                <span class="p-0.5 bg-green-100 rounded-full"><Check className="w-3 h-3 text-green-600" strokeWidth={4} aria-hidden="true" /></span>
+                <span>{p}</span>
+              </li>
+            ))}
+          </ul>
+          <button type="button" data-plan={x.id} class={buttonClass(x.variant, 'lg', 'w-full mt-auto')}>{x.label}</button>
+        </div>
+      ))}
+    </div>
+
+    <div class="max-w-3xl mx-auto bg-white rounded-3xl p-8 md:p-12 shadow-sm border border-purple-50">
+      <div class="flex items-center gap-3 mb-8 justify-center">
+        <CircleHelp className="w-6 h-6 text-[#7C3AED]" aria-hidden="true" />
+        <h2 class="font-display text-2xl font-bold text-gray-800">Frequently Asked Questions</h2>
+      </div>
+      <div class="space-y-8">
+        {faq.map(([q, a]) => (
+          <div class="border-b border-gray-100 last:border-0 pb-6 last:pb-0">
+            <h3 class="font-bold text-gray-900 mb-2">{q}</h3>
+            <p class="text-gray-600 text-sm leading-relaxed">{a}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+
+    <div class="text-center mt-12">
+      <p class="text-sm text-gray-400">Payments are securely processed. <br />Need help? Contact <a href="mailto:hello@biblesketch.app" class="underline hover:text-[#7C3AED]">hello@biblesketch.app</a></p>
+    </div>
+  </div>
+  <script>import '../scripts/pricing.ts';</script>
+</Base>

@@ -1,0 +1,86 @@
+---
+// / = Scene Art (bundle `Iq` head + `iq`, docs/bundle-map/scene-art.md). Server: one head (the bundle's server
+// title/description, which Google already shows), hero with the public count, the Community Favorites grid.
+// The create tool and its result are the Generator island (generation and charging run in createSketch).
+import Base from '../layouts/Base.astro';
+import ListingCard from '../components/ListingCard.astro';
+import CardIcons from '../components/CardIcons.astro';
+import Generator from '../components/Generator.tsx';
+import { count, query } from '../lib/firestore.ts';
+import { ORIGIN, jsonLd, loadAuthors, type Sketch } from '../lib/sketch.ts';
+
+let favorites: Sketch[] = [];
+let total = 0;
+try {
+  const [recent, n] = await Promise.all([
+    query('sketches', [['isPublic', true]], 100, { ordered: true }) as Promise<Sketch[]>,
+    count('sketches', [['isPublic', true]]),
+  ]);
+  // Bundle `aq`: the newest public scene art, most blessed first.
+  favorites = recent.filter((s) => !s.isBookmark && s.type !== 'verse')
+    .sort((a, b) => (b.blessCount ?? 0) - (a.blessCount ?? 0) || Date.parse(b.createdAt ?? '') - Date.parse(a.createdAt ?? ''))
+    .slice(0, 12);
+  total = n;
+  Astro.cache.set({ maxAge: 3600, swr: 86400, tags: ['home', ...favorites.map((s) => `related:${s.id}`)] });
+  Astro.response.headers.set('Cache-Control', 'public, max-age=300');
+} catch (e) {
+  // The create tool still works without the grid; don't cache the degraded page.
+  console.error('[home]', e);
+  Astro.cache.set(false);
+  Astro.response.headers.set('Cache-Control', 'no-store');
+}
+const authors = await loadAuthors(favorites);
+
+const title = 'Create Faith-Filled Coloring Pages | Bible Sketch';
+const description = 'Turn any bible verse into a custom, print-ready coloring page in seconds. AI-powered Bible coloring pages for Sunday School, VBS, and personal devotion.';
+const schema = jsonLd({
+  '@context': 'https://schema.org',
+  '@graph': [
+    { '@type': 'WebSite', '@id': `${ORIGIN}/#website`, url: `${ORIGIN}/`, name: 'Bible Sketch', publisher: { '@id': `${ORIGIN}/#organization` } },
+    { '@type': 'Organization', '@id': `${ORIGIN}/#organization`, name: 'Bible Sketch', url: `${ORIGIN}/`, logo: `${ORIGIN}/logo.png`, email: 'hello@biblesketch.app' },
+  ],
+});
+---
+<Base title={title} description={description} canonical={`${ORIGIN}/`} image={`${ORIGIN}/og.png`} imageAlt={title} ogType="website" schemas={[schema]}>
+  <main class="max-w-7xl mx-auto px-4 mt-8 md:mt-16">
+    <div class="text-center mb-10">
+      <h1 class="font-display text-4xl md:text-6xl font-bold text-[#1F2937] leading-tight mb-4">
+        Create Faith-Filled <br class="hidden md:block" />
+        <span class="relative inline-block">Coloring Pages<span class="absolute left-0 right-0 bottom-1 h-3 bg-[#FCD34D]/70 -z-10 rounded" aria-hidden="true"></span></span>
+      </h1>
+      <p class="text-lg md:text-xl text-gray-500 max-w-2xl mx-auto mb-6">Turn any bible verse into a custom, print-ready coloring page in seconds.</p>
+      <p class="inline-flex flex-wrap justify-center gap-x-4 gap-y-1 bg-white rounded-full px-5 py-2 shadow-sm border border-gray-100 text-sm text-gray-600">
+        <span><b class="text-[#7C3AED]">{Math.max(total, 500).toLocaleString('en-US')}+</b> created</span>
+        <span aria-hidden="true">•</span><span><b class="text-[#7C3AED]">60s</b> to generate</span>
+        <span aria-hidden="true">•</span><span>Print-ready</span>
+      </p>
+    </div>
+
+    <div class="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
+      <div class="xl:col-span-7"><Generator client:load kind="scene" /></div>
+      <div class="hidden xl:block xl:col-span-5">
+        <figure class="bg-white rounded-3xl shadow-xl border border-gray-100 p-4 rotate-2">
+          <div class="relative">
+            <img src="/examples/daniel-6.webp" alt="Example Coloring Page - Daniel in Lions Den" width="896" height="1280" loading="lazy" class="w-full aspect-[3/4] object-cover rounded-2xl" />
+            <span class="absolute top-3 right-3 bg-[#FCD34D] text-purple-900 text-xs font-bold px-3 py-1 rounded-full shadow">Example</span>
+          </div>
+          <figcaption class="pt-3 text-center"><b class="text-gray-800">Daniel 6:16-22</b><span class="block text-sm text-gray-500">Young Child • Sunday School</span></figcaption>
+        </figure>
+      </div>
+    </div>
+  </main>
+
+  {favorites.length > 0 && (
+    <section class="max-w-7xl mx-auto px-4 py-16" aria-labelledby="favorites">
+      <h2 id="favorites" class="font-display text-3xl font-bold text-gray-800 mb-2">Community Favorites</h2>
+      <p class="text-gray-500 mb-8">Explore the most loved coloring pages created by the Bible Sketch community. Bless your favorites or save them to your personal collection.</p>
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <CardIcons />
+        {favorites.map((s) => <ListingCard sketch={s} author={s.userId ? authors.get(s.userId) : undefined} />)}
+      </div>
+      <div class="text-center mt-10">
+        <a href="/gallery?sort=popular" class="inline-flex items-center justify-center rounded-full font-bold px-8 py-4 text-lg border-2 border-[#7C3AED] text-[#7C3AED] hover:bg-purple-50 transition-all">Explore All Sketches</a>
+      </div>
+    </section>
+  )}
+</Base>

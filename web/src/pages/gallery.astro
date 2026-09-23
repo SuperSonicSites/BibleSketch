@@ -1,0 +1,68 @@
+---
+// /gallery (bundle `QP`, docs/bundle-map/gallery-tags-profile.md). Community = every public sketch, one REST
+// query; ?tag/book/age/style/sort/page live in the URL (the bundle kept only ?tag), canonical is always
+// /gallery (owner decision 2026-09-23). My Gallery and Saved are the GalleryTabs island (the visitor's session).
+import Base from '../layouts/Base.astro';
+import ListingCard from '../components/ListingCard.astro';
+import CardIcons from '../components/CardIcons.astro';
+import FilterForm from '../components/FilterForm.astro';
+import Pagination from '../components/Pagination.astro';
+import GalleryTabs from '../components/GalleryTabs.tsx';
+import { query } from '../lib/firestore.ts';
+import { ORIGIN, TAG_LABELS, loadAuthors, type Sketch } from '../lib/sketch.ts';
+import { applyFilters, filterQuery, paginate, parseFilters } from '../lib/listing.ts';
+
+const f = parseFilters(Astro.url.searchParams, { sort: 'newest', tags: Object.keys(TAG_LABELS) });
+let all: Sketch[] = [];
+let failed = false;
+try {
+  // ponytail: one query of up to 2000 public sketches (~300 today), filtered here; cursor paging past that.
+  all = (await query('sketches', f.tag ? [['isPublic', true], ['tags', f.tag, 'array-contains']] : [['isPublic', true]], 2000, { ordered: true })) as Sketch[];
+} catch (e) {
+  console.error('[gallery]', e);
+  failed = true;
+}
+const matches = applyFilters(all, f);
+const { items, page, pages } = paginate(matches, f.page);
+const authors = await loadAuthors(items);
+
+if (failed) {
+  Astro.cache.set(false);
+  Astro.response.status = 503;
+  Astro.response.headers.set('Retry-After', '120');
+  Astro.response.headers.set('Cache-Control', 'no-store');
+} else {
+  Astro.cache.set({ maxAge: 3600, swr: 86400, tags: ['gallery', ...items.map((s) => `related:${s.id}`)] });
+  Astro.response.headers.set('Cache-Control', 'public, max-age=300');
+}
+const title = 'Bible Coloring Pages Gallery - Free Printable Christian Coloring Sheets | Bible Sketch';
+const description = 'Browse thousands of free printable Bible coloring pages. Discover coloring sheets for every Bible book, age group, and art style. Perfect for Sunday School, VBS, homeschool, and family devotionals.';
+---
+<Base title={title} description={description} canonical={`${ORIGIN}/gallery`} ogType="website" image={`${ORIGIN}/logo.png`} imageAlt="Bible Sketch Logo" twitterCard="summary">
+  <div class="max-w-7xl mx-auto px-4 py-12">
+    <div class="text-center mb-8">
+      <h1 class="font-display text-4xl md:text-5xl font-bold text-[#1F2937] mb-4">Bible Coloring Pages Gallery</h1>
+      <p class="text-lg text-gray-500 max-w-2xl mx-auto">Free printable coloring pages from every book of the Bible, for every age. Created by the Bible Sketch community.</p>
+    </div>
+
+    <GalleryTabs client:idle />
+
+    <section id="community" aria-label="Community coloring pages">
+      <FilterForm filters={f} action="/gallery" showTag defaultSort="newest" />
+      {failed ? (
+        <p class="text-center py-16 text-gray-500">The gallery is temporarily unavailable. Please try again in a couple of minutes.</p>
+      ) : items.length === 0 ? (
+        <div class="text-center py-16">
+          <h2 class="font-display text-2xl font-bold text-gray-800 mb-2">No sketches found</h2>
+          <p class="text-gray-500">{f.book ? `No sketches from ${f.book} yet.` : 'Be the first to share a sketch with the community!'}</p>
+        </div>
+      ) : (
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          <CardIcons />
+          {items.map((s) => <ListingCard sketch={s} author={s.userId ? authors.get(s.userId) : undefined} />)}
+        </div>
+      )}
+      <Pagination page={page} pages={pages} href={(n) => '/gallery' + filterQuery(f, 'newest', n)} />
+    </section>
+  </div>
+</Base>

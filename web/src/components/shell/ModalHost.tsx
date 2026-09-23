@@ -7,7 +7,7 @@ import AuthModal from './AuthModal.tsx';
 import AccountModal from './AccountModal.tsx';
 import CompletionModal from './CompletionModal.tsx';
 import PremiumModal from './PremiumModal.tsx';
-import Button from './Button.tsx';
+import Button, { buttonClass } from './Button.tsx';
 import Dialog from './Dialog.tsx';
 import { $modal, cancelModal } from '../../lib/store.ts';
 import { startSession } from '../../lib/session.ts';
@@ -25,7 +25,8 @@ export default function ModalHost() {
       <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4"><TriangleAlert className="w-8 h-8 text-red-500" /></div>
       <h2 className="font-display text-2xl font-bold text-[#1F2937] mb-2">{modal.title}</h2>
       <p className="text-gray-500 mb-6 leading-relaxed">{modal.message}</p>
-      <Button onClick={cancelModal} className="w-full">Try Again</Button>
+      {modal.link && <a href={modal.link.href} className={buttonClass('primary', 'md', 'w-full mb-3')}>{modal.link.label}</a>}
+      <Button onClick={cancelModal} variant={modal.link ? 'ghost' : 'primary'} className="w-full">{modal.link ? 'Close' : 'Try Again'}</Button>
     </Dialog>
   );
 }

@@ -10,7 +10,11 @@ import { TAG_LABELS, type Sketch } from '../lib/sketch.ts';
 
 const actions = () => import('../lib/sketch-actions.ts');
 
-export default function OwnerControls({ sketch }: { sketch: Sketch }) {
+export default function OwnerControls({ sketch, onChange, onDelete }: {
+  sketch: Sketch;
+  onChange?: (patch: Partial<Sketch>) => void; // gallery dialog / result view keep their copy in sync
+  onDelete?: () => void; // default: back to the gallery
+}) {
   const user = useStore($user);
   const [isPublic, setIsPublic] = useState(sketch.isPublic !== false);
   const [tags, setTagList] = useState<string[]>(sketch.tags ?? []);
@@ -25,6 +29,7 @@ export default function OwnerControls({ sketch }: { sketch: Sketch }) {
     try {
       await (await actions()).setTags(sketch.id, draft);
       setTagList(draft);
+      onChange?.({ tags: draft });
       setEditing(false);
     } catch (e) {
       console.error('[tags]', e);
@@ -38,6 +43,7 @@ export default function OwnerControls({ sketch }: { sketch: Sketch }) {
     try {
       await (await actions()).setVisibility(sketch.id, !isPublic);
       setIsPublic(!isPublic);
+      onChange?.({ isPublic: !isPublic });
     } catch (e) {
       console.error('[visibility]', e);
       alert('Failed to update visibility');
@@ -49,7 +55,8 @@ export default function OwnerControls({ sketch }: { sketch: Sketch }) {
     setBusy('delete');
     try {
       await (await actions()).deleteSketch(sketch);
-      location.href = '/gallery';
+      if (onDelete) onDelete();
+      else location.href = '/gallery';
     } catch (e) {
       console.error('[delete]', e);
       alert('Failed to delete sketch. Please try again.');

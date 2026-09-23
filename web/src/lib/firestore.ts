@@ -57,26 +57,32 @@ export type Filter = [field: string, value: string | boolean] | [field: string, 
 
 // Filters AND-ed; newest first unless `ordered: false` (a query with no matching composite index, sorted by the
 // caller). The rules require isPublic == true among the filters for signed-out reads.
+const where = (filters: Filter[]) => ({
+  compositeFilter: {
+    op: 'AND',
+    filters: filters.map(([field, value, op]) => ({
+      fieldFilter: {
+        field: { fieldPath: field },
+        op: op === 'array-contains' ? 'ARRAY_CONTAINS' : 'EQUAL',
+        value: typeof value === 'boolean' ? { booleanValue: value } : { stringValue: value },
+      },
+    })),
+  },
+});
+
 export async function query(
   collection: string,
   filters: Filter[],
   limit: number,
   opts: { ordered?: boolean; token?: string } = {},
 ): Promise<Doc[]> {
-  const fieldFilter = ([field, value, op]: Filter) => ({
-    fieldFilter: {
-      field: { fieldPath: field },
-      op: op === 'array-contains' ? 'ARRAY_CONTAINS' : 'EQUAL',
-      value: typeof value === 'boolean' ? { booleanValue: value } : { stringValue: value },
-    },
-  });
   const res = await fetch(url(':runQuery'), {
     method: 'POST',
     headers: headers(opts.token),
     body: JSON.stringify({
       structuredQuery: {
         from: [{ collectionId: collection }],
-        where: { compositeFilter: { op: 'AND', filters: filters.map(fieldFilter) } },
+        where: where(filters),
         ...(opts.ordered === false ? {} : { orderBy: [{ field: { fieldPath: 'createdAt' }, direction: 'DESCENDING' }] }),
         limit,
       },
@@ -85,6 +91,23 @@ export async function query(
   if (!res.ok) throw new Error(`Firestore runQuery ${collection}: ${res.status} ${await res.text()}`);
   const rows: { document?: any }[] = await res.json();
   return rows.filter((r) => r.document).map((r) => toDoc(r.document));
+}
+
+// Number of matching documents (an aggregation: billed as 1 read per 1000 docs, no documents transferred).
+export async function count(collection: string, filters: Filter[]): Promise<number> {
+  const res = await fetch(url(':runAggregationQuery'), {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify({
+      structuredAggregationQuery: {
+        structuredQuery: { from: [{ collectionId: collection }], where: where(filters) },
+        aggregations: [{ alias: 'n', count: {} }],
+      },
+    }),
+  });
+  if (!res.ok) throw new Error(`Firestore count ${collection}: ${res.status} ${await res.text()}`);
+  const rows: { result?: { aggregateFields?: { n?: Value } } }[] = await res.json();
+  return Number(decode(rows[0]?.result?.aggregateFields?.n ?? { integerValue: '0' }));
 }
 
 // Set one integer field only if the document hasn't changed since it was read (optimistic concurrency).

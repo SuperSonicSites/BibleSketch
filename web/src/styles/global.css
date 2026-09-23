@@ -7,6 +7,8 @@
 body { background-color: #fff7ed; color: #1f2937; }
 h1, h2, h3, h4, h5, h6, .font-display, .font-friendly { font-family: Quicksand, sans-serif; }
 html, body { overflow-x: clip; }
+/* Scripts toggle `hidden` on elements that also carry a display utility (flex, block): hidden must win. */
+[hidden] { display: none !important; }
 
 /* The live app's readability overrides of the small text sizes (verbatim from the live stylesheet). */
 @media (max-width: 767px) {

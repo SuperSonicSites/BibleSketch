@@ -31,6 +31,7 @@ export interface Sketch {
   blessCount?: number;
   createdAt?: string;
   tags?: string[];
+  refAdded?: boolean; // "Add Ref" already drew the reference (editSketch)
 }
 
 // Same list as the bundle's `Yo` and constants.ts LITURGICAL_TAGS.

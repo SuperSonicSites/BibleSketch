@@ -15,10 +15,14 @@ type Props = ButtonHTMLAttributes<HTMLButtonElement> & {
   isLoading?: boolean;
 };
 
+// Also used by server-rendered buttons and links in .astro pages.
+export const buttonClass = (variant: keyof typeof VARIANTS = 'primary', size: keyof typeof SIZES = 'md', className = '') =>
+  `inline-flex items-center justify-center rounded-full font-bold transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${VARIANTS[variant]} ${SIZES[size]} ${className}`;
+
 export default function Button({ variant = 'primary', size = 'md', className = '', isLoading, disabled, children, ...rest }: Props) {
   return (
     <button
-      className={`inline-flex items-center justify-center rounded-full font-bold transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${VARIANTS[variant]} ${SIZES[size]} ${className}`}
+      className={buttonClass(variant, size, className)}
       disabled={disabled || isLoading}
       {...rest}
     >

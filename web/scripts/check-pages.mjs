@@ -15,6 +15,8 @@ const PATHS = [
     'exile', 'prophets', 'miracles', 'parables', 'resurrection'].map((t) => `/tags/${t}`),
   ...['xaeS7pQ1HZRfPOIkdNV6LPbmKXC2', 'xeggSuDd2uZae29ONIpJqTEVWly2', 'QUmmtp2Zv0SB9v3OkxNI1PZXqtf2', 'TiAEiMqWxpWqxCLtoI5OgHAvtf33',
     'ArEgVs05L7fJYzYbA5CpFb6CqSI2', 'lRlBce35zvYPdzUjRs68txidY5W2', 'Zzd57UpTVchrtJ3qxlr0B5MLUWi1', 'EIV569rIHRVDiHYHTzFEKzDPzeg1'].map((u) => `/profile/${u}`),
+  // phases 3-4
+  '/pricing', '/gallery', '/', '/bible-verse-coloring',
 ];
 // Deliberate changes (ROADMAP 1, phase 1), as "path field".
 const INTENDED = new Set([
@@ -27,6 +29,8 @@ const INTENDED = new Set([
   // tag pages: one title, the richer one the live client renders after boot (what Google indexes), not the
   // server's short "<Tag> Coloring Pages | Bible Sketch"
   ...PATHS.filter((p) => p.startsWith('/tags/')).flatMap((p) => [`${p} title`, `${p} og:title`]),
+  // verse art: the client title/description Google indexes (as for tags), and the example page as share image
+  ...['title', 'description', 'og:title', 'og:image', 'twitter:card'].map((f) => `/bible-verse-coloring ${f}`),
 ]);
 
 const decode = (s) => s?.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#0?39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\s+/g, ' ').trim();

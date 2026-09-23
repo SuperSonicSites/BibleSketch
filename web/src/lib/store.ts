@@ -27,7 +27,7 @@ export type Modal =
   | { name: 'auth'; view: AuthView }
   | { name: 'account' }
   | { name: 'completion' }
-  | { name: 'error'; title: string; message: string }
+  | { name: 'error'; title: string; message: string; link?: { href: string; label: string } }
   | { name: 'premium'; remaining: number }
   | null;
 

@@ -1,0 +1,85 @@
+---
+// /bible-verse-coloring = Verse Art (bundle `Oq` head + `Lq`, docs/bundle-map/verse-art.md). One head (the
+// client's title/description and WebPage JSON-LD), hero, the Generator island, Community Verse Art (server).
+import Base from '../layouts/Base.astro';
+import ListingCard from '../components/ListingCard.astro';
+import CardIcons from '../components/CardIcons.astro';
+import Generator from '../components/Generator.tsx';
+import { query } from '../lib/firestore.ts';
+import { ORIGIN, jsonLd, loadAuthors, type Sketch } from '../lib/sketch.ts';
+
+const canonical = `${ORIGIN}/bible-verse-coloring`;
+let verses: Sketch[] = [];
+try {
+  // Bundle `UP`: the 50 newest public verse art, most blessed first (index isPublic + type + createdAt).
+  verses = ((await query('sketches', [['isPublic', true], ['type', 'verse']], 50, { ordered: true })) as Sketch[])
+    .filter((s) => !s.isBookmark)
+    .sort((a, b) => (b.blessCount ?? 0) - (a.blessCount ?? 0) || Date.parse(b.createdAt ?? '') - Date.parse(a.createdAt ?? ''))
+    .slice(0, 8);
+  Astro.cache.set({ maxAge: 3600, swr: 86400, tags: ['verse', ...verses.map((s) => `related:${s.id}`)] });
+  Astro.response.headers.set('Cache-Control', 'public, max-age=300');
+} catch (e) {
+  console.error('[verse]', e);
+  Astro.cache.set(false);
+  Astro.response.headers.set('Cache-Control', 'no-store');
+}
+const authors = await loadAuthors(verses);
+
+const title = 'Bible Verse Coloring Pages | Create Custom Scripture Art | Bible Sketch';
+const description = 'Turn any Bible verse into a beautiful coloring page. Choose from elegant script, modern brush, playful, or classic serif typography styles. Free printable scripture art.';
+const schema = jsonLd({
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  url: canonical,
+  name: 'Bible Verse Coloring Pages Generator',
+  description: 'Create beautiful Bible verse coloring pages with decorative typography. Choose from elegant script, modern brush, playful, or classic serif font styles.',
+  isPartOf: { '@type': 'WebSite', url: ORIGIN, name: 'Bible Sketch' },
+  mainEntity: {
+    '@type': 'SoftwareApplication', name: 'Bible Verse Coloring Page Generator', applicationCategory: 'DesignApplication',
+    operatingSystem: 'Web Browser', offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+  },
+});
+---
+<Base title={title} description={description} canonical={canonical} image={`${ORIGIN}/examples/verse-example.webp`} imageAlt="Bible verse coloring page example" ogType="website" schemas={[schema]}>
+  <main class="max-w-7xl mx-auto px-4 mt-8 md:mt-16">
+    <div class="text-center mb-10">
+      <h1 class="font-display text-4xl md:text-6xl font-bold text-[#1F2937] leading-tight mb-4">
+        Create Bible Verse <br class="hidden md:block" />
+        <span class="relative inline-block">Coloring Pages<span class="absolute left-0 right-0 bottom-1 h-3 bg-[#FCD34D]/70 -z-10 rounded" aria-hidden="true"></span></span>
+      </h1>
+      <p class="text-lg md:text-xl text-gray-500 max-w-2xl mx-auto mb-6">Turn any Bible verse into beautiful, decorative typography coloring art.</p>
+      <p class="inline-flex flex-wrap justify-center gap-x-4 gap-y-1 bg-white rounded-full px-5 py-2 shadow-sm border border-gray-100 text-sm text-gray-600">
+        <span><b class="text-[#7C3AED]">4</b> font styles</span>
+        <span aria-hidden="true">•</span><span><b class="text-[#7C3AED]">60s</b> to generate</span>
+        <span aria-hidden="true">•</span><span>Print-ready</span>
+      </p>
+    </div>
+
+    <div class="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
+      <div class="xl:col-span-7"><Generator client:load kind="verse" /></div>
+      <div class="hidden xl:block xl:col-span-5">
+        <figure class="bg-white rounded-3xl shadow-xl border border-gray-100 p-4 -rotate-2">
+          <div class="relative">
+            <img src="/examples/verse-example.webp" alt="Bible verse coloring page example" width="1000" height="1339" loading="lazy" class="w-full aspect-[3/4] object-cover rounded-2xl" />
+            <span class="absolute top-3 right-3 bg-[#FCD34D] text-purple-900 text-xs font-bold px-3 py-1 rounded-full shadow">Example</span>
+          </div>
+          <figcaption class="pt-3 text-center"><b class="text-gray-800">Philippians 4:13</b><span class="block text-sm text-gray-500">Elegant Script</span></figcaption>
+        </figure>
+      </div>
+    </div>
+  </main>
+
+  {verses.length > 0 && (
+    <section class="max-w-7xl mx-auto px-4 py-16" aria-labelledby="community-verse">
+      <h2 id="community-verse" class="font-display text-3xl font-bold text-gray-800 mb-2">Community Verse Art</h2>
+      <p class="text-gray-500 mb-8">Explore beautiful Bible verse coloring pages created by the community. Bless your favorites or save them to your collection.</p>
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <CardIcons />
+        {verses.map((s) => <ListingCard sketch={s} author={s.userId ? authors.get(s.userId) : undefined} />)}
+      </div>
+      <div class="text-center mt-10">
+        <a href="/gallery" class="inline-flex items-center justify-center rounded-full font-bold px-8 py-4 text-lg border-2 border-[#7C3AED] text-[#7C3AED] hover:bg-purple-50 transition-all">Explore All Verse Art</a>
+      </div>
+    </section>
+  )}
+</Base>
