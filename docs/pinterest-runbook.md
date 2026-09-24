@@ -6,17 +6,23 @@ Owner-only steps: CHECKLIST, "Pinterest auto-publish".
 
 ## Status (update this block at the end of every Pinterest session)
 
-As of **2026-09-24 03:30 UTC**:
-- **Calendar** (`web/src/data/pins.json`, 173 entries, `pins-check`: no errors):
+As of **2026-09-24 11:10 UTC** (first `pinterest-daily` run):
+- **Calendar** (`web/src/data/pins.json`, 178 entries, `pins-check`: no errors):
 
   | Board | Pins | Dates |
   |---|---|---|
-  | Christmas | 40 | Sept 23 - Dec 19 |
+  | Christmas | 42 | Sept 23 - Dec 19 |
   | Scripture | 74 | Sept 24 - Dec 20 (all verse art, `plain` template) |
-  | Sunday School | 59 | Sept 25 - Nov 13 (one a day Oct 1 - Nov 5, plus the Genesis 1-4 series Oct 2 - 30) |
+  | Sunday School | 62 | Sept 25 - Nov 13 (one a day Oct 1 - Nov 5, plus the Genesis 1-4 series Oct 2 - 30) |
 
-  Ramp capacity through Dec 20 is ~370; **198 slots are open**, first open day Oct 9. Sunday School has nothing after
-  Nov 13 and Christmas is thin in December by design (front-loaded).
+  Ramp capacity through Dec 20 is ~370; **193 slots are open** (100 of them in the 7-60 day window), first open day
+  Oct 14 (Oct 14 and Oct 16 can only take Christmas or Scripture: Sunday School already has 2). Sunday School has
+  nothing after Nov 13 and Christmas is thin in December by design (front-loaded).
+- **Daily task log.** 2026-09-24: 5 generated, 5 approved: Christmas Oct 9 (Luke 2:12, angel gives the shepherds
+  the sign) and Oct 12 (Micah 5:2, Micah points to Bethlehem); Sunday School **Abraham series** Oct 11 (Gen 12:5),
+  Oct 15 (Gen 15:5), Oct 17 (Gen 21:2-3). Next runs: continue Abraham (three visitors Gen 18:2, Isaac and Rebekah,
+  Jacob's ladder), then Babel and Joseph. `pins-alt.mjs` cuts alt text short when the description quotes a verse
+  with a full stop inside (Joshua 1:9); that Pin's alt was set by hand.
 - **Genesis 1-4 series** (2026-09-24, owner request after the stats showed Genesis 1-4 Pins earn 62% of clicks):
   18 reviewed pages on the Sunday School board every day or two from Oct 2 to Oct 30, in story order: Creation days
   1-7 (opener "Days of Creation Coloring Pages"), "very good", Adam's breath of life, tending the garden, Eve,
@@ -25,7 +31,8 @@ As of **2026-09-24 03:30 UTC**:
   and Eve, the Toddler style keeps them modest (behind flowers, with animals); the Young Child style drew Eve
   covered only by her hair twice. Cain's angry face (Gen 4:3-5) was kept on purpose: the verse says so.
 - **Alt text**: every Pin on the active boards has alt text (the 18 missing ones, mostly old Genesis Pins, were
-  written from their images and set 2026-09-24). New RSS Pins still need the weekly pass.
+  written from their images and set 2026-09-24; the two RSS Pins released so far, Luke 2:15-16 and Joshua 1:9, were
+  set by the daily run 2026-09-24). New RSS Pins get it on each daily run.
 - **Feeds connected** (Pinterest > Settings > Bulk create Pins): `christmas.xml` (Sept 23), `scripture.xml`
   (Sept 24 00:01 UTC). **Not yet:** `sunday-school.xml` (connect after 2026-09-25 00:00 UTC, when its first Pin is
   in the feed; Pinterest refuses an empty feed). `easter.xml` from Feb 1. `adult.xml` stays unconnected (paused).
