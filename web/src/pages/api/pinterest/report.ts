@@ -11,7 +11,9 @@ export const GET: APIRoute = async ({ url, cache, cookies }) => {
   cache.set(false);
   if (!(await isOwner(cookies.get(OWNER_COOKIE)?.value))) return text(401, 'Session expired: connect again at /api/pinterest');
   try {
-    if (url.searchParams.has('tldr')) return text(200, (await buildReport()).text); // preview, sends nothing
+    if (url.searchParams.has('tldr')) { // preview of the email, sends nothing
+      return new Response((await buildReport()).html, { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } });
+    }
     return new Response(JSON.stringify(await report()), {
       headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
     });

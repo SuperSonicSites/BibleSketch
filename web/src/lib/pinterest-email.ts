@@ -1,5 +1,7 @@
-// Monthly Pinterest TLDR, plain text, emailed to the owner (cron in wrangler.jsonc → src/worker.ts; send one now
-// with POST /api/pinterest/report). Owner decision 2026-09-24: a quick summary, not an analytics dashboard.
+// Monthly Pinterest TLDR emailed to the owner (cron in wrangler.jsonc → src/worker.ts; send one now with
+// POST /api/pinterest/report, preview with GET ?tldr). Owner decisions 2026-09-24: a quick summary, not an analytics
+// dashboard; bullet points, board names in bold followed by ":", top Pins as numbered lists linking to Pinterest.
+// Bare HTML (lists, bold, links; no styling) plus a plain-text copy.
 // Board numbers "since last report" = lifetime totals now minus the totals saved in KV at the previous report.
 import { env } from 'cloudflare:workers';
 import { EmailMessage } from 'cloudflare:email';
@@ -12,12 +14,18 @@ const FROM = 'reports@biblesketch.app';
 const TO = 'renaud@supersonicsites.com'; // also the binding's destination_address (wrangler.jsonc)
 
 // Email Routing (no Email Sending onboarding) only takes raw MIME messages; the structured send() is refused.
-const send = (subject: string, text: string) =>
-  E.REPORT_EMAIL.send(new EmailMessage(FROM, TO, [
+function send(subject: string, text: string, html?: string) {
+  const part = (type: string, body: string) => [`Content-Type: ${type}; charset=utf-8`, 'Content-Transfer-Encoding: 8bit', '', body];
+  const boundary = `b-${crypto.randomUUID()}`;
+  const body = html
+    ? [`Content-Type: multipart/alternative; boundary="${boundary}"`, '', `--${boundary}`, ...part('text/plain', text),
+      `--${boundary}`, ...part('text/html', html), `--${boundary}--`]
+    : part('text/plain', text);
+  return E.REPORT_EMAIL.send(new EmailMessage(FROM, TO, [
     `From: Bible Sketch <${FROM}>`, `To: ${TO}`, `Subject: ${subject}`, `Date: ${new Date().toUTCString()}`,
-    `Message-ID: <${crypto.randomUUID()}@biblesketch.app>`, 'MIME-Version: 1.0',
-    'Content-Type: text/plain; charset=utf-8', 'Content-Transfer-Encoding: 8bit', '', text,
+    `Message-ID: <${crypto.randomUUID()}@biblesketch.app>`, 'MIME-Version: 1.0', ...body,
   ].join('\r\n').replace(/\r?\n/g, '\r\n')));
+}
 
 const SNAPSHOT = 'report:last'; // { date, boards: { [boardId]: { impression, outbound_click } } }
 type Totals = { impression: number; outbound_click: number };
@@ -28,8 +36,14 @@ const label = (name: string) =>
   LABELS[Object.entries(BOARD_NAMES).find(([, n]) => n === name)?.[0] ?? ''] ?? name.split(/[:&|]/)[0].trim();
 
 const day = (n: number) => new Date(Date.now() - n * 86400_000).toISOString().slice(0, 10);
+const date = (iso?: string) => (iso ? new Date(`${iso}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }) : '?');
 const num = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : Math.round(n).toLocaleString('en-US'));
 const pct = (now: number, before: number) => (before ? ` (${now >= before ? '+' : ''}${Math.round((100 * (now - before)) / before)}%)` : '');
+const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+// Items are small HTML strings; the text copy unwraps them: bold dropped, links become "title (url)".
+const plain = (h: string) =>
+  h.replace(/<a href="([^"]+)">([^<]*)<\/a>/g, '$2 ($1)').replace(/<[^>]+>/g, '')
+    .replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
 // "Sunday School Crafts: Adam & Eve Hiding | Genesis 3:8" → "Adam & Eve Hiding"
 const short = (title = '') => {
   const head = title.split(' | ')[0].split(' - ')[0];
@@ -40,17 +54,18 @@ export async function buildReport() {
   const r = await report();
   const boards = r.boards.filter((b) => b.privacy === 'PUBLIC' && !b.name.startsWith('Sandbox'));
   const pins = r.pins.filter((p) => boards.some((b) => b.id === p.board));
-  const out: string[] = [];
-  const say = (s = '') => out.push(s);
+  const sections: { title: string; items: string[]; ordered?: boolean }[] = [];
 
   // Account, last 30 days vs the 30 before (includes repins by others and the archived boards).
   const days = (r.account.daily_metrics ?? []).filter((d: any) => d.data_status === 'READY');
   const sum = (ds: any[], k: string) => ds.reduce((a, d) => a + (d.metrics[k] ?? 0), 0);
   const [now, before] = [days.slice(-30), days.slice(-60, -30)];
   const stat = (k: string, what: string) => `${num(sum(now, k))} ${what}${pct(sum(now, k), sum(before, k))}`;
-  say(`Pinterest, ${days.at(-30)?.date} to ${days.at(-1)?.date}`);
-  say();
-  say(`Last 30 days: ${stat('IMPRESSION', 'impressions')}, ${stat('SAVE', 'saves')}, ${stat('OUTBOUND_CLICK', 'clicks to the site')}.`);
+  const intro = `Pinterest, ${date(days.at(-30)?.date)} to ${date(days.at(-1)?.date)}. Changes are vs the 30 days before.`;
+  sections.push({
+    title: 'Last 30 days',
+    items: [stat('IMPRESSION', 'impressions'), stat('SAVE', 'saves'), stat('OUTBOUND_CLICK', 'clicks to the site')],
+  });
 
   // Boards: since the last report when there is one, else the last 90 days.
   const prev = await E.PINTEREST.get<{ date: string; boards: Record<string, Totals> }>(SNAPSHOT, 'json');
@@ -68,48 +83,60 @@ export async function buildReport() {
     const shown = was ? { impression: t.life.impression - was.impression, outbound_click: t.life.outbound_click - was.outbound_click } : t.d90;
     return { name: label(b.name), ...shown };
   }).sort((a, b) => b.outbound_click - a.outbound_click);
-  say();
-  say(prev ? `Boards since last report (${prev.date}):` : 'Boards, last 90 days:');
-  for (const b of rows) say(`  ${b.name.padEnd(15)}${`${num(b.outbound_click)} clicks`.padEnd(12)}${num(b.impression)} impressions`);
+  sections.push({
+    title: prev ? `Boards since last report (${date(prev.date)})` : 'Boards, last 90 days',
+    items: rows.map((b) => `<b>${esc(b.name)}:</b> ${num(b.outbound_click)} clicks, ${num(b.impression)} impressions`),
+  });
 
-  // Top 3 Pins by clicks to the site (our goal), one line per window.
+  // Top 3 Pins by clicks to the site (our goal) for each window, linked to the Pin.
   const titles = new Map(pins.map((p) => [p.id, p.title]));
-  say();
-  say('Top Pins by clicks to the site:');
   for (const n of [30, 60, 90]) {
     const top = await api(`/user_account/analytics/top_pins?start_date=${day(n - 1)}&end_date=${day(0)}&sort_by=OUTBOUND_CLICK&num_of_pins=3`,
       {}, undefined, 'production');
-    const names = await Promise.all(((top.pins ?? []) as { pin_id: string; metrics: Record<string, number> }[]).map(async (t) => {
+    const items = await Promise.all(((top.pins ?? []) as { pin_id: string; metrics: Record<string, number> }[]).map(async (t) => {
       const title = titles.get(t.pin_id) ?? (await api(`/pins/${t.pin_id}`, {}, undefined, 'production').catch(() => ({}))).title;
-      return `${short(title)} (${t.metrics.OUTBOUND_CLICK ?? t.metrics.outbound_click ?? 0})`;
+      const clicks = t.metrics.OUTBOUND_CLICK ?? t.metrics.outbound_click ?? 0;
+      return `<a href="https://www.pinterest.com/pin/${esc(t.pin_id)}/">${esc(short(title))}</a> (${clicks} clicks)`;
     }));
-    say(`  ${`${n} days:`.padEnd(9)}${names.join(', ') || 'none'}`);
+    sections.push({ title: `Top Pins, last ${n} days (clicks to the site)`, items: items.length ? items : ['none'], ordered: true });
   }
 
   // What's new, what's next, what to fix.
   const fresh = pins.filter((p) => p.created >= day(30));
   const freshImp = fresh.reduce((a, p) => a + (p.metrics?.lifetime_metrics?.impression ?? 0), 0);
   const ahead = entries.filter((e) => e.approved && e.release > day(0) && e.release <= day(-30)).length;
-  say();
-  say(`New: ${fresh.length} Pins published in 30 days (${num(freshImp)} impressions so far); ${ahead} scheduled for the next 30.`);
+  sections.push({
+    title: 'New and next',
+    items: [`${fresh.length} Pins published in the last 30 days (${num(freshImp)} impressions so far)`, `${ahead} Pins scheduled for the next 30 days`],
+  });
   const lastDay = new Map<string, string>();
   for (const e of entries) if (e.approved && e.release > (lastDay.get(e.board) ?? '')) lastDay.set(e.board, e.release);
-  const runsOut = [...lastDay].filter(([, d]) => d > day(0) && d <= day(-30)).map(([k, d]) => `${LABELS[k] ?? k} ends ${d}`);
   const noAlt = pins.filter((p) => !p.alt).length;
-  const todo = [...runsOut.map((s) => `calendar: ${s}`), ...(noAlt ? [`${noAlt} Pins without alt text`] : [])];
-  if (todo.length) say(`To do: ${todo.join('; ')}.`);
-  say();
-  say('Details: https://biblesketch.app/api/pinterest');
+  const todo = [
+    ...[...lastDay].filter(([, d]) => d > day(0) && d <= day(-30)).map(([k, d]) => `<b>${LABELS[k] ?? k}:</b> calendar ends ${date(d)}`),
+    ...(noAlt ? [`${noAlt} Pins without alt text`] : []),
+  ];
+  if (todo.length) sections.push({ title: 'To do', items: todo });
+  const footer = 'Details: <a href="https://biblesketch.app/api/pinterest">biblesketch.app/api/pinterest</a>';
 
-  return { text: out.join('\n'), snapshot };
+  const html = ['<!doctype html><html><body>', `<p>${esc(intro)}</p>`,
+    ...sections.map((s) => {
+      const tag = s.ordered ? 'ol' : 'ul';
+      return `<p><b>${esc(s.title)}</b></p>\n<${tag}>\n${s.items.map((i) => `<li>${i}</li>`).join('\n')}\n</${tag}>`;
+    }),
+    `<p>${footer}</p>`, '</body></html>'].join('\n');
+  const text = [intro,
+    ...sections.map((s) => `${s.title}\n${s.items.map((i, n) => `${s.ordered ? `${n + 1}.` : '-'} ${plain(i)}`).join('\n')}`),
+    plain(footer)].join('\n\n');
+  return { text, html, snapshot };
 }
 
 // Sends the report; on failure sends the error instead, so a broken connection never goes unnoticed.
 export async function emailReport() {
   const subject = `Bible Sketch Pinterest TLDR, ${day(0)}`;
   try {
-    const { text, snapshot } = await buildReport();
-    await send(subject, text);
+    const { text, html, snapshot } = await buildReport();
+    await send(subject, text, html);
     await E.PINTEREST.put(SNAPSHOT, JSON.stringify({ date: day(0), boards: snapshot }));
   } catch (e) {
     console.error('[pinterest] report email', e);

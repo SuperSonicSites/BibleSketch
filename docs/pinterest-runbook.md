@@ -138,8 +138,9 @@ dashboard**: keep it about 15 lines): the Worker's cron (`0 13 24 * *`, `web/wra
 days (impressions, saves, clicks to the site, each vs the 30 before); one line per board (clicks and impressions
 since the last report, from per-board lifetime totals saved in KV `report:last`; the first report shows 90 days);
 top 3 Pins by clicks to the site for 30/60/90 days, one line each; new Pins and what's scheduled; a to-do line
-(a board's calendar ending within 30 days, Pins without alt text). Preview without sending:
-`/api/pinterest/report?tldr` (owner session). It goes through
+(a board's calendar ending within 30 days, Pins without alt text). Format (owner, 2026-09-24): bullet points,
+board names in bold followed by ":", top Pins as numbered lists linking to each Pin; bare HTML with a plain-text
+copy. Preview without sending: `/api/pinterest/report?tldr` (owner session). It goes through
 Email Routing (`send_email` binding `REPORT_EMAIL`, raw MIME: the structured `send()` is refused without Email
 Sending onboarding) to a verified destination address, from reports@biblesketch.app. If building fails, a
 "FAILED" email with the error goes out instead (e.g. Pinterest disconnected). Send one now: the "Email the
