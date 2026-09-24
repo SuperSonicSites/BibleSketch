@@ -142,6 +142,15 @@ Baseline 2026-09-24 (compare at the day-30 read, mid-November):
 - Top 10 Pins = 45% of impressions, 50% of outbound. 30 Pins had under 100 impressions in 90 days.
 - 18 Pins lacked alt text (16 of them Genesis/creation Pins, including the top Pin); all set the same day.
 
+**Market ceiling and funnel (measured 2026-09-24).** A profile's `profile_views` in the internal `UserResource`
+is Pinterest's "monthly views" (ours read 104,964 = the API's 30-day impressions). Niche leaders: Marshmallowish
+(Bible coloring) 1.5M, Sermons4Kids 978k, SundaySchoolZone 812k, Children's Ministry Deals 702k, Ministry-To-
+Children 486k, Trueway Kids 349k, Faithful Teacher's Corner 281k; generic coloring (SuperColoring) 10M+. So the
+niche ceiling is ~1-1.5M monthly views (10-15x today). Funnel: 0.17% of impressions become clicks to the site;
+Google sends ~nothing (1 ranking keyword), so sign-ups ~ Pinterest: ~8% of clicks sign up (183 sign-ups vs
+~2,100 lifetime clicks); 4 of 183 paid (2.2%), $84.95 total, ~$21 per buyer, ~$0.46 per sign-up. Pinterest's
+conversion tag only records page visits (no sign-up or purchase events), and sign-ups don't store a source.
+
 **Monthly email report** (owner request 2026-09-24: text only, every ~30 days, **a quick TLDR, not an analytics
 dashboard**: keep it about 15 lines): the Worker's cron (`0 13 24 * *`, `web/wrangler.jsonc`; entry
 `web/src/worker.ts`) runs `emailReport()` in `web/src/lib/pinterest-email.ts`: one line for the account's last 30
