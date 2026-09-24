@@ -58,6 +58,16 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
     - `RESEND_API_KEY` (above);
     - `RESEND_WEBHOOK_SECRET`, when Claude creates the webhook in phase 1.
     - No Worker secret is needed: replies come back through Resend, not a Cloudflare Email Worker.
+- [ ] **Personal mail as @biblesketch.app, at no extra cost** (plan §6.7): receive through Cloudflare Email Routing, send from Zoho Mail. Keep the MX on Cloudflare: moving it breaks the monthly report and the forwarding.
+  1. **Receive:** Cloudflare > biblesketch.app > Email > Email Routing > Routing rules: forward `hello@` (and `renaud@`, if you want it) to `renaud@supersonicsites.com`.
+  2. **Send:** Zoho Mail Admin Console > Domains: add `biblesketch.app`. It looks already verified: the `zoho-verification` TXT record exists. Skip the MX step.
+     - Then Users > you > Email alias: add `hello@biblesketch.app`, and choose it as "From" when composing.
+     - A second domain needs a paid Zoho Mail plan. The Forever Free plan hosts one domain only.
+  3. **Deliverability:**
+     - Zoho Admin > Domains > biblesketch.app > DKIM: create a key, add its TXT record in Cloudflare DNS, then click Verify.
+     - Add the SPF `include:` that Zoho shows for Zoho Mail to the existing record (`v=spf1 include:_spf.mx.cloudflare.net include:zcsend.ca ~all`). Keep a single SPF record.
+     - DMARC (`p=none`) is already there.
+  4. **Test:** send from `hello@biblesketch.app` to a Gmail address, then Gmail > Show original: SPF, DKIM and DMARC should all say PASS.
 - [ ] **Decisions (plan §11):**
   - the sender name ("Renaud at Bible Sketch" `<renaud@e.biblesketch.app>`?) and which inbox replies are forwarded to;
   - the mailing address for the CASL footer;

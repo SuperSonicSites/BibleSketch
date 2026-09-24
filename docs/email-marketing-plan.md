@@ -600,6 +600,12 @@ send next, and never ask what their behaviour already tells us.
   - the root `_dmarc.biblesketch.app` is `p=none`, with reports to Cloudflare. It covers the subdomain, which meets
     Gmail's and Yahoo's DMARC requirement. Tighten it to `quarantine` once reports show only aligned mail.
   - The root MX (Cloudflare Email Routing) is untouched, so `hello@` and `reports@` keep working.
+- **Personal mail on the root domain is separate** (2026-09-24):
+  - Cloudflare Email Routing receives it and forwards it to the owner's Zoho Mail (`supersonicsites.com`), where
+    Zoho sends as `hello@biblesketch.app` (CHECKLIST).
+  - Resend's free plan allows one domain, and that's `e.biblesketch.app`, so marketing and personal mail keep
+    separate reputations.
+  - Don't move the root MX: the Worker's `send_email` report binding and the forwarding depend on Email Routing.
 - **Topics** (so people can leave one without leaving everything):
   - "Sunday Prep (weekly)";
   - "Offers & seasonal packs".
