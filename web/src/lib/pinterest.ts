@@ -1,7 +1,9 @@
 // Pinterest API for our own account only (developer app "Bible Sketch Pin Publisher", id 1615048; privacy §3.4).
 // OAuth 2 authorization code → tokens AES-GCM encrypted (key PINTEREST_TOKEN_KEY) in the KV namespace PINTEREST.
 // PINTEREST_ENV: 'sandbox' while the app has Trial access (API Pins are visible only to us), 'production' after
-// Standard access. Secrets: PINTEREST_APP_SECRET, PINTEREST_TOKEN_KEY (wrangler secret put).
+// Standard access. Trial access can already read production (stats: report()), but tokens are bound to one
+// environment, so each has its own connection (/api/pinterest/connect?env=production).
+// Secrets: PINTEREST_APP_SECRET, PINTEREST_TOKEN_KEY (wrangler secret put).
 import { env } from 'cloudflare:workers';
 import { ORIGIN } from './sketch.ts';
 import { altText, pageUrl, pinFile, type PinEntry } from './pins.ts';
@@ -19,7 +21,9 @@ export const ACCOUNT = 'biblesketch'; // the callback refuses any other Pinteres
 export const REDIRECT_URI = `${ORIGIN}/api/pinterest/callback`;
 export const SCOPES = 'user_accounts:read,boards:read,boards:write,pins:read,pins:write';
 export const sandbox = () => E.PINTEREST_ENV !== 'production';
-const API = () => (sandbox() ? 'https://api-sandbox.pinterest.com/v5' : 'https://api.pinterest.com/v5');
+export type Env = 'sandbox' | 'production';
+export const current = (): Env => (sandbox() ? 'sandbox' : 'production');
+const API = (env: Env) => (env === 'sandbox' ? 'https://api-sandbox.pinterest.com/v5' : 'https://api.pinterest.com/v5');
 const BOARD_NAMES: Record<PinEntry['board'], string> = {
   'sunday-school': 'Sunday School Activities & Bible Coloring Lessons',
   christmas: 'Christmas Coloring Pages & Nativity Printables',
@@ -73,11 +77,11 @@ export async function isOwner(cookie: string | undefined) {
 
 // ---------------------------------------------------------------- tokens
 interface Tokens { access: string; refresh: string; expiresAt: number; scope: string }
-const tokenKey = () => `tokens:${sandbox() ? 'sandbox' : 'production'}`;
+const tokenKey = (env: Env) => `tokens:${env}`;
 
-async function tokenRequest(body: Record<string, string>): Promise<Tokens> {
+async function tokenRequest(body: Record<string, string>, env: Env): Promise<Tokens> {
   if (!E.PINTEREST_APP_SECRET) throw new Error('PINTEREST_APP_SECRET is not set');
-  const res = await fetch(`${API()}/oauth/token`, {
+  const res = await fetch(`${API(env)}/oauth/token`, {
     method: 'POST',
     headers: {
       Authorization: `Basic ${btoa(`${E.PINTEREST_APP_ID}:${E.PINTEREST_APP_SECRET}`)}`,
@@ -90,28 +94,28 @@ async function tokenRequest(body: Record<string, string>): Promise<Tokens> {
   return { access: j.access_token, refresh: j.refresh_token, expiresAt: Date.now() + j.expires_in * 1000, scope: j.scope };
 }
 
-export const exchangeCode = (code: string) =>
-  tokenRequest({ grant_type: 'authorization_code', code, redirect_uri: REDIRECT_URI });
-export const saveTokens = async (t: Tokens) => E.PINTEREST.put(tokenKey(), await seal(t));
-export const connected = async () => (await E.PINTEREST.get(tokenKey())) !== null;
+export const exchangeCode = (code: string, env: Env) =>
+  tokenRequest({ grant_type: 'authorization_code', code, redirect_uri: REDIRECT_URI }, env);
+export const saveTokens = async (t: Tokens, env: Env) => E.PINTEREST.put(tokenKey(env), await seal(t));
+export const connected = async (env = current()) => (await E.PINTEREST.get(tokenKey(env))) !== null;
 
 // Access tokens last 30 days; the continuous refresh token 60 days, renewed on every refresh.
-async function accessToken() {
-  const stored = await E.PINTEREST.get(tokenKey());
-  if (!stored) throw new Error('Pinterest is not connected');
+async function accessToken(env: Env) {
+  const stored = await E.PINTEREST.get(tokenKey(env));
+  if (!stored) throw new Error(`Pinterest (${env}) is not connected`);
   let t = await unseal<Tokens>(stored);
   if (t.expiresAt - Date.now() < 7 * 86400_000) {
-    const fresh = await tokenRequest({ grant_type: 'refresh_token', refresh_token: t.refresh });
+    const fresh = await tokenRequest({ grant_type: 'refresh_token', refresh_token: t.refresh }, env);
     t = { ...fresh, refresh: fresh.refresh || t.refresh };
-    await saveTokens(t);
+    await saveTokens(t, env);
   }
   return t.access;
 }
 
-export async function api(path: string, init: { method?: string; body?: unknown } = {}, token?: string) {
-  const res = await fetch(`${API()}${path}`, {
+export async function api(path: string, init: { method?: string; body?: unknown } = {}, token?: string, env = current()) {
+  const res = await fetch(`${API(env)}${path}`, {
     method: init.method ?? 'GET',
-    headers: { Authorization: `Bearer ${token ?? (await accessToken())}`, 'Content-Type': 'application/json' },
+    headers: { Authorization: `Bearer ${token ?? (await accessToken(env))}`, 'Content-Type': 'application/json' },
     body: init.body === undefined ? undefined : JSON.stringify(init.body),
   });
   const j = (await res.json().catch(() => ({}))) as Record<string, any>;
@@ -119,19 +123,46 @@ export async function api(path: string, init: { method?: string; body?: unknown 
   return j;
 }
 
+// Every item of a paged list (250 a page, bookmark cursor).
+async function all(path: string, env = current()) {
+  const items: Record<string, any>[] = [];
+  let bookmark: string | undefined;
+  for (let page = 0; page < 20; page++) {
+    const j = await api(`${path}${path.includes('?') ? '&' : '?'}page_size=250${bookmark ? `&bookmark=${encodeURIComponent(bookmark)}` : ''}`, {}, undefined, env);
+    items.push(...(j.items ?? []));
+    bookmark = j.bookmark;
+    if (!bookmark) break;
+  }
+  return items;
+}
+
+// ---------------------------------------------------------------- stats
+// Account metrics for the last 90 days (the API's limit, daily + summary), boards, and every Pin we own with its
+// 90-day and lifetime metrics. Read from production: Trial access allows it.
+export async function report() {
+  const day = (n: number) => new Date(Date.now() - n * 86400_000).toISOString().slice(0, 10);
+  const [account, boards, pins] = await Promise.all([
+    api(`/user_account/analytics?start_date=${day(89)}&end_date=${day(0)}`, {}, undefined, 'production'),
+    all('/boards', 'production'),
+    all('/pins?pin_metrics=true', 'production'),
+  ]);
+  return {
+    generated: new Date().toISOString(),
+    account: account.all ?? account,
+    boards: boards.map((b) => ({ id: b.id, name: b.name, privacy: b.privacy, pins: b.pin_count, followers: b.follower_count })),
+    pins: pins.map((p) => ({
+      id: p.id, board: p.board_id, created: p.created_at, title: p.title, link: p.link, alt: !!p.alt_text, metrics: p.pin_metrics,
+    })),
+  };
+}
+
 // ---------------------------------------------------------------- publishing
 // Our board by name. Sandbox hides the production boards but still refuses a duplicate name (and names of 50+
 // characters), so its copies are named "Sandbox - <board>" and created once.
 async function boardId(board: PinEntry['board']) {
   const name = sandbox() ? `Sandbox - ${board}` : BOARD_NAMES[board];
-  let bookmark: string | undefined;
-  for (let page = 0; page < 20; page++) {
-    const j = await api(`/boards?page_size=250${bookmark ? `&bookmark=${encodeURIComponent(bookmark)}` : ''}`);
-    const hit = (j.items as { id: string; name: string }[] | undefined)?.find((b) => b.name === name);
-    if (hit) return hit.id;
-    bookmark = j.bookmark;
-    if (!bookmark) break;
-  }
+  const hit = (await all('/boards')).find((b) => b.name === name);
+  if (hit) return hit.id as string;
   if (!sandbox()) throw new Error(`board not found: ${name}`);
   return (await api('/boards', { method: 'POST', body: { name, description: 'Sandbox copy for API tests' } })).id as string;
 }

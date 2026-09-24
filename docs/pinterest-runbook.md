@@ -24,6 +24,8 @@ As of **2026-09-24 00:40 UTC**:
   2026-09-24** with the demo video (`C:\Users\renau\Videos\bible-sketch-pinterest-api-demo-final.mp4`).
   Connected to @biblesketch in Sandbox. 3 Sandbox test Pins exist (boards "Sandbox - christmas/scripture/
   sunday-school", visible only to us).
+- **Stats through the API** since 2026-09-24: https://biblesketch.app/api/pinterest/report (see "Reading
+  performance"). Baseline below.
 - **Open decisions** (CHECKLIST): AI disclosure label on API Pins; "Free Printable" wording on the kids' banners.
 - **Next jobs:** connect `sunday-school.xml` (Sept 25 after 8 pm EDT); weekly alt text; generate Sunday School
   pages for Nov 6 onward and more Christmas scenes; read the paper/purple test mid-February; first day-30
@@ -94,13 +96,41 @@ feed has an item. Record it in CHECKLIST and the Status block.
   (owner-set) and `PINTEREST_TOKEN_KEY`; vars `PINTEREST_APP_ID`, `PINTEREST_ENV` in `web/wrangler.jsonc`.
 - Sandbox quirks: production boards are hidden but their names are still taken, and board names must be under
   50 characters (hence "Sandbox - <board>").
-- **After Standard access:** set `PINTEREST_ENV` to `production`, deploy, owner reconnects once at
-  /api/pinterest; build the daily publisher (a Worker cron that publishes each day's due entries with
+- Tokens are bound to one environment (KV `tokens:sandbox`, `tokens:production`). Trial access already reads
+  production, so the stats connection (`/api/pinterest/connect?env=production`, owner clicked "Give access"
+  2026-09-24) holds a production token with our full scopes.
+- The Sandbox test boards and Pins are hidden on pinterest.com (logged-out profile and board pages checked
+  2026-09-24) but the production API and the old public widget API (`widgets.pinterest.com/v3/pidgets/...`)
+  still list them. Harmless; the owner can delete them once Standard access is granted.
+- **After Standard access:** set `PINTEREST_ENV` to `production` and deploy; the production token from the stats
+  connection should then publish too (if /api/pinterest asks to connect, connect once); build the daily publisher (a Worker cron that publishes each day's due entries with
   `publish()`, which already sets alt text and refuses duplicates); disconnect the RSS feeds the same day so
   nothing posts twice; apply the owner's AI-disclosure decision (`ai_disclosures: { values: ['AI_MODIFIED'] }`).
 - Updating an existing Pin (e.g. alt text on RSS Pins) is beta in production and not available to our app.
 
 ## Reading performance
-In the signed-in Pinterest tab, `/resource/BoardFeedResource/get/` with `source_url` and header
+**API (preferred):** with an owner session (open https://biblesketch.app/api/pinterest and connect; the session
+lasts an hour), `/api/pinterest/report` returns JSON: the account's last 90 days (daily + summary: impressions,
+saves, Pin clicks, outbound clicks; includes repins and the archived boards), every board, and every Pin on an
+active board with its 90-day and lifetime metrics and whether it has alt text. The archived boards' Pins are not
+listed. Crunch it in the signed-in tab: `const r = await fetch('/api/pinterest/report').then((x) => x.json())`.
+
+Baseline 2026-09-24 (compare at the day-30 read, mid-November):
+
+| | Impressions | Saves | Pin clicks | Outbound |
+|---|---|---|---|---|
+| Account, Jun 27 - Sep 21 (per week) | ~24,000, flat since July | 70-104, rising in Sept | ~730 | ~43 |
+| Account, last 28 days vs first 29 (per day) | -6% | +17% | -10% | -16% |
+| 148 Pins on active boards, last 90 days | 172,366 | 582 | 5,277 | 405 |
+
+- Sunday School board: 55% of those impressions and 58% of the outbound clicks (5.6 outbound per Pin in 90 days;
+  Christmas 1.5, Scripture 1.5, Easter 0.6, Adult 2.1). Toddler-titled Pins: 13.8 per Pin.
+- Genesis 1-4 Pins (creation, Adam and Eve, Eden, Cain and Abel): 48 Pins, 53% of impressions and 62% of outbound
+  clicks, 3.4x the outbound per Pin of everything else (5.2 vs 1.6). The calendar has one Genesis 1-4 entry (Nov 3). Top Pin: "Creation Narrative ... Gen 1:20-22" (20,327
+  impressions, 50 outbound clicks in 90 days).
+- Top 10 Pins = 45% of impressions, 50% of outbound. 30 Pins had under 100 impressions in 90 days.
+- 18 Pins lack alt text (16 of them Genesis/creation Pins, including the top Pin).
+
+**Internal API (fallback):** in the signed-in Pinterest tab, `/resource/BoardFeedResource/get/` with `source_url` and header
 `X-Pinterest-PWS-Handler: www/[username]/[slug].js` returns each Pin's `creator_analytics` (lowercase keys:
 `impression`, `save`, `outbound_click`, `pin_click`). Judge nothing before day 30 (strategy §4).

@@ -8,15 +8,16 @@ const fail = (status: number, msg: string) =>
 
 export const GET: APIRoute = async ({ url, cache, cookies, redirect }) => {
   cache.set(false);
-  const state = cookies.get('pin_state')?.value;
+  const [state, env] = (cookies.get('pin_state')?.value ?? '').split('.');
   cookies.delete('pin_state', { path: '/api/pinterest' });
   const code = url.searchParams.get('code');
   if (!code || !state || url.searchParams.get('state') !== state) return fail(400, 'invalid or expired request, start again');
+  if (env !== 'sandbox' && env !== 'production') return fail(400, 'invalid request, start again');
   try {
-    const tokens = await exchangeCode(code);
-    const me = await api('/user_account', {}, tokens.access);
+    const tokens = await exchangeCode(code, env);
+    const me = await api('/user_account', {}, tokens.access, env);
     if (me.username !== ACCOUNT) return fail(403, `this app only connects @${ACCOUNT}`);
-    await saveTokens(tokens);
+    await saveTokens(tokens, env);
   } catch (e) {
     console.error('[pinterest] callback', e);
     return fail(502, (e as Error).message);
