@@ -3625,8 +3625,10 @@ const deleteSketchFiles = async (storagePath) => {
   await Promise.all([`${base}.`, `${base}_`].map((prefix) => bucket.deleteFiles({ prefix }).catch((e) => console.warn('[files] delete', prefix, e.message))));
 };
 
-// Runs `work` (returns a Jimp page) under a charge: saves it as a private sketch, or refunds on any failure.
-const chargedGeneration = async ({ uid, requestId, cost, description, work, sketch }) => {
+// Runs `work` (returns a Jimp page, or { page, record }) under a charge: saves it as a private sketch, or refunds on
+// any failure. `record` (what made the page: brief, guidance, models, references, prompt version, edit instruction)
+// goes on the private ledger doc as `prompt`, never on the sketch doc, which is public once published.
+const chargedGeneration = async ({ uid, requestId, cost, description, work, sketch, record: given }) => {
   const ref = ledgerRef(uid, requestId);
   const existing = await ref.get();
   if (existing.exists) return ledgerResult(existing.data());
@@ -3634,7 +3636,9 @@ const chargedGeneration = async ({ uid, requestId, cost, description, work, sket
   const prior = await openCharge(uid, requestId, cost, description);
   if (prior) return ledgerResult(prior);
   try {
-    const page = await work(gen.makeGemini(gen.FAKE ? '' : geminiApiKey.value().trim(), Date.now() + GENERATION_DEADLINE_MS));
+    const out = await work(gen.makeGemini(gen.FAKE ? '' : geminiApiKey.value().trim(), Date.now() + GENERATION_DEADLINE_MS));
+    const page = out.page ?? out;
+    const record = out.record ?? given;
     const qa = gen.measure(page.bitmap);
     const files = await uploadSketchPng(uid, await GI.toPng(page));
     const sketchRef = admin.firestore().collection('sketches').doc();
@@ -3645,7 +3649,10 @@ const chargedGeneration = async ({ uid, requestId, cost, description, work, sket
         userId: uid, ...files, isPublic: false, blessCount: 0, isBookmark: false,
         createdAt: FieldValue.serverTimestamp(), qa, generationId: ref.id, ...sketch,
       });
-      tx.update(ref, { ...(charged ? { status: 'done' } : {}), sketchId: sketchRef.id, imageUrl: files.imageUrl, updatedAt: FieldValue.serverTimestamp() });
+      tx.update(ref, {
+        ...(charged ? { status: 'done' } : {}), sketchId: sketchRef.id, imageUrl: files.imageUrl,
+        ...(record ? { prompt: record } : {}), updatedAt: FieldValue.serverTimestamp(),
+      });
     });
     console.log(`[generation] done uid=${uid} sketch=${sketchRef.id} ${description} qa=${JSON.stringify(qa)}`);
     return { status: 'done', sketchId: sketchRef.id, imageUrl: files.imageUrl };
@@ -3659,19 +3666,33 @@ const chargedGeneration = async ({ uid, requestId, cost, description, work, sket
 
 const GENERATION_OPTS = { secrets: [geminiApiKey], cors: true, timeoutSeconds: 540, memory: "1GiB" };
 
-// { requestId, kind: 'scene'|'verse', book, chapter, startVerse, endVerse?, age, style | font }
+// Master account only (the daily Pinterest task, docs/pinterest-runbook.md): `guidance` (the moment to draw and the
+// composition notes learned from our best Pins, at most 500 chars) and, for verse art, `composition` (one of
+// VERSE_COMPOSITIONS). Everyone else's are ignored, so no user text reaches the prompts.
+const masterDirection = (uid, d) => {
+  if (uid !== MASTER_UID) return {};
+  const { guidance, composition } = d || {};
+  if (guidance !== undefined && (typeof guidance !== 'string' || guidance.length > 500)) throw new HttpsError('invalid-argument', 'Invalid guidance.');
+  return {
+    ...(guidance?.trim() ? { guidance: guidance.trim() } : {}),
+    ...(typeof composition === 'string' ? { composition } : {}),
+  };
+};
+
+// { requestId, kind: 'scene'|'verse', book, chapter, startVerse, endVerse?, age, style | font, guidance?, composition? }
 // → { status: 'done', sketchId, imageUrl } | { status: 'refunded', error } | { status: 'running' }
 exports.createSketch = onCall(GENERATION_OPTS, async (request) => {
   const uid = verifiedUid(request);
   const { requestId } = request.data || {};
   if (!validRequestId(requestId)) throw new HttpsError('invalid-argument', 'Invalid request.');
   const p = parseCreate(request.data);
+  const direction = masterDirection(uid, request.data);
   return chargedGeneration({
     uid, requestId, cost: 1, description: p.description,
     sketch: { type: p.type, promptData: p.promptData },
-    work: async (gemini) => p.type === 'scene'
-      ? gen.runScene(gemini, { reference: p.reference, age: p.age, style: p.style })
-      : (await gen.runVerse(gemini, { reference: p.reference, font: p.font })).page,
+    work: (gemini) => p.type === 'scene'
+      ? gen.runScene(gemini, { reference: p.reference, age: p.age, style: p.style, guidance: direction.guidance })
+      : gen.runVerse(gemini, { reference: p.reference, font: p.font, ...direction }),
   });
 });
 
@@ -3709,6 +3730,7 @@ exports.editSketch = onCall(GENERATION_OPTS, async (request) => {
     uid, requestId, cost: 1, description: op === 'removeColor' ? 'Remove Color' : 'Refined Sketch',
     // An edit keeps what the source image already shows (e.g. the Add Ref caption), so keep its flag too.
     sketch: { type: s.type || 'scene', promptData: s.promptData || {}, ...(s.tags ? { tags: s.tags } : {}), ...(s.refAdded ? { refAdded: true } : {}), editedFrom: sketchId },
+    record: { version: gen.PROMPT_VERSION, models: { artist: GP.MODELS.ARTIST }, op, instruction: text, editedFrom: sketchId },
     work: (gemini) => gen.runEdit(gemini, source, text),
   });
 });

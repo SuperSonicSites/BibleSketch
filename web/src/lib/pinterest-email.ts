@@ -6,7 +6,7 @@
 import { env } from 'cloudflare:workers';
 import { EmailMessage } from 'cloudflare:email';
 import { entries } from './pins.ts';
-import { BOARD_NAMES, api, report } from './pinterest.ts';
+import { BOARD_NAMES, api, report, saveLearnInput } from './pinterest.ts';
 
 const E = env as unknown as { PINTEREST: KVNamespace; REPORT_EMAIL: { send(m: EmailMessage): Promise<void> } };
 
@@ -58,6 +58,8 @@ const short = (title = '') => {
 
 export async function buildReport() {
   const r = await report();
+  // The same numbers feed the learning loop (pins-learn.mjs), refreshed at least monthly this way.
+  await saveLearnInput(r).catch((e) => console.error('[pinterest] learn input', e));
   const boards = r.boards.filter((b) => b.privacy === 'PUBLIC' && !b.name.startsWith('Sandbox'));
   const pins = r.pins.filter((p) => boards.some((b) => b.id === p.board));
   const sections: { title: string; items: string[]; ordered?: boolean }[] = [];

@@ -186,9 +186,10 @@ const VERSE_COMPOSITIONS = {
     'lettering inside an unrolled parchment scroll',
   ],
 };
-const pickComposition = (layout) => {
+// `wanted` (master account only) is used when it belongs to this layout's list; otherwise a random pick.
+const pickComposition = (layout, wanted) => {
   const list = VERSE_COMPOSITIONS[layout === 'EMBLEM' ? 'EMBLEM' : 'TEXT'];
-  return list[Math.floor(Math.random() * list.length)];
+  return list.includes(wanted) ? wanted : list[Math.floor(Math.random() * list.length)];
 };
 
 const VERSE_NEGATIVES = [
@@ -244,14 +245,20 @@ const formatReference = (r) =>
 // "Psalm 23:1" (one psalm), but "Proverbs 3:5": the old bundle's "Proverb" was printed on pages and is wrong.
 const displayBook = (book) => (book === 'Psalms' ? 'Psalm' : book);
 
-const buildBriefPrompt = (reference, ageGroup, artStyle, passage) => `
+// Direction from the Bible Sketch team (master account only, docs/pinterest-runbook.md): which moment to draw and
+// the composition notes learned from our best Pins. The rules still win.
+const ownerDirection = (guidance) => (guidance
+  ? `OWNER DIRECTION (from the Bible Sketch team; follow it wherever it fits the rules below, which win on any conflict): ${guidance}\n`
+  : '');
+
+const buildBriefPrompt = (reference, ageGroup, artStyle, passage, guidance) => `
 ROLE: Biblical art director for a coloring book.
 TASK: Write a JSON brief that an image generator will turn into a black-and-white line-art coloring page.
 PASSAGE: "${formatReference(reference)}"
 ${passage.text ? `TEXT (WEB): "${passage.text}"\n` : ''}${passage.context ? `CONTEXT (surrounding verses, only to understand who speaks to whom, where and when; depict the PASSAGE): "${passage.context}"\n` : ''}
 AUDIENCE (${ageGroup}): ${AGE_LOGIC[ageGroup].subjectFocus}
 ART STYLE (${artStyle}): ${STYLE_LOGIC[artStyle]}
-
+${ownerDirection(guidance)}
 RULES:
 1. ${CHRISTIAN_GUIDELINES}
 2. FAITHFUL TO THE TEXT: depict what the passage describes, understood in its context. Include every concrete visual detail it states (who is present, what they hold, what happens, e.g. John 19:34: blood and water flow from Jesus' side) and nothing it contradicts. Do not add named or prominent characters the text does not mention (no extra angels or companions), except those rule 1.8's traditions attach to the scene; background figures only where the text or context implies them (a census crowd, a multitude).
@@ -288,7 +295,7 @@ ${brief.negative_prompt ? `Leave out: ${brief.negative_prompt}` : ''}
 const layoutFor = (words) =>
   words <= VERSE_LAYOUT_RULES.EMBLEM.maxWords ? 'EMBLEM' : words <= VERSE_LAYOUT_RULES.STACK.maxWords ? 'STACK' : 'SCROLL';
 
-const buildVerseBriefPrompt = (verseText, referenceString, words, layout, font, composition) => `
+const buildVerseBriefPrompt = (verseText, referenceString, words, layout, font, composition, guidance) => `
     ROLE: Creative Art Director for Bible Verse Typography Coloring Pages.
     TASK: Create a visually stunning, thematically cohesive typography coloring page.
 
@@ -325,7 +332,7 @@ const buildVerseBriefPrompt = (verseText, referenceString, words, layout, font, 
     ═══════════════════════════════════════════════════════════
     WORD COUNT: ${words} words
     COMPOSITION (mandatory, build the page around it): ${composition}
-
+    ${ownerDirection(guidance)}
     FONT STYLE: ${font}
     FONT RULES: ${FONT_STYLE_LOGIC[font]}
 
@@ -451,7 +458,7 @@ const ARTIST_CONFIG = {
 
 module.exports = {
   MODELS, AGE_GROUPS, ART_STYLES, FONT_STYLES, STYLES_BY_AGE, BIBLE_BOOKS, REFERENCE_MAP, VERSE_REFERENCE_MAP,
-  VERSE_LAYOUT_RULES, ARTIST_CONFIG, REMOVE_COLOR_INSTRUCTION,
+  VERSE_LAYOUT_RULES, VERSE_COMPOSITIONS, ARTIST_CONFIG, REMOVE_COLOR_INSTRUCTION,
   formatReference, displayBook, layoutFor, pickComposition, buildBriefPrompt, buildArtistPrompt, buildVerseBriefPrompt,
   buildVerseArtistPrompt, buildVerseCriticPrompt, buildEditPrompt,
 };

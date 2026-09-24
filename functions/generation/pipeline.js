@@ -9,6 +9,11 @@ const { measure } = require('./qa');
 
 const fail = (code, message) => Object.assign(new Error(message || code), { code });
 
+// Which prompts made a page: kept with each generation (functions/index.js chargedGeneration) so a Pin's results
+// can be traced back to its brief (docs/pinterest-runbook.md, learning loop).
+const PROMPT_VERSION = require('crypto').createHash('sha1')
+  .update(fs.readFileSync(path.join(__dirname, 'prompts.js'))).digest('hex').slice(0, 12);
+
 // Emulator-only fake Gemini (FAKE_GEMINI in functions/.env.local), so tests never pay for real calls.
 // Chapter 150 (or an edit instruction containing FAIL) makes the artist fail after the charge (refund path).
 const FAKE = process.env.FUNCTIONS_EMULATOR === 'true' ? process.env.FAKE_GEMINI : undefined;
@@ -87,16 +92,25 @@ const fetchPassage = async (r) => {
 };
 
 // Scene Art: Architect (brief) → Artist (with style references) → 85% + threshold. No critic (as live and the lab).
-const runScene = async (gemini, { reference, age, style }) => {
+// → { page, record }: record = what made the page, for the generation ledger.
+const runScene = async (gemini, { reference, age, style, guidance }) => {
   const passage = FAKE ? { text: '', context: '' } : await fetchPassage(reference);
-  const briefRes = await gemini(P.MODELS.ARCHITECT, [{ text: P.buildBriefPrompt(reference, age, style, passage) }], { responseMimeType: 'application/json' });
+  const briefRes = await gemini(P.MODELS.ARCHITECT, [{ text: P.buildBriefPrompt(reference, age, style, passage, guidance) }], { responseMimeType: 'application/json' });
   const brief = parseJson(briefRes.text || '');
   if (brief.error === 'INVALID_REFERENCE') throw fail('INVALID_REFERENCE');
   if (!brief.positive_prompt) throw fail('FAILED', 'Empty brief');
-  const refs = refParts(P.REFERENCE_MAP[`${age}_${style}`]);
+  const refFiles = P.REFERENCE_MAP[`${age}_${style}`] || [];
+  const refs = refParts(refFiles);
   const art = await gemini(P.MODELS.ARTIST, [...refs, { text: P.buildArtistPrompt(brief, age, style, refs.length > 0) }], P.ARTIST_CONFIG);
   if (!art.image) throw fail('FAILED', 'Artist returned no image');
-  return img.postProcess(art.image);
+  const { positive_prompt, negative_prompt, validation_criteria, reasoning } = brief;
+  return {
+    page: await img.postProcess(art.image),
+    record: {
+      version: PROMPT_VERSION, models: { architect: P.MODELS.ARCHITECT, artist: P.MODELS.ARTIST }, refs: refFiles,
+      ...(guidance ? { guidance } : {}), brief: { positive_prompt, negative_prompt, validation_criteria, reasoning },
+    },
+  };
 };
 
 // The brief's line split (minus a reference line it may add), used only if it has exactly the verse's words
@@ -123,7 +137,7 @@ const withLord = (t) => t
 
 // Verse Art: bible-api (WEB, start verse) → word count/layout → brief → up to 2 × (artist → 85% + threshold → critic).
 // Two rejected drafts = FAILED (refund); a critic error still passes the draft.
-const runVerse = async (gemini, { reference, font }) => {
+const runVerse = async (gemini, { reference, font, guidance, composition: wanted }) => {
   let verseText = 'Fake verse text for tests';
   if (!FAKE) {
     const res = await fetch(`https://bible-api.com/${encodeURIComponent(`${reference.book}+${reference.chapter}:${reference.startVerse}`)}?translation=web`, { signal: AbortSignal.timeout(10000) })
@@ -136,15 +150,21 @@ const runVerse = async (gemini, { reference, font }) => {
   const words = verseText.split(/\s+/).filter(Boolean).length;
   if (words >= P.VERSE_LAYOUT_RULES.MAX_WORDS) throw fail('VERSE_TOO_LONG', `${words} words`);
   const layout = P.layoutFor(words);
-  const composition = P.pickComposition(layout);
+  const composition = P.pickComposition(layout, wanted);
   const referenceString = `${P.displayBook(reference.book)} ${reference.chapter}:${reference.startVerse}`;
-  const briefRes = await gemini(P.MODELS.FLASH, [{ text: P.buildVerseBriefPrompt(verseText, referenceString, words, layout, font, composition) }], { responseMimeType: 'application/json' });
+  const briefRes = await gemini(P.MODELS.FLASH, [{ text: P.buildVerseBriefPrompt(verseText, referenceString, words, layout, font, composition, guidance) }], { responseMimeType: 'application/json' });
   const b = parseJson(briefRes.text || '');
   const brief = {
     verse_text: verseText, reference_string: referenceString, composition, lines: verseLines(verseText, b.lines, referenceString),
     positive_prompt: b.positive_prompt || '', negative_prompt: b.negative_prompt || '',
   };
-  const refs = refParts(P.VERSE_REFERENCE_MAP[font]);
+  const refFiles = P.VERSE_REFERENCE_MAP[font] || [];
+  const refs = refParts(refFiles);
+  const record = () => ({
+    version: PROMPT_VERSION, models: { brief: P.MODELS.FLASH, artist: P.MODELS.ARTIST }, refs: refFiles,
+    ...(guidance ? { guidance } : {}), verseText, layout, composition,
+    brief: { positive_prompt: brief.positive_prompt, negative_prompt: brief.negative_prompt, lines: brief.lines },
+  });
   for (let attempt = 1; attempt <= 2; attempt++) {
     const art = await gemini(P.MODELS.ARTIST, [...refs, { text: P.buildVerseArtistPrompt(brief) }], P.ARTIST_CONFIG);
     if (!art.image) throw fail('FAILED', 'Artist returned no image');
@@ -156,7 +176,7 @@ const runVerse = async (gemini, { reference, font }) => {
     } catch (e) {
       console.warn('[verse critic] error, assuming pass:', e.message); // fails open, as live
     }
-    if (verdict.passed !== false) return { page, verseText };
+    if (verdict.passed !== false) return { page, verseText, record: record() };
     if (attempt === 2) throw fail('FAILED', `Verse critic rejected both drafts: ${verdict.failure_reason}`); // refunded, user asked to retry
     brief.positive_prompt += ` (CRITICAL FIX: ${verdict.failure_reason}. Render the verse text exactly, with HOLLOW/OUTLINE letters and no solid black areas.)`;
   }
@@ -169,4 +189,4 @@ const runEdit = async (gemini, source, instruction) => {
   return img.thresholdOnly(art.image);
 };
 
-module.exports = { makeGemini, runScene, runVerse, runEdit, verseLines, withLord, measure, fail, FAKE };
+module.exports = { makeGemini, runScene, runVerse, runEdit, verseLines, withLord, measure, fail, FAKE, PROMPT_VERSION };

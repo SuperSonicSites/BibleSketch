@@ -3,7 +3,8 @@
 //   node scripts/pins-check.mjs --backlog  also list public master sketches that are neither on Pinterest nor in the calendar
 // Errors: more releases on a day than the ramp allows (dailyCap), sketch public + owned by the master account, slug matches,
 // never already on Pinterest, copy rules. Warnings: similar copy on a board, same passage on a board within 30 days.
-import { entries, BOARDS, TEMPLATES, MASTER_UID, pinFile } from '../src/lib/pins.ts';
+import { entries, BOARDS, TEMPLATES, MASTER_UID, pinFile, dailyCap } from '../src/lib/pins.ts';
+import year from '../src/data/pin-year.json' with { type: 'json' };
 import { getDoc, query } from '../src/lib/firestore.ts';
 import { slugOf, reference } from '../src/lib/sketch.ts';
 
@@ -32,9 +33,10 @@ for (const b of PINTEREST_BOARDS) {
 const seen = new Map(), days = new Map(), files = new Set();
 const today = new Date().toISOString().slice(0, 10);
 
-// Posting ramp (ROADMAP 1.5): 1 Pin a day in the week from RAMP_START, 2 a day the next week, and so on up to 5.
-const RAMP_START = '2026-09-24';
-const dailyCap = (d) => (d < RAMP_START ? 1 : Math.min(5, 1 + Math.floor((Date.parse(d) - Date.parse(RAMP_START)) / 6048e5)));
+// Yearly calendar (pin-year.json, scripts/pins-plan.mjs): an entry's `plan` names a bank item (and variant), its
+// `tags` come from the review vocabulary.
+const items = new Map(year.items.map((i) => [i.id, i]));
+const vocabulary = new Set(Object.entries(year.tags).flatMap(([k, vs]) => vs.map((v) => `${k}:${v}`))); // tags "key:value"
 const words = (s) => new Set(s.toLowerCase().match(/[a-z']+/g));
 const firstSentence = (s) => s.split(/(?<=[.!?])\s/)[0];
 
@@ -49,6 +51,14 @@ for (const e of entries) {
   if (days.get(e.release) > dailyCap(e.release)) err(e, `more than ${dailyCap(e.release)} releases on ${e.release} (posting ramp)`);
   if (files.has(pinFile(e))) err(e, 'duplicate Pin image name');
   files.add(pinFile(e));
+  if (e.plan !== undefined) {
+    const [id, variant] = e.plan.split(':');
+    const item = items.get(id);
+    if (!item) err(e, `plan ${e.plan}: no such item in pin-year.json`);
+    else if (item.board !== e.board) err(e, `plan ${e.plan} is for the ${item.board} board`);
+    else if (variant !== undefined && !item.variants[Number(variant)]) err(e, `plan ${e.plan}: no variant ${variant}`);
+  }
+  for (const t of e.tags ?? []) if (!vocabulary.has(t)) err(e, `tag ${t} is not in the pin-year.json vocabulary`);
   // A released entry is on Pinterest by design; only a future one must not be.
   if (pinned.has(e.sketchId) && e.release > today) err(e, 'already on Pinterest');
 

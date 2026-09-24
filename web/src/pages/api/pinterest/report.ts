@@ -1,16 +1,28 @@
 // GET  /api/pinterest/report: our Pinterest stats as JSON (report() in src/lib/pinterest.ts); ?tldr previews the email.
 // POST /api/pinterest/report: email the monthly text report now (src/lib/pinterest-email.ts). Owner session only.
+// GET also takes `Authorization: Bearer <Firebase ID token>` of the master account, so the daily task can read the
+// stats from its signed-in biblesketch.app tab without the Pinterest OAuth click (docs/pinterest-runbook.md).
 import type { APIRoute } from 'astro';
-import { OWNER_COOKIE, isOwner, report } from '../../../lib/pinterest.ts';
+import { verifyIdToken } from '../../../lib/id-token.ts';
+import { MASTER_UID } from '../../../lib/pins.ts';
+import { OWNER_COOKIE, isOwner, report, saveLearnInput } from '../../../lib/pinterest.ts';
 import { buildReport, emailReport } from '../../../lib/pinterest-email.ts';
+
+const masterToken = async (request: Request) => {
+  const token = request.headers.get('authorization')?.match(/^Bearer (\S+)$/)?.[1];
+  return !!token && (await verifyIdToken(token).catch(() => '')) === MASTER_UID;
+};
 
 const text = (status: number, msg: string) =>
   new Response(msg, { status, headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' } });
 
-export const GET: APIRoute = async ({ url, cache, cookies }) => {
+export const GET: APIRoute = async ({ url, request, cache, cookies }) => {
   cache.set(false);
-  if (!(await isOwner(cookies.get(OWNER_COOKIE)?.value))) return text(401, 'Session expired: connect again at /api/pinterest');
+  if (!(await isOwner(cookies.get(OWNER_COOKIE)?.value)) && !(await masterToken(request))) {
+    return text(401, 'Session expired: connect again at /api/pinterest');
+  }
   try {
+    if (url.searchParams.has('save')) return text(200, `Saved ${await saveLearnInput()} Pins for pins-learn.`); // learning input
     if (url.searchParams.has('tldr')) { // preview of the email, sends nothing
       return new Response((await buildReport()).html, { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } });
     }

@@ -13,6 +13,12 @@ export const BOARDS = ['sunday-school', 'christmas', 'adult', 'easter', 'scriptu
 export const TEMPLATES = ['purple', 'black', 'paper', 'plain'] as const; // plain: no banner, trimmed (verse art)
 export const WINDOW_DAYS = 2;
 
+// Posting ramp (ROADMAP 1.5): 1 Pin a day in the week from RAMP_START, 2 a day the next week, and so on up to 5.
+// The ceiling for every release day (pins-check enforces it, pins-plan fills under it).
+export const RAMP_START = '2026-09-24';
+export const dailyCap = (d: string) =>
+  d < RAMP_START ? 1 : Math.min(5, 1 + Math.floor((Date.parse(d) - Date.parse(RAMP_START)) / 6048e5));
+
 export interface PinEntry {
   sketchId: string;
   ref: string; // coloring-page slug, e.g. luke-2-15-16
@@ -22,6 +28,8 @@ export interface PinEntry {
   title: string;
   description: string;
   approved: boolean;
+  plan?: string; // "<pin-year.json item id>" or "<item id>:<variant index>" (yearly calendar, scripts/pins-plan.mjs)
+  tags?: string[]; // composition tags from the review, vocabulary in pin-year.json (the learning loop)
 }
 
 export const entries = calendar as PinEntry[];

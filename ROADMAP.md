@@ -132,6 +132,24 @@ Built 2026-09-23 in `web/`: `src/data/pins.json` (the calendar), `src/lib/pins.t
 - **Pinterest stats** (2026-09-24): Trial access reads production, so a second, production connection feeds `/api/pinterest/report` (JSON) and a monthly email report (owner decisions: every ~30 days to renaud@supersonicsites.com, CC brent@supersonicsites.com, a short TLDR rather than a dashboard, bullets with bold board names and linked top Pins; cron on the 24th, Email Routing). Details: docs/pinterest-runbook.md, "Reading performance".
 - **Genesis 1-4 series** (2026-09-24): the stats showed Genesis 1-4 Pins earn 62% of clicks (3.4x per Pin), so 18 reviewed Creation / Eden / Cain and Abel pages go out on the Sunday School board Oct 2-30, and the 18 Pins without alt text (mostly Genesis) got it. Details: runbook Status.
 - **Daily production** (owner decision 2026-09-24): a desktop-app scheduled task (`pinterest-daily`, 7:00 local) generates, reviews, publishes and schedules 5 Pins a day into the earliest open ramp slots 7-60 days out, deploys the Worker, runs the alt-text pass and pushes. Board mix, content rules and its authorized scope: runbook "Daily scheduled task". Cost: about 5-10 generations a day on the Gemini key (watch the spend cap) and the master account's credits.
+- **Yearly calendar and learning loop** (owner decisions 2026-09-24): `web/src/data/pin-year.json` holds:
+  - seasons timed about 6 weeks before the Pinterest Trends rise, with Easter and the other moveable days
+    computed;
+  - the daily board mix, with Adult back at 2 a week;
+  - a bank of about 350 moments and verses. No repeats, except proven winners as fresh images after 6 months, in
+    at most 10% of slots.
+
+  `scripts/pins-plan.mjs` turns it into each day's exact slots with a drawing `guidance`.
+  `scripts/pins-learn.mjs` learns monthly from Pins at least 180 days old:
+  - reach (clicks + saves) steers what to post;
+  - resonance (per 1,000 impressions, within a board) judges the image;
+  - visual profiles, and a winners-vs-losers visual study, become composition notes.
+
+  Backend: `createSketch` takes the master-only `guidance` (and a verse `composition`), and every generation keeps
+  its brief, guidance, models, references and prompt version on its private ledger doc. **That backend part is not
+  deployed yet:** it needs the emulator security check (a step was added) and an owner-approved
+  `firebase deploy --only "functions:createSketch,functions:editSketch"`. Until then createSketch ignores
+  `guidance`. Details: runbook "Daily scheduled task".
 - Not verified yet: the `security-check.mjs` step for the master account's 250 cap (the emulators were held by another session on 2026-09-23). Run it with the next emulator suite.
 - Local test of `/pin-img`: set `"remote": true` on the `images` binding in `wrangler.jsonc` (local mode can't draw overlays), and remove it after.
 

@@ -156,6 +156,21 @@ export async function report() {
   };
 }
 
+// The learning loop's input (web/scripts/pins-learn.mjs reads it with `wrangler kv key get learn:report`): every
+// Pin's lifetime clicks, saves and impressions. Saved by the monthly report and by GET /api/pinterest/report?save.
+export async function saveLearnInput(r?: Awaited<ReturnType<typeof report>>) {
+  r ??= await report();
+  const input = {
+    generated: r.generated,
+    boards: r.boards.map(({ id, name }) => ({ id, name })),
+    pins: r.pins.map(({ id, board, created, link, metrics }) => ({
+      id, board, created, link, metrics: { lifetime_metrics: metrics?.lifetime_metrics ?? {} },
+    })),
+  };
+  await E.PINTEREST.put('learn:report', JSON.stringify(input));
+  return input.pins.length;
+}
+
 // ---------------------------------------------------------------- publishing
 // Our board by name. Sandbox hides the production boards but still refuses a duplicate name (and names of 50+
 // characters), so its copies are named "Sandbox - <board>" and created once.

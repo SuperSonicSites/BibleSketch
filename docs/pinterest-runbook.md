@@ -52,42 +52,118 @@ As of **2026-09-24 11:10 UTC** (first `pinterest-daily` run):
 ## Daily scheduled task (`pinterest-daily`, owner request 2026-09-24)
 A Claude Code scheduled task in the desktop app (`C:\Users\renau\.claude\scheduled-tasks\pinterest-daily\SKILL.md`,
 every day at 7:00 local, runs only while the app is open) adds **5 reviewed Pins a day** with the procedure in
-"Generating a batch of pages" below. Owner-authorized scope: at most 10 generations per run on the master
-account; publishing the approved ones; editing `web/src/data/pins.json` and this file's Status block; pins-check,
-build, `npx wrangler deploy` (Worker only); commit and push those files to `main`; the alt-text pass. Nothing else.
+"Generating a batch of pages" below, following the **yearly calendar**. Owner-authorized scope: at most 10
+generations per run on the master account (with the planner's `guidance`); publishing the approved ones; editing
+`web/src/data/pins.json`, `pin-year.json` (refill only: add items, never remove used ones), `pin-learn.json` and
+this file's Status and "What's working" blocks; pins-check, pins-plan, pins-learn, build, `npx wrangler deploy`
+(Worker only); commit and push those files to `main`; the alt-text pass. Nothing else.
 
-**Where the 5 go:** the earliest open ramp slots at least 7 days out and at most 60 days out (`dailyCap` in
-pins-check; never above it). At most 2 Pins of one board on a day. No open slot in that window: generate nothing.
+### The yearly calendar (owner request 2026-09-24)
+`web/src/data/pin-year.json` is the whole year, and `node scripts/pins-plan.mjs` (in `web/`) turns it into each
+day's exact instructions, so the task never improvises what to post:
+- **Seasons** with release windows opened about 6 weeks before Pinterest searches rise (Trends curves in the file's
+  `_trends`): Christmas Oct 1 - Dec 15 (1 a day, 2 a day Nov 1 - Dec 10), Epiphany Dec 16 - Jan 3, Lent and
+  Easter from Easter - 60 days (2 a day on the Easter board), New Year and Valentine's verses, Mother's Day,
+  Pentecost, VBS summer, Father's Day, back to school, creation (our Genesis peak in September), fall (Noah and
+  Jonah), light (October), Thanksgiving. Easter, Pentecost, Mother's/Father's Day and Thanksgiving are computed
+  each year.
+- **Daily mix** (trimmed to the ramp): the seasonal boards first, then Sunday School, 1 Scripture, **Adult on
+  Tuesdays and Fridays** (owner decision 2026-09-24, Adult/Classic, `black` template), then Sunday School up to 3.
+  A board with nothing left hands its slot to Sunday School, then Scripture.
+- **Content bank** (`items`): about 350 story moments and verses, each with its variants (T = Toddler, Y = Young
+  Child, A = Adult/Classic, ES/CS/MB/PL = verse fonts) in the order to make them. Adam and Eve are Toddler only.
+- **No repeats:** a moment + variant is posted once. Another variant of it waits 90 days, the same page slug on a
+  board 30 days. Only **proven winners** (`pin-learn.json`, top 10% at day 180) come back as a fresh image, after
+  6 months, in at most 10% of recent slots (owner decision 2026-09-24).
+- `pins-plan.mjs --check` validates the file and the next 365 days, and warns when a board has fewer unused pages
+  than open slots in the next 90 days: then the task **refills** the bank (at most 20 new moments a run, same
+  format, faithful to the text, not already in the bank).
 
-**Board mix of the 5** (by release date of each slot):
-- Oct 1 - Dec 15: 3 Sunday School + 2 Christmas (front-load Christmas; nothing Christmas after Dec 15).
-- Dec 16 - Jan 31: 4 Sunday School + 1 Scripture (only on days after Dec 20; Scripture is full until then).
-- Feb 1 - Easter Sunday (Mar 28, 2027): 3 Sunday School + 2 Easter.
-- Otherwise: 4 Sunday School + 1 Scripture. Adult board: none (paused).
+### The learning loop (owner decisions 2026-09-24: long-term data only; steer the drawing; learn the "je ne sais quoi" from winners and losers)
+**Two outcomes per Pin,** from lifetime numbers at **day 180** (and day 365), ranked **within its own board**
+(boards differ a lot):
+- **Reach** = outbound clicks + saves. It mostly reflects what the topic, the season and Pinterest's distribution
+  gave the Pin, which is partly a lottery. So reach only steers **what to post** (planner weights per board, age,
+  style, font, book, template, title opener and series). 1 slot in 5 ignores the weights, to keep exploring.
+- **Resonance** = clicks + saves per 1,000 impressions, counted only for Pins shown 300+ times: did the people who
+  saw the image want it? Only resonance judges the image itself (composition, faces, feel, style), so a lucky or
+  unlucky distribution teaches nothing about the drawing.
 
-**Content** (what performs, "Reading performance" and the strategy):
-- Sunday School: Toddler/Sunday School for 2 of 3, Young Child/Sunday School for the rest; one key moment with
-  1-3 named characters in a full setting. Adam and Eve only in the Toddler style (the Young Child style draws them
-  nude but for hair). Order of preference: Genesis stories (creation, Eden, Noah, Babel, Abraham, Isaac, Jacob,
-  Joseph), then David, Jonah, Daniel, Moses (traditional bearded Moses), Joshua, Gideon, Samuel, Ruth, Esther,
-  Elijah, Jesus's miracles and parables (calming the storm, feeding the 5000, walking on water, Zacchaeus, lost
-  sheep, Good Samaritan, prodigal son, Jairus's daughter, Bartimaeus, Jesus and the children), Acts (Pentecost,
-  Peter's escape, Paul's shipwreck). Build short series (3-4 moments of one story on consecutive slots).
-- Christmas: nativity story moments (annunciation, Mary and Elizabeth, the road to Bethlehem, no room at the inn,
-  the manger, shepherds and angels, the star, three crowned wise men with gifts, flight to Egypt, Simeon), beloved
-  traditions (ox and donkey, three magi).
-- Easter: triumphal entry, Last Supper, Gethsemane (gentle), the empty tomb, the angel, Mary Magdalene, Emmaus,
-  Thomas; no crucifixion violence on kids' pages.
-- Scripture: one verse under 30 words (docs/pinterest-scripture-plan.md), adult looks, `plain` template.
-- Never a passage already scheduled on the same board within 30 days (pins-check warns), never a sketch already
-  on Pinterest, and pick moments the calendar doesn't have yet.
+Winners and losers weigh the same: each Pin above the board median pushes its traits up, each one below pushes
+them down. Every trait is shrunk toward neutral for small samples and labelled by evidence: hunch (fewer than 8
+Pins), moderate, or strong (15+ Pins and a clear effect). Only moderate and strong ones become rules.
 
-**Run:** read the Status block; `git pull --ff-only` (stop if it fails or `pins.json` has uncommitted changes);
-generate 5 (Scenes: `kind: 'scene'`; verse: `kind: 'verse'`), review each up close, regenerate rejects (10
-generations max per run; stop after 3 failures in a row: likely the Gemini spend cap), publish the approved,
-write the entries (copy rules §3.3a; titles unique, no warnings on new entries), pins-check with no errors, build,
-deploy, check one new `/pin-img/`, run the alt-text pass (below), update the Status block's calendar table and
-open-slot count, commit (`pins.json`, this file) and push. Fewer than 5 approved is fine: never schedule a reject.
+**Visual profiles.** Each approved page gets `tags` from the vocabulary in pin-year.json (`_tags` explains them):
+- characters, children, animals
+- scale, viewpoint, setting, density
+- faces (joyful, tender, calm, awe, worried, stern), feel, composition, action, recognizable at feed size
+- look, lines, frame, caption
+- layout and motifs (verse art)
+
+New pages get their tags at review, in pins.json. Older Pins have them in pin-learn.json `profiles`: all 130
+sketches were profiled on 2026-09-24 from their images, with the performance numbers hidden while tagging.
+
+**Monthly** (the daily run on or after the 25th, after the monthly report saved fresh numbers in KV
+`learn:report`):
+1. `node scripts/pins-learn.mjs` writes to pin-learn.json:
+   - `weights`: what to post;
+   - `traits` and `traitsByKind`: kids, adult and verse, with effect, n and confidence;
+   - `traitNotes`;
+   - `winners`: the top 10%, which may come back as fresh images;
+   - `study`: the 12 most and 12 least resonant Pins of each kind, with images;
+   - `referenceCandidates`: for a quarterly, owner-approved swap of `REFERENCE_MAP`.
+2. **Visual study:** turn `study` into contact sheets (`python scripts/pins-review.py <json> <prefix> 6`) and look at
+   the top and bottom Pins side by side. Update `lessons` (what the winners share and the losers lack) and
+   `compositionNotes` (at most ~300 characters per kind; the planner puts them in every `guidance`). Keep only what
+   both the images and the moderate/strong traits support.
+3. Paste the summary into "What's working" below.
+
+To refresh the numbers by hand, open `/api/pinterest/report?save` from the signed-in tab (snippet in "Reading
+performance").
+
+**The drawing is steered:** every slot's `guidance` holds the moment to draw (or the verse decorations) plus that
+kind's composition notes, and `createSketch` accepts it from the master account only. Every generation keeps its
+brief, guidance, models, references and prompt version on its private `generations/` ledger doc. Log a rejected
+page with `node scripts/pins-plan.mjs --reject <plan> "<reason>"`; two rejects skip that item variant.
+
+**What's working** (pins-learn and the visual study, 2026-09-24; 146 Pins from Nov-Dec 2025, all at least 180
+days old and all profiled; `lessons` in pin-learn.json has the detail):
+- **Kids:**
+  - Winners have a big, friendly, calm or smiling face (1-2 people, or smiling animals) and a garden or setting
+    filling every corner in bold shapes: Adam breathing in life, Esther and the king, the Eden trees.
+  - Losers have no face or person, big empty sea or sky, abstract swirls, or a small subject: dry land and seas,
+    the tiny ark.
+  - Measured (moderate): no characters, a wide viewpoint, medium scale and medium lines all fall flat.
+- **Adult:**
+  - Winners are whole pages of ornate pattern, peaceful or majestic, and readable: stained-glass magi under the
+    star, the creation trees, the Psalm 23 meadow. Measured: peaceful feel +0.19, a wide view (strong), dense.
+  - Losers: the crucifixion, abstract objects, a lone static figure, half-empty backgrounds, nudity. Measured:
+    solemn feel (strong), balanced density (strong), awe faces, a single character.
+- **Verse:**
+  - Winners are bold outline letters filling a scroll or the page, with an ornate frame and cheerful motifs, on
+    famous verses. Measured: dense, framed, scroll, medium lines.
+  - Losers are thin script in white space, and fragments or odd KJV wording.
+- **What to post** (reach and resonance within boards): Iconography ×1.18, the Playful verse font ×1.14, Matthew
+  ×1.12, Classic ×1.08, Psalms, Toddler. Weaker: 1 Thessalonians, Stained Glass for kids' boards, Young Child.
+- **Winners** (may come back as fresh images after 6 months): Romans 8:28, Joshua 1:9, John 10:30, the magi and
+  the star, the manger, Eve brought to Adam, Genesis 3:1, Cain and Abel, John 19:30, Matthew 28:6, the flood,
+  1 John 4:8, the Eden trees.
+
+**Run** (in order; stop and report on any failure):
+1. Read the Status block; `git pull --ff-only` (stop if it fails or `pins.json`/this file have uncommitted changes).
+2. On or after the 25th, if `pin-learn.json` `updated` is older than 25 days: `node scripts/pins-learn.mjs`.
+3. `node scripts/pins-plan.mjs --check`: refill the bank if it warns.
+4. `node scripts/pins-plan.mjs --next 5`: exactly these slots, in this order.
+5. Generate each slot's `create` (it includes `guidance`), review up close, and log rejects. Regenerate a reject once;
+   if it fails again, ask the planner for the next pick. At most 10 generations; stop after 3 failures in a row
+   (likely the Gemini spend cap).
+6. Publish the approved pages. Write each entry with the slot's `release`, `board`, `template`, `ref`, `plan`, the
+   review `tags`, and copy by §3.3a.
+7. Run pins-check (no errors, no warnings on new entries), build, deploy, check one new `/pin-img/`, then the
+   alt-text pass.
+8. Update the Status block, commit `pins.json`, `pin-year.json`, `pin-learn.json` and this file, then push.
+
+Fewer than 5 approved is fine: never schedule a reject.
 
 ## Weekly: alt text on RSS-published Pins
 RSS can't carry alt text. In `web/`: `node scripts/pins-alt.mjs > alt.js`, then run its contents in the signed-in
@@ -130,7 +206,10 @@ accounts keep 60. Each generation costs 1 credit (the master account has hundred
    contact sheets of 3; crop details with PIL when text or faces are small. Reject: lone figure with no action,
    sparse or empty setting, stern or angry faces on kids' pages, violence, faint lines, broken or open border,
    stray marks or quotes, wrong or misspelled text, anything that breaks a beloved tradition (bearded Moses,
-   three magi). Regenerate the verse or scene; never schedule a reject.
+   three magi). Also reject what the learning loop found falls flat: large empty areas (bare sky or sea),
+   no readable face on a kids' page, a subject too small to read at feed size, suffering or nudity, and thin
+   letters floating in white space on verse art. Regenerate the verse or scene; never schedule a reject.
+   Give every approved page its visual profile (`tags`, vocabulary in pin-year.json `_tags`).
 5. **Publish the approved pages** (`isPublic: true`, the same field the app's "Publicly Visible" toggle sets):
    ```js
    const f = await import('/_astro/firebase-client.<hash>.js'); const { db, fs } = await f.r();
@@ -172,6 +251,13 @@ lasts an hour), `/api/pinterest/report` returns JSON: the account's last 90 days
 saves, Pin clicks, outbound clicks; includes repins and the archived boards), every board, and every Pin on an
 active board with its 90-day and lifetime metrics and whether it has alt text. The archived boards' Pins are not
 listed. Crunch it in the signed-in tab: `const r = await fetch('/api/pinterest/report').then((x) => x.json())`.
+Without the owner session, the master account's Firebase ID token also works (the daily task uses this), and
+`?save` stores the per-Pin numbers in KV `learn:report` for `pins-learn.mjs`:
+```js
+const f = await import('/_astro/firebase-client.<hash>.js'); const { auth } = await f.n();
+const headers = { Authorization: `Bearer ${await auth.currentUser.getIdToken()}` };
+await fetch('/api/pinterest/report?save', { headers }).then((r) => r.text()); // "Saved 151 Pins for pins-learn."
+```
 
 Baseline 2026-09-24 (compare at the day-30 read, mid-November):
 
