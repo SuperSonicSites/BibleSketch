@@ -1,6 +1,6 @@
-// Monthly Pinterest insight report, plain text, emailed to the owner (cron in wrangler.jsonc → src/worker.ts; send
-// one now with POST /api/pinterest/report). Numbers come from the production API (report() and top_pins).
-// "Since last report" per board = lifetime totals now minus the totals saved in KV at the previous report.
+// Monthly Pinterest TLDR, plain text, emailed to the owner (cron in wrangler.jsonc → src/worker.ts; send one now
+// with POST /api/pinterest/report). Owner decision 2026-09-24: a quick summary, not an analytics dashboard.
+// Board numbers "since last report" = lifetime totals now minus the totals saved in KV at the previous report.
 import { env } from 'cloudflare:workers';
 import { EmailMessage } from 'cloudflare:email';
 import { entries } from './pins.ts';
@@ -18,114 +18,95 @@ const send = (subject: string, text: string) =>
     `Message-ID: <${crypto.randomUUID()}@biblesketch.app>`, 'MIME-Version: 1.0',
     'Content-Type: text/plain; charset=utf-8', 'Content-Transfer-Encoding: 8bit', '', text,
   ].join('\r\n').replace(/\r?\n/g, '\r\n')));
-const SNAPSHOT = 'report:last'; // { date, boards: { [boardId]: Totals } }
-const K = ['impression', 'save', 'pin_click', 'outbound_click'] as const;
-type Totals = Record<(typeof K)[number], number>;
+
+const SNAPSHOT = 'report:last'; // { date, boards: { [boardId]: { impression, outbound_click } } }
+type Totals = { impression: number; outbound_click: number };
+const LABELS: Record<string, string> = {
+  'sunday-school': 'Sunday School', christmas: 'Christmas', scripture: 'Scripture', easter: 'Easter', adult: 'Adult',
+};
+const label = (name: string) =>
+  LABELS[Object.entries(BOARD_NAMES).find(([, n]) => n === name)?.[0] ?? ''] ?? name.split(/[:&|]/)[0].trim();
 
 const day = (n: number) => new Date(Date.now() - n * 86400_000).toISOString().slice(0, 10);
-const fmt = (n: number) => Math.round(n).toLocaleString('en-US');
-const pct = (now: number, before: number) => (before ? `${now >= before ? '+' : ''}${Math.round((100 * (now - before)) / before)}%` : 'n/a');
-const line = (t: Totals) => `${fmt(t.impression)} impressions, ${fmt(t.save)} saves, ${fmt(t.outbound_click)} clicks to the site`;
-const zero = (): Totals => ({ impression: 0, save: 0, pin_click: 0, outbound_click: 0 });
-const add = (a: Totals, m: Record<string, number | null> | undefined) => K.forEach((k) => (a[k] += m?.[k] ?? 0));
+const num = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : Math.round(n).toLocaleString('en-US'));
+const pct = (now: number, before: number) => (before ? ` (${now >= before ? '+' : ''}${Math.round((100 * (now - before)) / before)}%)` : '');
+// "Sunday School Crafts: Adam & Eve Hiding | Genesis 3:8" → "Adam & Eve Hiding"
+const short = (title = '') => {
+  const head = title.split(' | ')[0].split(' - ')[0];
+  return (head.split(': ').slice(1).join(': ') || head).slice(0, 50).trim() || '(untitled)';
+};
 
 export async function buildReport() {
   const r = await report();
   const boards = r.boards.filter((b) => b.privacy === 'PUBLIC' && !b.name.startsWith('Sandbox'));
-  const boardName = new Map(r.boards.map((b) => [b.id, b.name]));
   const pins = r.pins.filter((p) => boards.some((b) => b.id === p.board));
-  const byId = new Map(pins.map((p) => [p.id, p]));
   const out: string[] = [];
   const say = (s = '') => out.push(s);
 
-  // Account (includes repins by others and the archived boards).
+  // Account, last 30 days vs the 30 before (includes repins by others and the archived boards).
   const days = (r.account.daily_metrics ?? []).filter((d: any) => d.data_status === 'READY');
-  const sum = (ds: any[]) => Object.fromEntries(K.map((k) => [k, ds.reduce((a, d) => a + (d.metrics[k.toUpperCase()] ?? 0), 0)])) as Totals;
-  const last30 = sum(days.slice(-30)), prev30 = sum(days.slice(-60, -30));
-  say(`Covers ${days.at(-30)?.date} to ${days.at(-1)?.date} (Pinterest data lags a day or two).`);
+  const sum = (ds: any[], k: string) => ds.reduce((a, d) => a + (d.metrics[k] ?? 0), 0);
+  const [now, before] = [days.slice(-30), days.slice(-60, -30)];
+  const stat = (k: string, what: string) => `${num(sum(now, k))} ${what}${pct(sum(now, k), sum(before, k))}`;
+  say(`Pinterest, ${days.at(-30)?.date} to ${days.at(-1)?.date}`);
   say();
-  say('ACCOUNT, LAST 30 DAYS (change vs the 30 days before)');
-  for (const [label, k] of [['Impressions', 'impression'], ['Saves', 'save'], ['Pin clicks', 'pin_click'], ['Clicks to the site', 'outbound_click']] as const) {
-    say(`  ${label.padEnd(20)}${fmt(last30[k]).padStart(9)}  (${pct(last30[k], prev30[k])})`);
-  }
-  say(`  Last 60 days: ${line(sum(days.slice(-60)))}.`);
-  say(`  Last 90 days: ${line(sum(days))}.`);
+  say(`Last 30 days: ${stat('IMPRESSION', 'impressions')}, ${stat('SAVE', 'saves')}, ${stat('OUTBOUND_CLICK', 'clicks to the site')}.`);
 
-  // Boards.
+  // Boards: since the last report when there is one, else the last 90 days.
   const prev = await E.PINTEREST.get<{ date: string; boards: Record<string, Totals> }>(SNAPSHOT, 'json');
   const snapshot: Record<string, Totals> = {};
-  say();
-  say(`BOARDS${prev ? ` (since last report = ${prev.date} to today)` : ''}`);
   const rows = boards.map((b) => {
-    const ps = pins.filter((p) => p.board === b.id);
-    const d90 = zero(), life = zero();
-    ps.forEach((p) => { add(d90, p.metrics?.['90d']); add(life, p.metrics?.lifetime_metrics); });
-    snapshot[b.id] = life;
-    return { b, ps, d90, life };
-  }).sort((a, b) => b.d90.impression - a.d90.impression);
-  for (const { b, ps, d90, life } of rows) {
-    const fresh = ps.filter((p) => p.created >= day(30)).length;
-    say(b.name);
-    say(`  ${ps.length} Pins (${fresh} new in the last 30 days), ${fmt(b.followers)} followers`);
-    const was = prev?.boards[b.id];
-    if (was) {
-      const since = Object.fromEntries(K.map((k) => [k, life[k] - was[k]])) as Totals;
-      say(`  Since last report: ${line(since)}`);
-    }
-    say(`  Last 90 days: ${line(d90)} (${(d90.outbound_click / Math.max(ps.length, 1)).toFixed(1)} clicks per Pin)`);
-  }
-  if (!prev) say('(Per-board "since last report" numbers start with the next report.)');
-
-  // Top Pins per window, by impressions and by clicks to the site.
-  const pinLabel = async (id: string) => {
-    let p: { title?: string; board?: string } | undefined = byId.get(id);
-    if (!p) p = await api(`/pins/${id}`, {}, undefined, 'production').then((j) => ({ title: j.title, board: j.board_id })).catch(() => undefined);
-    const board = (p?.board && boardName.get(p.board)) || 'archived board';
-    return `${(p?.title || '(untitled)').slice(0, 90)} [${board.split(/[:&|]/)[0].trim()}]`;
-  };
-  for (const [heading, sortBy] of [['TOP 3 PINS BY IMPRESSIONS', 'IMPRESSION'], ['TOP 3 PINS BY CLICKS TO THE SITE', 'OUTBOUND_CLICK']] as const) {
-    say();
-    say(heading);
-    for (const n of [30, 60, 90]) {
-      const top = await api(
-        `/user_account/analytics/top_pins?start_date=${day(n - 1)}&end_date=${day(0)}&sort_by=${sortBy}&num_of_pins=3`, {}, undefined, 'production',
-      );
-      say(`  Last ${n} days`);
-      for (const [i, t] of ((top.pins ?? []) as { pin_id: string; metrics: Record<string, number> }[]).entries()) {
-        const v = (k: string) => fmt(t.metrics[k] ?? t.metrics[k.toLowerCase()] ?? 0);
-        say(`    ${i + 1}. ${await pinLabel(t.pin_id)}`);
-        say(`       ${v('IMPRESSION')} impressions, ${v('SAVE')} saves, ${v('OUTBOUND_CLICK')} clicks · https://www.pinterest.com/pin/${t.pin_id}/`);
+    const t = { life: { impression: 0, outbound_click: 0 }, d90: { impression: 0, outbound_click: 0 } };
+    for (const p of pins.filter((p) => p.board === b.id)) {
+      for (const k of ['impression', 'outbound_click'] as const) {
+        t.life[k] += p.metrics?.lifetime_metrics?.[k] ?? 0;
+        t.d90[k] += p.metrics?.['90d']?.[k] ?? 0;
       }
     }
+    snapshot[b.id] = t.life;
+    const was = prev?.boards[b.id];
+    const shown = was ? { impression: t.life.impression - was.impression, outbound_click: t.life.outbound_click - was.outbound_click } : t.d90;
+    return { name: label(b.name), ...shown };
+  }).sort((a, b) => b.outbound_click - a.outbound_click);
+  say();
+  say(prev ? `Boards since last report (${prev.date}):` : 'Boards, last 90 days:');
+  for (const b of rows) say(`  ${b.name.padEnd(15)}${`${num(b.outbound_click)} clicks`.padEnd(12)}${num(b.impression)} impressions`);
+
+  // Top 3 Pins by clicks to the site (our goal), one line per window.
+  const titles = new Map(pins.map((p) => [p.id, p.title]));
+  say();
+  say('Top Pins by clicks to the site:');
+  for (const n of [30, 60, 90]) {
+    const top = await api(`/user_account/analytics/top_pins?start_date=${day(n - 1)}&end_date=${day(0)}&sort_by=OUTBOUND_CLICK&num_of_pins=3`,
+      {}, undefined, 'production');
+    const names = await Promise.all(((top.pins ?? []) as { pin_id: string; metrics: Record<string, number> }[]).map(async (t) => {
+      const title = titles.get(t.pin_id) ?? (await api(`/pins/${t.pin_id}`, {}, undefined, 'production').catch(() => ({}))).title;
+      return `${short(title)} (${t.metrics.OUTBOUND_CLICK ?? t.metrics.outbound_click ?? 0})`;
+    }));
+    say(`  ${`${n} days:`.padEnd(9)}${names.join(', ') || 'none'}`);
   }
 
-  // New Pins and what's coming.
+  // What's new, what's next, what to fix.
   const fresh = pins.filter((p) => p.created >= day(30));
-  const freshTotals = zero();
-  fresh.forEach((p) => add(freshTotals, p.metrics?.lifetime_metrics));
+  const freshImp = fresh.reduce((a, p) => a + (p.metrics?.lifetime_metrics?.impression ?? 0), 0);
+  const ahead = entries.filter((e) => e.approved && e.release > day(0) && e.release <= day(-30)).length;
   say();
-  say('NEW PINS (published in the last 30 days)');
-  say(`  ${fresh.length} Pins: ${line(freshTotals)} so far.`);
-  const nameOf = (key: string) => BOARD_NAMES[key as keyof typeof BOARD_NAMES].split(/[:&|]/)[0].trim();
-  const ahead = entries.filter((e) => e.approved && e.release > day(0) && e.release <= day(-30));
-  const count = (list: typeof entries) => Object.entries(Object.groupBy(list, (e) => e.board)).map(([k, v]) => `${nameOf(k)} ${v!.length}`).join(', ');
-  say();
-  say('CALENDAR');
-  say(`  Next 30 days: ${ahead.length} Pins scheduled (${count(ahead) || 'none'}).`);
-  const lastDates = Object.entries(Object.groupBy(entries.filter((e) => e.approved), (e) => e.board))
-    .map(([k, v]) => `${nameOf(k)} ${v!.map((e) => e.release).sort().at(-1)}`);
-  say(`  Last scheduled day per board: ${lastDates.join(', ')}.`);
+  say(`New: ${fresh.length} Pins published in 30 days (${num(freshImp)} impressions so far); ${ahead} scheduled for the next 30.`);
+  const lastDay = new Map<string, string>();
+  for (const e of entries) if (e.approved && e.release > (lastDay.get(e.board) ?? '')) lastDay.set(e.board, e.release);
+  const runsOut = [...lastDay].filter(([, d]) => d > day(0) && d <= day(-30)).map(([k, d]) => `${LABELS[k] ?? k} ends ${d}`);
   const noAlt = pins.filter((p) => !p.alt).length;
-  if (noAlt) say(`  ${noAlt} Pins have no alt text (runbook: "Weekly: alt text").`);
+  const todo = [...runsOut.map((s) => `calendar: ${s}`), ...(noAlt ? [`${noAlt} Pins without alt text`] : [])];
+  if (todo.length) say(`To do: ${todo.join('; ')}.`);
   say();
-  say('Full data: https://biblesketch.app/api/pinterest (connect, then Stats). How to act on it: docs/pinterest-runbook.md.');
+  say('Details: https://biblesketch.app/api/pinterest');
 
   return { text: out.join('\n'), snapshot };
 }
 
 // Sends the report; on failure sends the error instead, so a broken connection never goes unnoticed.
 export async function emailReport() {
-  const subject = `Bible Sketch Pinterest report, ${day(0)}`;
+  const subject = `Bible Sketch Pinterest TLDR, ${day(0)}`;
   try {
     const { text, snapshot } = await buildReport();
     await send(subject, text);

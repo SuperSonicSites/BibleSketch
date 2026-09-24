@@ -132,11 +132,14 @@ Baseline 2026-09-24 (compare at the day-30 read, mid-November):
 - Top 10 Pins = 45% of impressions, 50% of outbound. 30 Pins had under 100 impressions in 90 days.
 - 18 Pins lack alt text (16 of them Genesis/creation Pins, including the top Pin).
 
-**Monthly email report** (owner request 2026-09-24: text only, every ~30 days): the Worker's cron (`0 13 24 * *`,
-`web/wrangler.jsonc`; entry `web/src/worker.ts`) runs `emailReport()` in `web/src/lib/pinterest-email.ts`:
-account totals for 30 days (vs the 30 before), 60 and 90 days; each board (Pins, new Pins, followers, 90-day
-totals, and "since last report" from the per-board lifetime totals saved in KV `report:last`); top 3 Pins by
-impressions and by clicks for 30/60/90 days; new Pins; the calendar ahead; Pins without alt text. It goes through
+**Monthly email report** (owner request 2026-09-24: text only, every ~30 days, **a quick TLDR, not an analytics
+dashboard**: keep it about 15 lines): the Worker's cron (`0 13 24 * *`, `web/wrangler.jsonc`; entry
+`web/src/worker.ts`) runs `emailReport()` in `web/src/lib/pinterest-email.ts`: one line for the account's last 30
+days (impressions, saves, clicks to the site, each vs the 30 before); one line per board (clicks and impressions
+since the last report, from per-board lifetime totals saved in KV `report:last`; the first report shows 90 days);
+top 3 Pins by clicks to the site for 30/60/90 days, one line each; new Pins and what's scheduled; a to-do line
+(a board's calendar ending within 30 days, Pins without alt text). Preview without sending:
+`/api/pinterest/report?tldr` (owner session). It goes through
 Email Routing (`send_email` binding `REPORT_EMAIL`, raw MIME: the structured `send()` is refused without Email
 Sending onboarding) to a verified destination address, from reports@biblesketch.app. If building fails, a
 "FAILED" email with the error goes out instead (e.g. Pinterest disconnected). Send one now: the "Email the
