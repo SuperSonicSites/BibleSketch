@@ -231,7 +231,8 @@ by the owner before it goes out. `{first}` is the first name (the email opens wi
 **W0 (clearly automatic):**
 > Hi {first},
 > Welcome to Bible Sketch! This is the automatic welcome, so here's everything in one place:
-> you have **5 free pages and 5 free prints**. Here are more pages like the one you came for:
+> you have **5 free pages and 10 free prints** (5 extra for joining these emails). Here are more pages like the one
+> you came for:
 > **[{story} pages, ready to print]**. Teaching something specific? **[Make your own]** in about 30 seconds.
 > — Renaud
 > *(super-signature, §5.9)*
@@ -402,7 +403,9 @@ lists every field that makes that possible, where it lives, and how we collect i
 - **Existing sources, used as they are:**
   - Firebase Auth: the email, `emailVerified`, `displayName`, the sign-in provider, and `lastRefreshTime` (the last
     time the app was open, even without making a page).
-  - `users/{uid}`: `credits`, `downloadsRemaining`, `isPremium`, `planStatus`, `subscriptionStartDate`,
+  - `users/{uid}`: `printsUnlimitedUntil` (**new**; a timestamp, set by the server only, for the outage gift in
+    §12.1; the create and update rules already refuse any key not on their lists, so clients can't set it),
+    `credits`, `downloadsRemaining`, `isPremium`, `planStatus`, `subscriptionStartDate`,
     `createdAt`.
   - `users/{uid}/transactions`: `bonus`, `usage`, `refund`, `credit_purchase` (with `pack` and `price`),
     `subscription`.
@@ -485,7 +488,7 @@ send next, and never ask what their behaviour already tells us.
 | Where | What we ask or capture | Field |
 |---|---|---|
 | First visit, before sign-up | the landing page, its sketch and story, the UTM tags, the referrer domain, the Pinterest click id (a first-touch record kept in the browser) | `signup` |
-| Sign-up form | an **unticked** box: *"Email me a free Bible story page each week, plus occasional offers. Unsubscribe anytime."* (the owner approves the wording) | the consent fields |
+| Sign-up form | an **unticked** box: *"Email me a free Bible story page each week, plus occasional offers, and get 5 extra free prints now. Unsubscribe anytime."* (owner decision 2026-09-24: an opt-in bonus of extra prints; the exact number and wording are to be approved). The bonus is granted once per account by the server (§12.2) | the consent fields |
 | Sign-up form (optional) | *"I'm making pages for: my class / my kids / myself"*. An answer skips W1 | `persona` |
 | Sign-up, silently | the browser's time zone and language | `timezone`, `locale` |
 | W1 reply | a class, or your kids at home? | `persona` |
@@ -725,8 +728,10 @@ Every number here comes from `emailProfiles` (§6.2). Cohorts by sign-up month (
 - ship the consent checkbox and the persona question alone, storing to `private/profile`. Every week without it,
   about 5 sign-ups arrive that we may never email;
 - ship the question for Google sign-ups too (§12.3);
-- prepare the outage win-back (§12.1) to go out as soon as Resend is verified, if the owner accepts the
-  implied-consent basis.
+- the opt-in bonus trigger (§12.2), with its security-check steps (a functions deploy);
+- unlimited prints until a date (`printsUnlimitedUntil`, §12.1), with its three checks (a Worker deploy), and the
+  outage grant script;
+- prepare the outage win-back (§12.1) to go out as soon as Resend is verified.
 
 **Phase 1 (about a week of build once Resend is ready; target Oct 9):**
 - **The data (§6.2-6.3):**
@@ -770,14 +775,17 @@ Every number here comes from `emailProfiles` (§6.2). Cohorts by sign-up month (
 3. **A mailing address** for the footer (CASL).
 4. **Approve** the consent checkbox wording and the persona question (§6.3), and the privacy policy update (§6.10).
 5. **Bonus amounts:**
+   - **the opt-in bonus** (decided: extra free prints; proposed: +5; §12.2);
    - the first-purchase bonus (proposed: +10 pages for 7 days after running out);
    - the re-engagement gift (proposed: 3 pages);
    - the seasonal bonus (proposed: +20% pages on packs during the window);
    - the referral (proposed: 5 and 5).
 6. **Implied consent** for the 4 past buyers: use it, or ask via the banner only?
-7. **Urgent: the outage win-back (§12.1).** Send one short, honest email to the 85 people who signed up since
-   Mar 26 and never got to make a page, relying on CASL's 6-month implied consent for an inquiry? The April
-   sign-ups age out during October. A lawyer's 15-minute check is worth it.
+7. **Urgent: the outage win-back (§12.1).**
+   - Decided 2026-09-24: the gift is a month of unlimited prints.
+   - Still open: send it relying on CASL's 6-month implied consent? The April sign-ups age out during October. A
+     lawyer's 15-minute check is worth it.
+   - Also approve the Worker deploy and the grant script.
 8. **Is the weekly page free to print (§12.4)?** Either it doesn't count against the 5 prints, or the consent
    wording drops "free".
 9. **A standing approval** for the automated sequences once you've read the first versions, and later for the
@@ -799,20 +807,60 @@ Sorted by value. Each item says where it changes the plan.
   - The April sign-ups age out during October and the May ones in November, so this can't wait for phase 2.
   - Owner decision, ideally with a 15-minute lawyer check (§11).
   - Anyone older than 6 months only sees the in-app banner.
+- **The apology gift (owner decision 2026-09-24): unlimited prints for a month.**
+  - Each of the 85 gets `printsUnlimitedUntil` = the send date + 30 days, set by an owner-approved script just before
+    the send.
+  - A fixed end date keeps it simple, and it's a real deadline for the email to name.
+  - The gift doesn't depend on opting in. An apology that requires a subscription would feel wrong.
+- **What it costs:** almost nothing. A print of an existing page costs no Gemini call, only a PDF from the Worker.
+  Someone printing the whole public gallery costs pennies.
 - **Draft** (subject `{first}`; it carries the identification and unsubscribe footer like any other):
   > Hi {first}, did you ever get your coloring page made? Our page maker was broken for part of the summer, and
-  > I'm sorry. It works again, and your 5 free pages are still in your account.
+  > I'm sorry. It works again, your 5 free pages are still in your account, and to make up for it, printing is
+  > unlimited for you until {date}. **[Print this week's page]**
   > — Renaud
 - **Order:** the oldest cohorts first.
 - **Replies:** go to the owner (the concierge).
-- **Follow-up:** people who reply "yes" or click get the regular opt-in question. **Without express consent from
-  that step, nobody gets a second marketing email once their 6 months are up.**
+- **When they come back,** the opt-in banner asks for express consent (with the weekly page, and the opt-in bonus
+  for after the month).
+- **The next moves (the chess plan):** the month works as a free Premium trial for prints.
+  - **Day 23,** a reply-only check-in: *"What have you printed so far?"*
+  - **Day 27:** `unlimited ends {date}`, with Premium ("keep unlimited prints, plus 10 new pages a month, for $4.99;
+    cancel anytime").
+  - **Day 30:** a last-day note.
+  - **Who gets these:** only people who opted in, or who are still inside their own 6-month window. **Without
+    express consent, nobody gets a marketing email once their 6 months are up.**
+- **If it works,** test "your first month of unlimited prints" as the opt-in bonus for every new sign-up (§8 tests).
+
+**Build (small, no Resend needed; phase 0.5):**
+- a helper `unlimitedPrints(profile)` = `isPremium` or `printsUnlimitedUntil` is still in the future, used in:
+  - `web/src/lib/downloads.ts` (`grantDownload` skips the decrement);
+  - `web/src/components/SketchActions.tsx` (no "(n left)", no print wall);
+  - `web/src/components/shell/AccountModal.tsx` ("Unlimited until Oct 31");
+- the grant script, which checks the cohort by the same rules as §3.1 and writes only `printsUnlimitedUntil`;
+- a Worker deploy, and the script run: both owner-approved.
 
 ### 12.2 Capture consent now, before anything else is built
 - Each week without the checkbox, about 5 new sign-ups arrive that we may never be allowed to email.
 - The 90 accounts from before Mar 26 are already out of reach except through the in-app banner.
 - Ship the checkbox and the persona question alone this week (§10, phase 0.5), storing to `private/profile`. The
   consent record is what matters, and the sending can come later.
+- **The opt-in bonus (owner decision 2026-09-24): extra free prints for opting in.** It applies at sign-up and
+  through the banner, so it also gives the 90 older accounts a reason to say yes.
+  - **Granted by the server:** the `onPrivateProfileWritten` trigger adds the prints to `downloadsRemaining` the
+    first time `emailOptIn` turns true.
+    - It logs a `bonus` transaction (`description: 'Email opt-in bonus'`, `downloadsAdded`).
+    - It records `offers.optInBonus.redeemedAt`, so it's paid once per account. Opting out and back in again gives
+      nothing more.
+    - Opting out later doesn't take the prints back.
+    - The client never writes `downloadsRemaining` upward (the rules forbid it), so this needs a functions deploy.
+  - **CASL is fine with an incentive,** as long as:
+    - the box stays unticked and separate from the Terms;
+    - using the app never depends on it;
+    - the wording says what they'll get and how to unsubscribe.
+  - **The trade-off:** extra prints push the print wall (C6) back by that many prints. Permission to email is worth
+    far more than a few prints, because the wall converts best when an email arrives right as they hit it.
+  - **Recommendation:** +5 (5 free prints becomes 10).
 
 ### 12.3 Google sign-ups never see a form
 - Google sign-in is one click through a popup, so a checkbox on the email form misses them.

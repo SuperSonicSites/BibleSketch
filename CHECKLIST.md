@@ -25,7 +25,8 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
 ### Lifecycle email (ROADMAP 1.6, plan in docs/email-marketing-plan.md)
 - [ ] **Resend account.**
   - Create it and verify the sending domain `biblesketch.app` (Resend can add the Cloudflare DNS records; its return path goes on a `send.` subdomain, and Email Routing keeps receiving mail).
-  - **Urgent decision (plan §12.1):** a one-time, honest win-back email to the 85 people who signed up since Mar 26 and never got to make a page (the generator was down Jun-Sep), relying on CASL implied consent. The April sign-ups age out during October.
+  - **Urgent decision (plan §12.1):** a one-time, honest win-back email to the 85 people who signed up since Mar 26 and never got to make a page (the generator was down Jun-Sep), relying on CASL implied consent. The April sign-ups age out during October. Decided 2026-09-24: the gift is a month of unlimited prints. Still open: the implied-consent basis (a lawyer check is worth it), plus approval of the Worker deploy and the grant script.
+  - **Opt-in bonus** (decided 2026-09-24: extra free prints for joining the emails): confirm the number (+5 proposed) and the checkbox wording.
   - Set the secrets yourself (plan §6.5):
     - `RESEND_API_KEY` and `RESEND_WEBHOOK_SECRET` as Firebase secrets (`firebase functions:secrets:set <NAME>`);
     - `EMAIL_HOOK_SECRET` (any random value) as both a Firebase secret and a Worker secret (`npx wrangler secret put EMAIL_HOOK_SECRET` in `web/`).
