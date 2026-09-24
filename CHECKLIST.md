@@ -22,6 +22,17 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
 - [ ] Weekly (Claude can do it): alt text on the Pins RSS published that week. In `web/`: `node scripts/pins-alt.mjs`, then run the printed snippet in the signed-in Pinterest tab (DevTools console, or ask Claude). Idempotent.
 - [x] Old Pin "Joshua 1:9 Memory Verse" (385 saves) had no link: linked on 2026-09-23 to `/coloring-page/joshua-1-9/5SISdcUP4jxzkCc7qUXw` (a different Joshua 1:9 page than the RSS one, so each page keeps one Pin). Its creator stats (22,469 impressions, 385 saves) were intact after the edit; watch its analytics for a few days.
 
+### Lifecycle email (ROADMAP 1.6, plan in docs/email-marketing-plan.md)
+- [ ] **Resend account.**
+  - Create it and verify the sending domain `mail.biblesketch.app` (Resend can add the Cloudflare DNS records).
+  - Set the API key yourself: as a Firebase secret (`firebase functions:secrets:set RESEND_API_KEY`) and as a Worker secret (`npx wrangler secret put RESEND_API_KEY` in `web/`).
+- [ ] **Decisions (plan §11):**
+  - the sender name ("Renaud at Bible Sketch"?) and where replies to hello@biblesketch.app go;
+  - the mailing address for the CASL footer;
+  - the consent checkbox wording and the persona question;
+  - the bonus amounts (first purchase, win-back, seasonal, referral);
+  - implied consent for the 4 past buyers.
+
 ### Astro rebuild, phases 3-5
 - [x] ~~**Let the preview site sign in**~~ Not needed: the owner chose to test on the live site (2026-09-23). (the browser API key only accepts biblesketch.app): Google Cloud console > APIs & Services > Credentials > the Firebase browser key (`AIzaSyAxrH…`) > Website restrictions: add `https://biblesketch-web.supersonicworkers.workers.dev/*`, Save (up to 5 min to apply). For Google sign-in there too: Firebase console > Authentication > Settings > Authorized domains: add `biblesketch-web.supersonicworkers.workers.dev`. **Remove both after cutover step 2.**
 - [ ] **Test the new pages on https://biblesketch.app** (live since 2026-09-23): make one Scene Art page and one Verse Art page, try Make changes, Remove Color and Add Ref on the result, publish one, check My Gallery and Saved on /gallery, open /pricing (don't buy). Each generation or paid edit uses 1 of your credits; failures are refunded.

@@ -156,6 +156,18 @@ Built 2026-09-23 in `web/`: `src/data/pins.json` (the calendar), `src/lib/pins.t
 - Not verified yet: the `security-check.mjs` step for the master account's 250 cap (the emulators were held by another session on 2026-09-23). Run it with the next emulator suite.
 - Local test of `/pin-img`: set `"remote": true` on the `images` binding in `wrangler.jsonc` (local mode can't draw overlays), and remove it after.
 
+### 1.6 Lifecycle email (Resend)
+- Plan: [docs/email-marketing-plan.md](docs/email-marketing-plan.md), built on Dean Jackson's *Email Mastery* (2026-09-24).
+- **Owner decisions:**
+  - the emails go to sign-ups; their data is in Firebase, and Resend sends;
+  - no Zoho integration;
+  - every campaign is automated.
+- **Phases:**
+  1. Consent, persona, the event pipeline, welcome and sort, activation and out-of-credits offers, and a reply Worker. Target Oct 9.
+  2. The weekly "Sunday Prep" flagship, Advent/Christmas, after-the-sale emails and 9-word re-engagement. Live by Nov 10.
+  3. Referrals, automatic concierge answers, Premium annual, the church path. January 2027.
+- **Waiting on the owner steps** in the plan's §11: the Resend account and domain, sender, mailing address, consent wording, bonus amounts.
+
 ### 1.4 Suggestions
 - **S0. Model safety net (urgent, backend only).** Production still calls `gemini-3-pro-image-preview` (Google lists its shutdown as 2026-06-25; it still answers today) and `gemini-2.5-flash` (deprecated). When either stops, generation breaks for everyone until the rebuild. `generateContent` can map the old model names to `gemini-3.1-flash-image` / a current flash model server-side, without touching the bundle. Ship the mapping (behind a flag) now, and flip it on the first sign of errors or immediately after a quality check in the lab.
 - **S1. Monitoring and alerts (do first, no rebuild needed).** A daily synthetic check that calls generation end to end, Cloud Monitoring alerts on `generateContent` error rate and on zero successful generations in 6 hours, a Gemini budget alert, and an uptime check on 5 key URLs. The 3.5-month outage would have been caught on day one.

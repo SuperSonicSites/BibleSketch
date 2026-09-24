@@ -17,6 +17,10 @@ Bible Sketch (https://biblesketch.app) turns Bible verses into printable colorin
 - The scheduled task `pinterest-daily` (7:00 local, desktop app) is owner-authorized (2026-09-24) to generate, review, publish and schedule 5 Pins a day, following the yearly calendar (`web/src/data/pin-year.json`, `node scripts/pins-plan.mjs`) and the learning loop (`pin-learn.json`, `scripts/pins-learn.mjs`), and to deploy the Worker and push `pins.json`, `pin-year.json`, `pin-learn.json` and the runbook, within the scope written in the runbook's "Daily scheduled task" section. That standing approval covers only that task's runs.
 - The Gemini key has an AI Studio monthly spend cap. On 2026-09-23 a big batch hit it and every customer's generation failed until the owner raised it: ask the owner about headroom before a large batch, and stop a batch after 3 failures in a row.
 
+## Email
+
+- Lifecycle and marketing email to sign-ups: [docs/email-marketing-plan.md](docs/email-marketing-plan.md). It covers the Dean Jackson philosophy, voice rules, campaigns, the Firestore → Resend system and CASL. Read its §1-2 and use the §9 checklist before writing any email; ROADMAP 1.6 tracks the build. Sending to real users is owner-approved until the owner grants a standing approval.
+
 ## Facts you can't infer from the code
 
 - **The production front-end source is lost.** Live = the minified bundle `hosting-public/assets/index-DHKtGwi1.js` (React 19.2, react-router 6, react-helmet-async). Root `App.tsx`, `components/`, `services/` are an **older** version: read them to understand behaviour, grep the bundle for what production actually does. Features that exist only in the bundle: blog, About, Verse Art pipeline, profile-completion modal, tag URL filters, Zaraz tracking. Front-end changes wait for the Astro rebuild (ROADMAP 1).
