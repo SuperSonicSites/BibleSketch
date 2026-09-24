@@ -25,7 +25,9 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
 ### Lifecycle email (ROADMAP 1.6, plan in docs/email-marketing-plan.md)
 - [ ] **Resend account.**
   - Create it and verify the sending domain `mail.biblesketch.app` (Resend can add the Cloudflare DNS records).
-  - Set the API key yourself: as a Firebase secret (`firebase functions:secrets:set RESEND_API_KEY`) and as a Worker secret (`npx wrangler secret put RESEND_API_KEY` in `web/`).
+  - Set the secrets yourself (plan §6.5):
+    - `RESEND_API_KEY` and `RESEND_WEBHOOK_SECRET` as Firebase secrets (`firebase functions:secrets:set <NAME>`);
+    - `EMAIL_HOOK_SECRET` (any random value) as both a Firebase secret and a Worker secret (`npx wrangler secret put EMAIL_HOOK_SECRET` in `web/`).
 - [ ] **Decisions (plan §11):**
   - the sender name ("Renaud at Bible Sketch"?) and where replies to hello@biblesketch.app go;
   - the mailing address for the CASL footer;

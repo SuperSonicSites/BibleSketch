@@ -158,12 +158,19 @@ Prices come from `web/src/pages/pricing.astro`:
 
 People who don't answer get the **teacher** path (the biggest group on Pinterest), softened to fit either.
 
-### 3.4 Stages (computed nightly, §6.3)
-- `new`: signed up in the last 14 days.
-- `active`: made a page in the last 30 days and still has credits.
-- `empty`: has used all of their credits and never bought.
-- `buyer`: bought a pack. `premium`: subscribed.
-- `quiet`: no activity for 30-89 days. `dormant`: 90 days or more.
+### 3.4 Stage and activity (computed nightly, §6.2)
+There are two separate fields, so a Premium subscriber can also be dormant.
+
+- **`stage`**, the relationship. The first match wins:
+  - `premium`: subscribed.
+  - `buyer`: bought a pack.
+  - `new`: signed up in the last 14 days.
+  - `empty`: 0 credits, never bought.
+  - `free`: has credits, never bought.
+- **`activity`**, the recent behaviour:
+  - `active`: made, printed or opened something in the last 30 days;
+  - `quiet`: 30-89 days;
+  - `dormant`: 90 days or more.
 
 ---
 
@@ -207,13 +214,13 @@ by the owner before it goes out. `{first}` is the first name (the email opens wi
 > *(super-signature, §5.9)*
 
 - **Congruence:** `{story}` is the story on the page or Pin where they signed up (the landing path we'll capture,
-  §6.2). Without it, use this week's story.
+  §6.3). Without it, use this week's story.
 
 **W1 (the sorting question, next day, on top of W0):**
 > Hi {first}, quick question: are these pages for a class, or for your kids at home?
 > — Renaud
 
-- **Reply handling (§6.5):**
+- **Reply handling (§6.8):**
   - "class", "church", "Sunday school", "kids at church", "VBS" → **teacher**;
   - "home", "my kids", "grandkids", "homeschool" → **family**;
   - "me", "myself", "adult", "for me" → **adult**.
@@ -233,10 +240,10 @@ by the owner before it goes out. `{first}` is the first name (the email opens wi
 - **teacher, T1** (the day after the reply): *"Great! What are you teaching this Sunday?"*
   - The reply names a story, and we answer with that story's page, filled in for their class's age. That's the magic
     trick: they told us what they need and got it within minutes.
-  - In phase 1 the owner answers these; in phase 3 the reply Worker answers automatically (§6.5).
+  - In phase 1 the owner answers these; in phase 3 the reply Worker answers automatically (§6.8).
 - **family, F1:** *"How old are your kids?"*
-  - The reply sets their default age group (Toddler / Kids / Older), so every later link opens the generator at the
-    right age.
+  - The reply sets `ageGroups`, using the app's values (Toddler, Young Child, Teen). Every
+    later link then opens the generator at the right age.
 - **adult, D1:** *"Do you color for quiet time, or just to relax?"*
   - Either answer leads to verse art (a fitting verse and font) or to the ornate full-page scenes that win on our
     adult board.
@@ -334,7 +341,7 @@ This follows the same calendar as Pinterest (`pin-year.json`). Each season gets:
 It sits under the sign-off, above the footer, and starts **"3 ways we can help this week:"**. The slots are chosen by
 stage, each one framed as already happening:
 
-| Slot | new / active | empty | buyer / premium |
+| Slot | new / free | empty | buyer / premium |
 |---|---|---|---|
 | 1 | "Every Thursday I send this Sunday's story with a ready page." (links to this week's page) | same | same |
 | 2 | this season's series ("The Advent pages go up one a day from Nov 29.") | same | same |
@@ -348,51 +355,213 @@ stage, each one framed as already happening:
 
 ---
 
-## 6. The system
+## 6. The system and its data
+
+The better we know someone, the more each email can sound like it was written for them: "the Noah page you were
+looking at", "next in your David series", "for your Young Child class", at 6 a.m. in their time zone. This section
+lists every field that makes that possible, where it lives, and how we collect it.
 
 ### 6.1 Where things live
-- **Firestore** is the source of truth for behaviour: `users/{uid}` (credits, downloadsRemaining, isPremium),
-  `users/{uid}/transactions` (the welcome bonus, each generation and refund, purchases through our own Zoho
-  webhook), sketches, and prints.
-- **Resend** holds the email side: contacts with their properties, unsubscribe status, Topics, Segments,
-  Automations (the sequences) and Broadcasts (the flagship and seasonal emails).
-- Nothing reads or writes Zoho for email.
+- **`users/{uid}` is public by design.** Anyone who knows a uid can read it (`allow get: if true` in
+  `firestore.rules`), because profile pages and gallery credits show the name and photo, and `onUserCreated` strips
+  the email from it.
+  - **No email or marketing data ever goes on it.**
+- **Four new places in Firestore:**
 
-### 6.2 Consent and persona at sign-up (needs a reviewed Firestore rules change)
-- **The sign-up form gets:**
-  - an **unticked** checkbox: *"Email me a free Bible story page each week, plus occasional offers. Unsubscribe
-    anytime."* (the owner approves the wording);
-  - one optional question: *"I'm making pages for: my class / my kids / myself"*. If they answer it, the sorting
-    email W1 is skipped and the branch starts straight away.
-- **Stored on `users/{uid}`:**
-  - `marketing: { optIn, at, text, source }`, with the exact wording shown, for CASL proof;
-  - `persona`;
-  - `landing`: the first page they viewed on this visit, captured in the browser, which gives the story for W0.
-  - The client creates this doc (`web/src/lib/session.ts`), so `firestore.rules` must allow these fields on create
-    and on the owner's update. **That rules change gets the security-check treatment** (`scripts/security-check.mjs`).
-- **Existing users (183)** get an in-app opt-in banner, not an email (§7).
+  | Place | Written by | Readable by | Holds |
+  |---|---|---|---|
+  | `users/{uid}/private/profile` | the user (rules validate each key), and functions | that user, functions | consent, answers, sign-up context |
+  | `users/{uid}/events/{id}` | the user, or the Worker acting as the user; create only | functions | prints, downloads, checkout clicks, page feedback |
+  | `emailProfiles/{uid}` | functions only | functions only (clients denied) | everything computed: stage, counts, taste, money, email engagement, offers |
+  | `emailReplies/{id}` | functions only | functions only | each reply: its text, the parsed answer, what we did with it |
 
-### 6.3 Events and sync (Firebase functions, which have admin access)
-- **`onUserCreated`** (exists): when they opted in, create the Resend contact with its properties and fire the
-  `signed_up` event.
-- **New `onTransactionCreated`** on `users/{uid}/transactions`:
-  - `page_made` (with the credits left);
-  - `credits_low` / `credits_zero`;
-  - `purchased` (pack or Premium);
-  - `refunded`.
-- **Prints:** the Worker's print and download endpoints fire `page_printed`.
-- **Checkout started:** the pricing page's plan click posts to a small Worker endpoint, which fires
-  `checkout_started` for C3.
-- **Consent changes:** a user-doc update trigger (the banner, or the account settings) creates or unsubscribes the
-  Resend contact.
-- **Nightly sync** (a scheduled function): recomputes each opted-in contact's properties, which catches anything the
-  events missed.
-  - Properties: `credits`, `pages`, `prints`, `premium`, `lastActive`, `persona`, `stage`, `lastStory`, `ageGroup`.
-- **Secret:** `RESEND_API_KEY`, which the owner sets (Firebase secret and Worker secret). Claude never handles it.
-- **Deploys:** these are functions deploys with an explicit, quoted `--only` list (CLAUDE.md), and they're
-  owner-approved.
+- **Existing sources, used as they are:**
+  - Firebase Auth: the email, `emailVerified`, `displayName`, the sign-in provider, and `lastRefreshTime` (the last
+    time the app was open, even without making a page).
+  - `users/{uid}`: `credits`, `downloadsRemaining`, `isPremium`, `planStatus`, `subscriptionStartDate`,
+    `createdAt`.
+  - `users/{uid}/transactions`: `bonus`, `usage`, `refund`, `credit_purchase` (with `pack` and `price`),
+    `subscription`.
+  - `sketches`: `userId`, `type` (scene or verse), `reference`, `age`, `style`, `font`, `isPublic`, `isBookmark`,
+    `tags`, `createdAt`.
+  - `generations/{uid}_{requestId}`: the status (charged, done or refunded) and the error code.
+- **Resend** holds copies for sending: contacts (email, first name, unsubscribe status, topics, and the properties
+  in §6.4), segments, Automations and Broadcasts.
+  - Firestore stays the source of truth, and Resend is rebuilt from it every night.
+- Nothing reads or writes Zoho for email: purchases already land in `transactions` through our own webhook.
 
-### 6.4 Resend setup
+### 6.2 The Firestore fields
+
+**`users/{uid}/private/profile`**: what the person tells us. They can see and change it in their account.
+
+| Field | Type and values | Set when | Used for |
+|---|---|---|---|
+| `emailOptIn` | boolean | sign-up checkbox, the opt-in banner, account settings | marketing email at all |
+| `optInAt` | timestamp | same | CASL proof |
+| `optInText` | string (the exact wording shown) | same | CASL proof |
+| `optInSource` | `signup` / `banner` / `account` | same | CASL proof; opt-in rate by place |
+| `persona` | `teacher` / `family` / `adult` | sign-up question, the W1 reply, or inferred | the branch, the offers, the wording |
+| `personaSource` | `signup` / `reply` / `inferred` | same | an answer always beats a guess |
+| `ageGroups` | list of the app's ages: `Toddler`, `Young Child`, `Teen`, `Adult` | F1/T1 reply, or inferred from pages made | the default age in every link; which pages we show |
+| `setting` | `sunday-school` / `childrens-church` / `christian-school` / `homeschool` / `vbs` / `home` / `personal` | a reply | "your class" vs "your kids"; the Beacon and church pitch |
+| `groupSize` | `1-5` / `6-15` / `16+` | a reply ("How many kids in your class?") | Spark vs Torch vs Beacon |
+| `curriculum` | string, 80 characters max ("God's Big Story") | a reply | series that match their lessons; church-plan leads |
+| `timezone` | IANA name (`America/Chicago`) | sign-up, from the browser | the flagship arrives at 6 a.m. their time |
+| `locale` | `en-US` / `en-CA` / `en-GB`... | sign-up, from the browser | Letter vs A4; the right Mother's Day (the UK's is in Lent) and Thanksgiving |
+| `signup` | map: `path`, `story`, `sketchId`, `utmSource`, `utmMedium`, `utmCampaign`, `referrer` (domain only), `epik` (yes/no), `at` | first visit, kept in the browser until they sign up | a congruent W0 ("the Noah page you were looking at"); which Pins and boards bring buyers |
+
+- Functions may also write `persona`, `ageGroups`, `setting`, `groupSize` and `curriculum` from a parsed reply.
+
+**`emailProfiles/{uid}`**: everything we compute. Rebuilt from the sources every night, updated live by the
+triggers.
+
+| Group | Fields | Comes from |
+|---|---|---|
+| Identity | `email`, `firstName` (first word of the display name), `emailVerified`, `provider` (`google` / `password`), `resendContactId` | Auth, Resend |
+| Lifecycle | `stage` and `activity` (§3.4), `stageSince`, `signedUpAt`, `cohort` (`2026-10`), `lastActiveAt` | computed; Auth `lastRefreshTime` + events |
+| Usage | `pagesMade`, `scenes`, `verses`, `edits`, `failed`, `prints`, `downloads`, `printsOfOwn`, `published`, `saved` (bookmarks), `pagesLast30`, `printsLast30`, `firstPageAt`, `lastPageAt`, `firstPrintAt`, `lastPrintAt` | transactions, sketches, generations, events |
+| Balance | `credits`, `downloadsRemaining`, `isPremium`, `planStatus` | `users/{uid}` |
+| Taste | `lastStory` (`{ref, sketchId, at}`), `recentRefs` (the last 10), `topBooks` (the top 3), `favAge`, `favStyle`, `favFont`, `verseShare` (0-1), `series` (`{seriesId: last order made}`, matched to `pin-year.json` items) | sketches |
+| Money | `purchases`, `revenue`, `firstPurchaseAt`, `lastPurchaseAt`, `lastPack`, `premiumSince`, `premiumRenewals`, `cancelledAt` | transactions, `users/{uid}` |
+| Email | `emailsSent`, `lastSentAt`, `lastOpenAt`, `lastClickAt`, `clicks30`, `lastReplyAt`, `replies`, `bouncedAt`, `complainedAt`, `unsubscribedAt`, `topics` (`{sundayPrep, offers}`) | Resend webhooks, the reply hook |
+| Answers | `lastAnswer` (`{question, answer, at}`) | the reply hook |
+| Offers | `offers.<id>` (`{sentAt, expiresAt, redeemedAt}`), e.g. `firstPack10`, `winback3`, `advent2026` | the offer logic; the purchase trigger |
+| Sync | `syncedAt`, `syncedHash` | the nightly sync (only changed contacts go to Resend) |
+
+- `offers` does two jobs. It stops an offer from repeating, and the purchase trigger reads it to grant a promised
+  bonus automatically.
+
+**`users/{uid}/events/{id}`**: behaviour that leaves no other trace.
+
+- **Rules:**
+  - create only, by that user;
+  - `type` is one of the values below, the keys are fixed, and `at` is the server time;
+  - no update and no delete.
+- **Forgery:** a user could fake their own events. The only effect is on their own emails; nothing about credits or
+  money reads these.
+
+| `type` | Payload | Written by |
+|---|---|---|
+| `page_printed` | `sketchId`, `own` (boolean), `paper` | the Worker's `/api/print` (it already acts with the user's token) |
+| `page_downloaded` | `sketchId`, `own` | the Worker's `/api/download` |
+| `checkout_started` | `plan` (`spark` / `torch` / `beacon` / `premium`) | the pricing page's plan buttons |
+| `page_feedback` | `sketchId`, `vote` (`up` / `down`) | the 👍/👎 after a page (phase 3) |
+
+- **Today, prints only lower `downloadsRemaining`,** and only on other people's pages. Nothing records who printed
+  what, and that's why this collection is needed.
+
+**`emailReplies/{id}`**: the fields are `uid`, `email`, `at`, `question` (which email it answers: `w1`, `t1`,
+`f1`, `nine-word`...), `text` (the first 2,000 characters, without the quoted history), `parsed` (`{field, value}`),
+`action` (`auto-answered` or `forwarded`) and `handledAt`.
+
+### 6.3 How we collect it (one question at a time)
+Following §1.4, every question in an email is also a way to collect data. Ask only when the answer changes what we
+send next, and never ask what their behaviour already tells us.
+
+| Where | What we ask or capture | Field |
+|---|---|---|
+| First visit, before sign-up | the landing page, its sketch and story, the UTM tags, the referrer domain, the Pinterest click id (a first-touch record kept in the browser) | `signup` |
+| Sign-up form | an **unticked** box: *"Email me a free Bible story page each week, plus occasional offers. Unsubscribe anytime."* (the owner approves the wording) | the consent fields |
+| Sign-up form (optional) | *"I'm making pages for: my class / my kids / myself"*. An answer skips W1 | `persona` |
+| Sign-up, silently | the browser's time zone and language | `timezone`, `locale` |
+| W1 reply | a class, or your kids at home? | `persona` |
+| T1 reply | What are you teaching this Sunday? | `lastAnswer`; `curriculum` if they name one |
+| T2 reply (after their 3rd page) | How many kids are in your class? | `groupSize`, `setting` |
+| F1 reply | How old are your kids? | `ageGroups` |
+| D1 reply | For quiet time, or just to relax? | `setting` = `personal` |
+| 9-word reply | yes or no | "no" moves them to seasonal-only (`topics.sundayPrep` off) |
+| Behaviour, no question | the ages, styles, fonts and books of the pages they make, and the days they make them | inferred `ageGroups`, `favStyle`, `topBooks`, and a guessed `persona` (never over an answer) |
+| Account settings | they can change their persona, ages and opt-in at any time | the profile |
+
+- **Existing users (183)** get an in-app opt-in banner, not an email (§7). It writes the same consent fields, with
+  `optInSource: banner`.
+
+### 6.4 What Resend gets: contact properties and events
+- **The principle:** compute everything in Firestore and give Resend only flat, ready-to-use values.
+  - Segments then filter on simple equality (`stage = empty`).
+  - Templates insert values as they are (`{{{next_story_url}}}`) with no logic in Resend.
+- **Before building:** confirm the property types and limits in the current Resend docs.
+
+**Contact properties** (snake_case, all set by the sync or the triggers):
+
+| Property | Example | Used by |
+|---|---|---|
+| `first_name` (built in) | Sarah | every email |
+| `persona`, `setting` | teacher, sunday-school | branches, wording, super-signature |
+| `stage`, `activity` | empty, dormant | segments, stop rules |
+| `age_group` | Young Child | the default age in every link |
+| `credits`, `prints_left` | 1, 3 | C1, C2 |
+| `pages_made`, `prints` | 4, 2 | C4, milestones |
+| `is_premium`, `last_pack` | no, torch | B1, B3, B4; keeping sales emails away from subscribers |
+| `last_story`, `last_story_url` | Jonah 1, a link to their page | the check-ins; "how did it go?" |
+| `next_story`, `next_story_url` | David and Goliath, a pre-filled generator link | "next in your series"; the flagship's personal line |
+| `landing_story`, `landing_url` | Noah's Ark, a link | W0 |
+| `signup_source`, `signup_board` | pinterest, sunday-school | congruent copy; reports |
+| `timezone`, `paper` | America/Chicago, letter | send time; print links |
+| `curriculum`, `group_size` | God's Big Story, 6-15 | teacher emails; Beacon and church offers |
+| `offer`, `offer_ends` | "+10 pages on your first pack", "Sunday, Oct 4" | C2 and the seasonal emails (the real deadline, written out) |
+
+**Events** (they start and stop the Automations; their payload values can go into the email):
+
+| Event | Fired by | Payload | Starts / stops |
+|---|---|---|---|
+| `signed_up` | consent given (profile trigger) | `landing_story`, `landing_url` | starts W0/W1 and activation |
+| `persona_set` | the profile trigger, the reply hook | `persona` | starts T1 / F1 / D1 |
+| `page_made` | a `usage` transaction | `story`, `sketch_url`, `credits_left` | stops activation; milestones |
+| `page_printed` | an events trigger | `story`, `own` | stops A2 |
+| `credits_low`, `credits_zero` | a `usage` transaction | `credits_left` | C1, C2 |
+| `checkout_started` | an events trigger | `plan` | C3 (waits 1 hour for `purchased`) |
+| `purchased` | a `credit_purchase` transaction | `pack`, `credits_added`, `price` | B1; stops C1-C5 |
+| `premium_started`, `premium_renewed`, `premium_cancelled` | a `subscription` transaction; a `planStatus` change | — | B3; win-back |
+| `page_failed` | a `refund` transaction | `story`, `error` | the apology (transactional) |
+| `replied` | the reply hook | `question`, `answer` | the next step of a branch |
+| `went_dormant` | the nightly sync | `persona` | the 9-word email |
+
+### 6.5 The pipeline (Firebase functions, which have admin access)
+- **`onUserCreated`** (exists): also creates `emailProfiles/{uid}`. Everyone gets one, because it feeds the
+  numbers in §8, but only people who opted in become Resend contacts.
+- **New `onPrivateProfileWritten`** on `users/{uid}/private/profile`. It watches the person's own answers:
+  - opting in creates or re-subscribes the Resend contact, and fires `signed_up` the first time;
+  - opting out unsubscribes them;
+  - a new persona fires `persona_set`.
+- **New `onTransactionCreated`:** updates the counters, and fires `page_made`, `credits_low`, `credits_zero`,
+  `purchased`, `premium_*` and `page_failed`. When a promised offer is open, it grants the bonus.
+- **New `onEventCreated`** on `users/{uid}/events`: updates the counters, and fires `page_printed` and
+  `checkout_started`.
+- **New HTTPS `resendWebhook`:** checks Resend's signature (`RESEND_WEBHOOK_SECRET`), then records delivered,
+  opened, clicked, bounced, complained and unsubscribed in `emailProfiles`. A bounce or a complaint stops all
+  marketing to that person.
+- **New HTTPS `emailReply`:** called by the Email Worker (§6.8) with a shared secret (the purge secret's pattern,
+  in reverse). It stores the reply in `emailReplies`, applies the parsed answer, and fires `replied`.
+- **Nightly scheduled `emailSync`:**
+  - recomputes `stage`, `activity`, the taste fields and `next_story` from the sources;
+  - sends Resend only the contacts that changed (a hash comparison), throttled, because Resend's API rate limit is
+    a few requests a second;
+  - fires `went_dormant`.
+- **One Resend key, in one place:** only the functions hold `RESEND_API_KEY`.
+  - The Worker never talks to Resend. Prints travel through `events` docs, and replies through the `emailReply`
+    hook.
+  - Secrets, all set by the owner (Claude never handles them):
+    - `RESEND_API_KEY` and `RESEND_WEBHOOK_SECRET`: Firebase secrets;
+    - `EMAIL_HOOK_SECRET`: a Firebase secret and a Worker secret, with the same value.
+- **Deploys:** functions deploys with an explicit, quoted `--only` list (CLAUDE.md), and they're owner-approved.
+  The `firestore.rules` change goes through `scripts/security-check.mjs` first (§6.10).
+
+### 6.6 Links that carry the context
+- **Pre-filled generator links (new, small front-end change):**
+  - `/?ref=Jonah+1:1-17&age=Young+Child&style=Sunday+School`
+  - `/bible-verse-coloring?ref=John+3:16&font=Playful`
+
+  The link fills in the form but doesn't generate: a click must never spend a credit. Today the generator only
+  reads `?sketch=`.
+- **Tracking tags:** every email link carries `utm_source=email&utm_medium=email&utm_campaign=<email id>`
+  (`w0`, `c2`, `sunday-prep-2026-11-12`...). The site and GA4 then see which email brought each visit, sign-up and
+  purchase.
+- **Print links** open the page's print view at the reader's `paper` size.
+- **The sync computes every personal link** (`next_story_url`, `last_story_url`, `landing_url`), so the templates
+  only insert them.
+
+### 6.7 Resend setup
 - **Sending domain:** `mail.biblesketch.app`, with SPF, DKIM and DMARC in Cloudflare DNS. A subdomain keeps the root
   domain's reputation safe.
 - **Topics** (so people can leave one without leaving everything):
@@ -407,18 +576,21 @@ stage, each one framed as already happening:
 - **Check first:** before building, confirm the API shapes in the current Resend docs (Contacts properties, Events,
   Automations, Topics). This product changes quickly.
 
-### 6.5 Replies: the email concierge
+### 6.8 Replies: the email concierge
 - Replies go to `hello@biblesketch.app`, through Cloudflare Email Routing, to an **Email Worker** (the `email()`
   handler on `biblesketch-web`).
-- **Phase 1:** it logs the reply, sets `persona` on simple W1 answers (the keyword rules in §5.1), and forwards
-  **every** reply to the owner's inbox. The owner is the concierge and answers the "love letters".
+- **Phase 1:** the Worker:
+  - strips the quoted history and matches the sender to a uid;
+  - parses the simple answers: the W1 keyword rules in §5.1, the age groups for F1, yes/no for the 9-word email;
+  - posts the result to the `emailReply` function (§6.5);
+  - forwards **every** reply to the owner's inbox. The owner is the concierge and answers the "love letters".
 - **Phase 3:** automatic answers to the easy, high-value replies:
   - "What are you teaching this Sunday?" gets back a link to that story, filled in for their age;
   - "yes" to a 9-word email gets this week's page and a gift.
   - Anything unclear still goes to the owner.
   - Optional: a daily scheduled task drafts replies for the owner to approve.
 
-### 6.6 The weekly flagship job
+### 6.9 The weekly flagship job
 - A scheduled job runs on Wednesday. It could be a step in a Claude scheduled task (`email-weekly`) or a Worker
   cron.
 - **Steps:**
@@ -427,6 +599,27 @@ stage, each one framed as already happening:
   3. Fill in the template.
   4. Create a Resend Broadcast for Thursday 6:00 a.m. ET.
 - **Approval:** a draft for the owner to approve until a standing approval exists. Then it sends automatically.
+- **Personal lines:** the Broadcast is the same for everyone, except the properties it inserts:
+  - `first_name`;
+  - `next_story_url` ("next in your series");
+  - `age_group` in the "make your own version" link.
+
+### 6.10 Privacy, security and deletion
+- **Collect nothing sensitive:** no church name, no denomination, no children's names or exact ages (age groups
+  only), and no free text beyond `curriculum` and the replies themselves.
+- **Rules** (`firestore.rules`, checked by new `scripts/security-check.mjs` steps):
+  - another user can't read or write someone's `private/profile`;
+  - a user can't write unknown keys or values outside the lists in §6.2;
+  - `events` are create-only, with the allowed types;
+  - clients can't read `emailProfiles` or `emailReplies`.
+- **Account deletion:** `onUserDeleted` (exists) also deletes `private/profile`, `events`, `emailProfiles/{uid}`,
+  their `emailReplies`, and the Resend contact.
+- **Reply texts** are deleted after 12 months, and the parsed answers stay on the profile.
+- **The privacy policy** (`web/src/pages/privacy.astro`) must describe all of this before launch. The owner approves
+  that copy. It covers:
+  - the marketing email;
+  - Resend as the processor;
+  - what we keep and why.
 
 ---
 
@@ -450,6 +643,9 @@ stage, each one framed as already happening:
 ---
 
 ## 8. Numbers to track (added to the monthly report email)
+Every number here comes from `emailProfiles` (§6.2). Cohorts by sign-up month (`cohort`) and by source
+(`signup_source`, `signup_board`) show which Pins and boards bring people who buy, and not just people who sign up.
+
 | Metric | Today | Target by March 2027 |
 |---|---|---|
 | Opt-in rate at sign-up | n/a | 50%+ |
@@ -494,12 +690,19 @@ stage, each one framed as already happening:
 **Phase 0 (owner, now):** the steps in §11.
 
 **Phase 1 (about a week of build once Resend is ready; target Oct 9):**
-- consent, persona and landing capture at sign-up, the rules change and the security check, and the opt-in banner
-  for existing users;
-- the Resend contact on sign-up, the transaction trigger events, and the nightly sync;
-- the W0/W1 welcome and sort, activation A1-A3, and the conversion emails C1-C2;
-- the reply Worker (log, persona, forward to the owner);
-- email numbers in the monthly report.
+- **The data (§6.2-6.3):**
+  - `private/profile` with its rules and security-check steps;
+  - the first-touch capture and the sign-up questions;
+  - the opt-in banner for existing users;
+  - `emailProfiles` (built for all 183 users on the first run);
+  - `events`, written by `/api/print`, `/api/download` and the pricing buttons.
+- **The pipeline (§6.5):** the profile, transaction and events triggers, `resendWebhook`, and the nightly
+  `emailSync`.
+- **Pre-filled generator links and the tracking tags (§6.6).**
+- **The emails:** the W0/W1 welcome and sort, activation A1-A3, and the conversion emails C1-C2.
+- **Replies:** the reply Worker and the `emailReply` hook (parse, store, forward to the owner).
+- **Reporting:** email numbers in the monthly report (from `emailProfiles`).
+- **Deletion:** `onUserDeleted` cleanup, and the privacy policy update.
 
 **Phase 2 (live by Nov 10, before the Advent announcement on Nov 12):**
 - the weekly Sunday Prep flagship (the first 4 approved by the owner) and the super-signature;
@@ -517,13 +720,16 @@ stage, each one framed as already happening:
 ---
 
 ## 11. Owner steps and decisions
-1. **Create a Resend account.** Verify `mail.biblesketch.app` (Resend can add the Cloudflare DNS records), then set
-   `RESEND_API_KEY` yourself as a Firebase secret and as a Worker secret (`npx wrangler secret put RESEND_API_KEY`
-   in `web/`).
+1. **Create a Resend account.** Verify `mail.biblesketch.app` (Resend can add the Cloudflare DNS records). Then set
+   these secrets yourself (§6.5):
+   - `RESEND_API_KEY` and `RESEND_WEBHOOK_SECRET` as Firebase secrets
+     (`firebase functions:secrets:set <NAME>`);
+   - `EMAIL_HOOK_SECRET`, a random value of your choice, as a Firebase secret and as a Worker secret
+     (`npx wrangler secret put EMAIL_HOOK_SECRET` in `web/`).
 2. **Sender:** is "Renaud at Bible Sketch", with replies to `hello@biblesketch.app`, OK? Where should replies be
    forwarded?
 3. **A mailing address** for the footer (CASL).
-4. **Approve** the consent checkbox wording and the persona question (§6.2).
+4. **Approve** the consent checkbox wording and the persona question (§6.3), and the privacy policy update (§6.10).
 5. **Bonus amounts:**
    - the first-purchase bonus (proposed: +10 pages for 7 days after running out);
    - the re-engagement gift (proposed: 3 pages);
