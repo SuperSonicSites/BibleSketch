@@ -46,7 +46,9 @@ export const GET: APIRoute = async ({ url, cache, cookies }) => {
 <button class="btn" type="submit">Publish to Pinterest</button></form>
 <p class="muted">Each Pin gets its title, description, link to its page on biblesketch.app, and alt text.</p>
 <h2>Stats</h2>${(await connected('production'))
-    ? '<p><a class="btn" href="/api/pinterest/report">Account and Pin stats (JSON)</a></p>'
+    ? `<p><a class="btn" href="/api/pinterest/report">Account and Pin stats (JSON)</a></p>
+<form method="post" action="/api/pinterest/report"><button class="btn" type="submit">Email the monthly report now</button></form>
+<p class="muted">The report also goes out by itself on the 24th of each month.</p>`
     : `<p>Stats read the live account, which needs its own connection.</p>
 <p><a class="btn" href="/api/pinterest/connect?env=production">Connect for stats</a></p>`}`);
 };

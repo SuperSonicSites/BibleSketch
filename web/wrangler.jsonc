@@ -1,7 +1,8 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "biblesketch-web",
-  "main": "@astrojs/cloudflare/entrypoints/server",
+  // Astro's handler plus the cron below (src/worker.ts).
+  "main": "./src/worker.ts",
   "compatibility_date": "2026-09-22",
   "compatibility_flags": ["nodejs_compat"],
   "assets": { "directory": "./dist", "binding": "ASSETS" },
@@ -36,6 +37,10 @@
   "images": { "binding": "IMAGES" },
   // Pinterest API (src/lib/pinterest.ts): encrypted OAuth tokens and published-Pin markers. PINTEREST_ENV
   // becomes "production" once the app has Standard access. Secrets: PINTEREST_APP_SECRET, PINTEREST_TOKEN_KEY.
-  "kv_namespaces": [{ "binding": "PINTEREST", "id": "944b03ce0f58499c92672d833a199194" }]
+  "kv_namespaces": [{ "binding": "PINTEREST", "id": "944b03ce0f58499c92672d833a199194" }],
+  // Monthly Pinterest report (src/lib/pinterest-email.ts), 13:00 UTC on the 24th, sent through Email Routing to a
+  // verified destination address of the account (free; the only address this binding can reach).
+  "triggers": { "crons": ["0 13 24 * *"] },
+  "send_email": [{ "name": "REPORT_EMAIL", "destination_address": "renaud@supersonicsites.com" }]
   // Secret PURGE_SECRET: `npx wrangler secret put PURGE_SECRET` (local dev: .dev.vars).
 }

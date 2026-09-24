@@ -24,7 +24,7 @@ export const sandbox = () => E.PINTEREST_ENV !== 'production';
 export type Env = 'sandbox' | 'production';
 export const current = (): Env => (sandbox() ? 'sandbox' : 'production');
 const API = (env: Env) => (env === 'sandbox' ? 'https://api-sandbox.pinterest.com/v5' : 'https://api.pinterest.com/v5');
-const BOARD_NAMES: Record<PinEntry['board'], string> = {
+export const BOARD_NAMES: Record<PinEntry['board'], string> = {
   'sunday-school': 'Sunday School Activities & Bible Coloring Lessons',
   christmas: 'Christmas Coloring Pages & Nativity Printables',
   scripture: 'Scripture Coloring Sheets | Bible Verse Coloring',
@@ -124,7 +124,7 @@ export async function api(path: string, init: { method?: string; body?: unknown 
 }
 
 // Every item of a paged list (250 a page, bookmark cursor).
-async function all(path: string, env = current()) {
+export async function all(path: string, env = current()) {
   const items: Record<string, any>[] = [];
   let bookmark: string | undefined;
   for (let page = 0; page < 20; page++) {
