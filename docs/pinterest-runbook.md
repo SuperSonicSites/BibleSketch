@@ -1,0 +1,106 @@
+# Pinterest runbook (where we are, and how to do each recurring job)
+
+Why we do things this way: [pinterest-strategy.md](pinterest-strategy.md) (the plan, with the Pin copy rules in
+§3.3a) and [pinterest-scripture-plan.md](pinterest-scripture-plan.md) (verse art). Decisions: ROADMAP 1.5.
+Owner-only steps: CHECKLIST, "Pinterest auto-publish".
+
+## Status (update this block at the end of every Pinterest session)
+
+As of **2026-09-24 00:40 UTC**:
+- **Calendar** (`web/src/data/pins.json`, 155 entries, `pins-check`: no errors):
+
+  | Board | Pins | Dates |
+  |---|---|---|
+  | Christmas | 40 | Sept 23 - Dec 19 |
+  | Scripture | 74 | Sept 24 - Dec 20 (all verse art, `plain` template) |
+  | Sunday School | 41 | Sept 25 - Nov 13 (one a day Oct 1 - Nov 5) |
+
+  Ramp capacity through Dec 20 is ~370; **216 slots are open**, first open day Oct 2. Sunday School has nothing after
+  Nov 13 and Christmas is thin in December by design (front-loaded).
+- **Feeds connected** (Pinterest > Settings > Bulk create Pins): `christmas.xml` (Sept 23), `scripture.xml`
+  (Sept 24 00:01 UTC). **Not yet:** `sunday-school.xml` (connect after 2026-09-25 00:00 UTC, when its first Pin is
+  in the feed; Pinterest refuses an empty feed). `easter.xml` from Feb 1. `adult.xml` stays unconnected (paused).
+- **Pinterest API app** "Bible Sketch Pin Publisher" (id 1615048): Trial access; **Standard upgrade submitted
+  2026-09-24** with the demo video (`C:\Users\renau\Videos\bible-sketch-pinterest-api-demo-final.mp4`).
+  Connected to @biblesketch in Sandbox. 3 Sandbox test Pins exist (boards "Sandbox - christmas/scripture/
+  sunday-school", visible only to us).
+- **Open decisions** (CHECKLIST): AI disclosure label on API Pins; "Free Printable" wording on the kids' banners.
+- **Next jobs:** connect `sunday-school.xml` (Sept 25 after 8 pm EDT); weekly alt text; generate Sunday School
+  pages for Nov 6 onward and more Christmas scenes; read the paper/purple test mid-February; first day-30
+  results read mid-November (strategy §4).
+
+## Weekly: alt text on RSS-published Pins
+RSS can't carry alt text. In `web/`: `node scripts/pins-alt.mjs > alt.js`, then run its contents in the signed-in
+Pinterest tab (browser tool `javascript_exec`, or DevTools). Idempotent. Stops being needed once the API publisher
+replaces RSS.
+
+## Generating a batch of pages (master account)
+The master account (`TiAEiMqWxpWqxCLtoI5OgHAvtf33`, the owner's signed-in tab on biblesketch.app) has its own
+**250 generations a day** outside the global 500 pool (`functions/index.js`, `MASTER_DAILY_IMAGE_LIMIT`); other
+accounts keep 60. Each generation costs 1 credit (the master account has hundreds) and real Gemini money.
+
+1. **Gemini spend cap.** The Gemini key sits under an AI Studio monthly spend cap (ai.studio/spend, owner only).
+   On 2026-09-23 a ~140-page day hit it and every generation, customers' included, failed with "exceeded its
+   monthly spending cap" until the owner raised it. Before a large batch, ask the owner to check the headroom.
+2. **Run it in the signed-in tab** (open any biblesketch.app page first; find the current bundle name with
+   `[...document.scripts].map(s => s.src)`, it changes with every deploy):
+   ```js
+   const g = await import('/_astro/generate.<hash>.js');
+   const LIST = [/* { kind:'scene', book:'Jonah', chapter:2, startVerse:10, endVerse?, age:'Toddler', style:'Sunday School' }
+                    or { kind:'verse', book, chapter, startVerse, font:'Elegant Script'|'Classic Serif'|'Modern Brush'|'Playful' } */];
+   window.__batch = LIST.map((x) => ({ ...x, status: 'queued' }));
+   let next = 0, fails = 0; window.__stop = false;
+   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+   const worker = async (w) => { await sleep(w * 6000); while (next < LIST.length && !window.__stop) {
+     const it = window.__batch[next++]; it.status = 'running';
+     try { const r = await g.callFunction('createSketch', { requestId: crypto.randomUUID(), ...LIST[next - 1] });
+       Object.assign(it, { status: r.status, sketchId: r.sketchId, imageUrl: r.imageUrl, error: r.error }); }
+     catch (e) { Object.assign(it, { status: 'error', error: e.message }); }
+     if (it.status === 'done') fails = 0; else if (++fails >= 3) window.__stop = true;   // cap or outage: stop
+     await sleep(4000); } };
+   window.__done = Promise.all([0, 1, 2].map(worker));
+   ```
+   Three workers, 4 s apart: verse art fetches bible-api.com, which rate-limits around 15 requests / 30 s. A page
+   takes 30-60 s; 30 pages take ~15 minutes. Poll `window.__batch`. A refunded run cost nothing; the logs
+   (`firebase functions:log --only createSketch --project biblesketch-5104c`) say why.
+3. **Inputs that work.** Scenes: `age` Toddler (style Sunday School only) or Young Child (Sunday School best);
+   one key moment with 1-3 named characters. Verse art prints **one verse** (`startVerse` only), under 30 words
+   (longer ones come out cramped), WEB text with "the LORD" (`withLord`), Psalms as "Psalm", Proverbs as "Proverbs".
+4. **Review every page up close** (ROADMAP 1.5): `python web/scripts/pins-review.py pages.json sheet` makes
+   contact sheets of 3; crop details with PIL when text or faces are small. Reject: lone figure with no action,
+   sparse or empty setting, stern or angry faces on kids' pages, violence, faint lines, broken or open border,
+   stray marks or quotes, wrong or misspelled text, anything that breaks a beloved tradition (bearded Moses,
+   three magi). Regenerate the verse or scene; never schedule a reject.
+5. **Publish the approved pages** (`isPublic: true`, the same field the app's "Publicly Visible" toggle sets):
+   ```js
+   const f = await import('/_astro/firebase-client.<hash>.js'); const { db, fs } = await f.r();
+   for (const id of IDS) { const ref = fs.doc(db, 'sketches', id); const d = (await fs.getDoc(ref)).data();
+     if (d.userId === 'TiAEiMqWxpWqxCLtoI5OgHAvtf33' && d.isPublic !== true) await fs.updateDoc(ref, { isPublic: true }); }
+   ```
+6. **Schedule**: write the entries by hand to the copy rules (strategy §3.3a; Scripture titles lead with the
+   reference, scripture plan §3), place them in open days under the ramp (`dailyCap` in `pins-check.mjs`), one per
+   board per day, the same story at least 4 days apart, kids' templates alternating `paper`/`purple`, Scripture
+   `plain`. Then `node scripts/pins-check.mjs` (no errors), build, `npx wrangler deploy`, check one `/pin-img/`
+   and one page, commit, push, and update the Status block above.
+
+## Connecting a feed
+Pinterest > Settings > Bulk create Pins > Auto-publish > Add another: URL `https://biblesketch.app/pins/<board>.xml`,
+pick the board by name (the picker defaults to a Sandbox board; search for the real one), Save. Only on a day the
+feed has an item. Record it in CHECKLIST and the Status block.
+
+## Pinterest API (Sandbox now, production after Standard access)
+- Code: `web/src/lib/pinterest.ts`, owner page `https://biblesketch.app/api/pinterest` (Connect, Publish, Sign out;
+  only @biblesketch is accepted). Tokens AES-GCM encrypted in KV `PINTEREST`; secrets `PINTEREST_APP_SECRET`
+  (owner-set) and `PINTEREST_TOKEN_KEY`; vars `PINTEREST_APP_ID`, `PINTEREST_ENV` in `web/wrangler.jsonc`.
+- Sandbox quirks: production boards are hidden but their names are still taken, and board names must be under
+  50 characters (hence "Sandbox - <board>").
+- **After Standard access:** set `PINTEREST_ENV` to `production`, deploy, owner reconnects once at
+  /api/pinterest; build the daily publisher (a Worker cron that publishes each day's due entries with
+  `publish()`, which already sets alt text and refuses duplicates); disconnect the RSS feeds the same day so
+  nothing posts twice; apply the owner's AI-disclosure decision (`ai_disclosures: { values: ['AI_MODIFIED'] }`).
+- Updating an existing Pin (e.g. alt text on RSS Pins) is beta in production and not available to our app.
+
+## Reading performance
+In the signed-in Pinterest tab, `/resource/BoardFeedResource/get/` with `source_url` and header
+`X-Pinterest-PWS-Handler: www/[username]/[slug].js` returns each Pin's `creator_analytics` (lowercase keys:
+`impression`, `save`, `outbound_click`, `pin_click`). Judge nothing before day 30 (strategy §4).
