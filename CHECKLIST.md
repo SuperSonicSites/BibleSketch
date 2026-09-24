@@ -4,6 +4,17 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
 
 ## Open
 
+### Start here (priority order, 2026-09-24)
+1. **Tonight, after 8 pm EDT:** connect `sunday-school.xml` (Pinterest auto-publish, below).
+2. **Zaraz sign-up fix,** if the browser agent hasn't finished it (below).
+3. **"Run now" once on `pinterest-daily`** and approve its prompts (below).
+4. **Before mid-October: the outage win-back decision** (Lifecycle email, below). The April sign-ups age out of CASL's 6-month window during October.
+5. **Resend:** the account, domain and secrets (Lifecycle email, below).
+6. **The email decisions,** then tell Claude "go" for phase 0.5 (below).
+7. **Zoho:** create the $1.99 prints plan, if you want the test (below).
+8. **Before the balance runs out (about mid-January):** add the 5,000 credits to the master account (below).
+9. **Brent's Cloudflare verification click** (below).
+
 ### Decisions
 - [x] **Unpaid premium/credits accounts.** 8 accounts have premium or credits without any payment (beta-week sign-ups, Nov 24-28, 2025; one orphan doc `EIV569…` with no Auth user). Keep or revoke? - ANSWER: KEEP
 - [x] **Bucket CORS.** Allow GET from `https://biblesketch.app` on the Storage bucket now, or wait for the rebuild (needed before any browser-side image editing; see ROADMAP 1.1). - ANSWER: ENABLED 2026-09-23 (verified: GET from biblesketch.app returns Access-Control-Allow-Origin)
@@ -18,6 +29,16 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
 - [ ] **Gemini spend alert.** On 2026-09-23 the AI Studio monthly spend cap stopped all generations (customers too) until you raised it. Add a Cloud Billing budget alert on the Gemini project at ~80% of the cap (ROADMAP S1) so it never surprises you.
 - [x] **Deploy the drawing guidance** (2026-09-24, run by Claude at the owner's request; verified with a live Genesis 8:11 generation).
 - [ ] **Daily Pinterest task (`pinterest-daily`, 7:00 every day):** keep the Claude desktop app open (a missed run happens at the next launch) and the in-app browser signed in to biblesketch.app (master account) and Pinterest. Click "Run now" once on the task (sidebar > Scheduled) and approve its tool prompts, so later runs don't stop on a permission prompt. Raise the Gemini spend cap in AI Studio if a run reports the cap.
+- [ ] **Zaraz: fix Pinterest sign-up tracking** (Cloudflare dashboard > Zaraz > Tools > Pinterest Conversions API > the "Signup" action). Skip it if the browser agent already did this.
+  - **Why:** Pinterest rejects the sign-ups with a 400, because Zaraz sends the email and external ID as text where Pinterest needs a list.
+  - **The fix:**
+    - remove the **Email** and **External ID** fields;
+    - keep **Click ID** (cookie `_epik`) and **Event ID** (event property `event_id`; the site sends `signup_<uid>` since 2026-09-24);
+    - keep only the "Signup - Google" trigger (`CompleteRegistration`), and change nothing else.
+  - **Test in Zaraz debug mode** on biblesketch.app: `zaraz.track('CompleteRegistration', { event_id: 'signup_zaraz-debug-2' })`. Pinterest should answer 200, and a sign-up should appear in Pinterest Ads > Conversions within minutes. Turn debug mode off afterwards.
+- [ ] **Add 5,000 credits to the master account** (blocked for Claude as a production data write). The daily Pinterest task uses about 6-7 generations a day, and 724 credits last until about mid-January.
+  - Firebase console > Firestore Database > `users` > `TiAEiMqWxpWqxCLtoI5OgHAvtf33` > `credits`: add 5,000 to the current value (724 on 2026-09-24).
+  - The Gemini spend cap stays the real limit.
 - [ ] **Brent: click Cloudflare's verification email** (sent 2026-09-24 to brent@supersonicsites.com, "verify your destination address"). Until then his CC of the monthly Pinterest report is skipped (renaud@ still gets it).
 - [ ] Weekly (Claude can do it): alt text on the Pins RSS published that week. In `web/`: `node scripts/pins-alt.mjs`, then run the printed snippet in the signed-in Pinterest tab (DevTools console, or ask Claude). Idempotent.
 - [x] Old Pin "Joshua 1:9 Memory Verse" (385 saves) had no link: linked on 2026-09-23 to `/coloring-page/joshua-1-9/5SISdcUP4jxzkCc7qUXw` (a different Joshua 1:9 page than the RSS one, so each page keeps one Pin). Its creator stats (22,469 impressions, 385 saves) were intact after the edit; watch its analytics for a few days.
@@ -27,7 +48,11 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
   - Create it and verify the sending domain `biblesketch.app` (Resend can add the Cloudflare DNS records; its return path goes on a `send.` subdomain, and Email Routing keeps receiving mail).
   - **Urgent decision (plan §12.1):** a one-time, honest win-back email to the 85 people who signed up since Mar 26 and never got to make a page (the generator was down Jun-Sep), relying on CASL implied consent. The April sign-ups age out during October. Decided 2026-09-24: the gift is a month of unlimited prints. Still open: the implied-consent basis (a lawyer check is worth it), plus approval of the Worker deploy and the grant script.
   - **Opt-in bonus** (decided 2026-09-24: extra free prints for joining the emails): confirm the number (+5 proposed) and the checkbox wording.
-  - [x] **Billing webhook fix deployed** (2026-09-24, owner-approved; revision handlezohowebhook-00137; unsigned calls still 401). Only the Premium plan code grants Premium. Next: create the $1.99 prints plan in Zoho (plan §12.20) and give Claude its plan code.
+  - [x] **Billing webhook fix deployed** (2026-09-24, owner-approved; revision handlezohowebhook-00137; unsigned calls still 401). Only the Premium plan code grants Premium.
+  - [ ] **$1.99 prints-only test (plan §12.20):**
+    - decide yes or no, and monthly, annual ($14.99), or both;
+    - if yes, create the plan in Zoho Billing (no automation rule is needed yet) and give Claude its plan code;
+    - keep it off the pricing page: the offer only goes out by email.
   - Set the secrets yourself (plan §6.5):
     - `RESEND_API_KEY` and `RESEND_WEBHOOK_SECRET` as Firebase secrets (`firebase functions:secrets:set <NAME>`);
     - `EMAIL_HOOK_SECRET` (any random value) as both a Firebase secret and a Worker secret (`npx wrangler secret put EMAIL_HOOK_SECRET` in `web/`).
@@ -36,7 +61,12 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
   - the mailing address for the CASL footer;
   - the consent checkbox wording and the persona question;
   - the bonus amounts (first purchase, win-back, seasonal, referral);
-  - implied consent for the 4 past buyers.
+  - implied consent for the 4 past buyers;
+  - is the weekly Thursday page free to print, so it doesn't use up one of the free prints (§12.4)? If not, the checkbox drops "free";
+  - the privacy policy update, which Claude drafts for your approval before launch (§6.10);
+  - **"go" for phase 0.5 (§10):** the consent checkbox and persona question, the opt-in bonus, and "unlimited prints until". None of it needs Resend yet. It then needs your approval of one Worker deploy and one functions deploy.
+- [ ] **Check how many accounts never verified their email (§12.6).** It's an Auth export, so you run it, because it contains personal data. Claude can give you the command. If the number is high, the verification email is the first thing to fix.
+- [ ] **Later:** a standing approval for the automated emails, once you've read the first versions (§11).
 
 ### Astro rebuild, phases 3-5
 - [x] ~~**Let the preview site sign in**~~ Not needed: the owner chose to test on the live site (2026-09-23). (the browser API key only accepts biblesketch.app): Google Cloud console > APIs & Services > Credentials > the Firebase browser key (`AIzaSyAxrH…`) > Website restrictions: add `https://biblesketch-web.supersonicworkers.workers.dev/*`, Save (up to 5 min to apply). For Google sign-in there too: Firebase console > Authentication > Settings > Authorized domains: add `biblesketch-web.supersonicworkers.workers.dev`. **Remove both after cutover step 2.**
