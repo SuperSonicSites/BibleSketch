@@ -108,7 +108,7 @@ export async function signUpWithEmail(email: string, password: string, name: str
       throw e;
     }
     // Fix: the bundle fired CompleteRegistration only for Google sign-ups started from the sign-up view.
-    track('CompleteRegistration', { em: user.email, external_id: user.uid });
+    track('CompleteRegistration', { em: user.email, external_id: user.uid, event_id: `signup_${user.uid}` });
     await fa.signOut(auth);
   } finally {
     signingUp = false;
@@ -126,13 +126,14 @@ export async function logInWithEmail(email: string, password: string) {
   }
 }
 
-// `k8`. CompleteRegistration fires for genuinely new accounts only (the bundle keyed it on the modal view).
+// `k8`. CompleteRegistration fires for genuinely new accounts only (the bundle keyed it on the modal view). Its
+// event_id (one per account) lets Pinterest drop duplicates (Zaraz Pinterest "Signup" action).
 export async function signInWithGoogle() {
   const { auth, fa } = await getAuthClient();
   const res = await fa.signInWithPopup(auth, new fa.GoogleAuthProvider(), fa.browserPopupRedirectResolver);
   if (fa.getAdditionalUserInfo(res)?.isNewUser) {
     await ensureUserDoc(res.user);
-    track('CompleteRegistration', { em: res.user.email, external_id: res.user.uid });
+    track('CompleteRegistration', { em: res.user.email, external_id: res.user.uid, event_id: `signup_${res.user.uid}` });
   }
 }
 
