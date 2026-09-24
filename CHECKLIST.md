@@ -9,11 +9,10 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
 2. **Zaraz sign-up fix,** if the browser agent hasn't finished it (below).
 3. **"Run now" once on `pinterest-daily`** and approve its prompts (below).
 4. **Before mid-October: the outage win-back decision** (Lifecycle email, below). The April sign-ups age out of CASL's 6-month window during October.
-5. **Resend:** the account, domain and secrets (Lifecycle email, below).
+5. **Resend:** the key into Firebase secrets, and domain verification (the account is done; Lifecycle email, below).
 6. **The email decisions,** then tell Claude "go" for phase 0.5 (below).
-7. **Zoho:** create the $1.99 prints plan, if you want the test (below).
-8. **Before the balance runs out (about mid-January):** add the 5,000 credits to the master account (below).
-9. **Brent's Cloudflare verification click** (below).
+7. **Zoho:** create the $1.99 prints plans with the browser-agent prompt Claude gave you (below).
+8. **Brent's Cloudflare verification click** (below).
 
 ### Decisions
 - [x] **Unpaid premium/credits accounts.** 8 accounts have premium or credits without any payment (beta-week sign-ups, Nov 24-28, 2025; one orphan doc `EIV569…` with no Auth user). Keep or revoke? - ANSWER: KEEP
@@ -36,16 +35,18 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
     - keep **Click ID** (cookie `_epik`) and **Event ID** (event property `event_id`; the site sends `signup_<uid>` since 2026-09-24);
     - keep only the "Signup - Google" trigger (`CompleteRegistration`), and change nothing else.
   - **Test in Zaraz debug mode** on biblesketch.app: `zaraz.track('CompleteRegistration', { event_id: 'signup_zaraz-debug-2' })`. Pinterest should answer 200, and a sign-up should appear in Pinterest Ads > Conversions within minutes. Turn debug mode off afterwards.
-- [ ] **Add 5,000 credits to the master account** (blocked for Claude as a production data write). The daily Pinterest task uses about 6-7 generations a day, and 724 credits last until about mid-January.
-  - Firebase console > Firestore Database > `users` > `TiAEiMqWxpWqxCLtoI5OgHAvtf33` > `credits`: add 5,000 to the current value (724 on 2026-09-24).
-  - The Gemini spend cap stays the real limit.
+- [x] **Credits for the daily Pinterest task:** 2026-09-24, the owner set the master account to 9,999 credits (verified). The Gemini spend cap stays the real limit.
 - [ ] **Brent: click Cloudflare's verification email** (sent 2026-09-24 to brent@supersonicsites.com, "verify your destination address"). Until then his CC of the monthly Pinterest report is skipped (renaud@ still gets it).
 - [ ] Weekly (Claude can do it): alt text on the Pins RSS published that week. In `web/`: `node scripts/pins-alt.mjs`, then run the printed snippet in the signed-in Pinterest tab (DevTools console, or ask Claude). Idempotent.
 - [x] Old Pin "Joshua 1:9 Memory Verse" (385 saves) had no link: linked on 2026-09-23 to `/coloring-page/joshua-1-9/5SISdcUP4jxzkCc7qUXw` (a different Joshua 1:9 page than the RSS one, so each page keeps one Pin). Its creator stats (22,469 impressions, 385 saves) were intact after the edit; watch its analytics for a few days.
 
 ### Lifecycle email (ROADMAP 1.6, plan in docs/email-marketing-plan.md)
 - [ ] **Resend account.**
-  - Create it and verify the sending domain `biblesketch.app` (Resend can add the Cloudflare DNS records; its return path goes on a `send.` subdomain, and Email Routing keeps receiving mail).
+  - [x] Account created (2026-09-24).
+    - The API key is in `C:\Users\renau\Coding\BibleSketch-recovered-prod\.env` (as `RESEND_API`). That's outside the project and not in git, but nothing reads it there.
+    - Move it into Firebase's secret store: in `C:\Users\renau\Coding\BibleSketch-astro`, run `firebase functions:secrets:set RESEND_API_KEY --project biblesketch-5104c` and paste the key when asked.
+    - Then delete that `.env`: a plain-text key in an old folder is one more place to leak.
+  - [ ] Verify the sending domain `biblesketch.app` in Resend (Resend can add the Cloudflare DNS records; its return path goes on a `send.` subdomain, and Email Routing keeps receiving mail).
   - **Urgent decision (plan §12.1):** a one-time, honest win-back email to the 85 people who signed up since Mar 26 and never got to make a page (the generator was down Jun-Sep), relying on CASL implied consent. The April sign-ups age out during October. Decided 2026-09-24: the gift is a month of unlimited prints. Still open: the implied-consent basis (a lawyer check is worth it), plus approval of the Worker deploy and the grant script.
   - **Opt-in bonus** (decided 2026-09-24: extra free prints for joining the emails): confirm the number (+5 proposed) and the checkbox wording.
   - [x] **Billing webhook fix deployed** (2026-09-24, owner-approved; revision handlezohowebhook-00137; unsigned calls still 401). Only the Premium plan code grants Premium.
