@@ -307,7 +307,8 @@ by the owner before it goes out. `{first}` is the first name (the email opens wi
 | C3 | started checkout, no purchase in 1h | `anything I can help with?` | "Looks like you almost got the {pack}. Any question I can answer?" A reply is expected; no hard sell | buys |
 | C4 | 5+ pages or 3+ prints in 30 days, free or a pack buyer | `you're making a lot of pages` | Premium: unlimited prints and 10 new pages a month for $4.99 | subscribes |
 | C5 | teacher with 3+ pages | `for your whole class` | The Beacon (200 pages at 15¢), and the church plan once it exists | buys Beacon |
-| **C6** | **1 print left, or 0 prints left** (the print wall; §3.1) | `one print left` / `out of prints?` | "You've printed 5 pages. Premium is unlimited prints, plus 10 new pages a month, for $4.99. Cancel anytime. [Get Premium]" For a teacher, the Torch as well (80 prints come with it) | subscribes or buys |
+| **C6** | **1 print left** (the print wall is next; §3.1) | `one print left` | "You have one free print left. Premium is unlimited prints, plus 10 new pages a month, for $4.99. Cancel anytime. [Get Premium]" For a teacher, the Torch as well (80 prints come with it) | subscribes or buys |
+| **C7** | **0 prints left, never bought**: a 7-day, email-only offer (§12.20) | day 0 `out of prints?`, day 5 `re: out of prints?`, day 7 `last day` | "You've used your free prints. Just for you, for 7 days: unlimited prints for $1.99 a month. **[Keep printing]** (Want new pages too? Premium is $4.99.)" The link expires on day 7 | subscribes or buys; the offer repeats at most every 90 days |
 
 - **One conversion email a week at most.** People in the middle of activation don't get conversion emails.
 - The flagship's super-signature does the gentle, constant selling. The C-emails only fire on a real signal.
@@ -791,7 +792,8 @@ Every number here comes from `emailProfiles` (§6.2). Cohorts by sign-up month (
 9. **The $1.99 prints-only downsell (§12.20):**
    - test it: yes or no?
    - monthly, annual ($14.99), or both?
-   - Don't create the Zoho plan before the webhook routes on the plan code.
+   - The webhook now routes on the plan code (2026-09-24). Approve the `handleZohoWebhook` deploy before creating
+     the Zoho plan, then send its plan code so the prints path can be added.
 10. **A standing approval** for the automated sequences once you've read the first versions, and later for the
    weekly flagship.
 
@@ -997,7 +999,12 @@ that, and a tiny price turns a free user into a customer with a card on file. Ev
 **So it's a downsell,** shown only to people who have already passed on Premium:
 - **the end of the outage month (§12.1):** "keep unlimited prints for $1.99 a month" (Premium stays as the option
   that includes pages);
-- **a few days after hitting the print wall without buying** (C7, after C6);
+- **the moment someone runs out of prints, as a 7-day, email-only offer** (C7; owner idea 2026-09-24):
+  - **Day 0:** the offer.
+  - **Day 5:** a "re:" reminder.
+  - **Day 7:** a last-day note.
+  - After that, the link stops working. It's offered at most once every 90 days, so nobody learns to wait for it.
+  - The deadline is real because the Worker enforces it (see Build);
 - **not on a fixed day 15:** most people have printed only 1-2 pages by then and don't feel the need yet. Use day 15
   only as a fallback for people who have printed at least 3.
 
@@ -1007,11 +1014,24 @@ less churn.
 **The honest size:** at today's volume, a handful of subscribers. The value is the first purchase, not the $1.99.
 
 **Build (before the owner creates the plan in Zoho):**
-1. **The webhook first.** `handleZohoWebhook` currently treats *every* subscription as Premium: `isPremium` plus
-   10 credits a month. It must route on the plan code first.
-2. **The prints plan** sets `printsUnlimitedUntil` to the paid term's end + 3 days on each payment. That's the same
-   field as the outage gift (§12.1), so no new flag is needed.
-3. **The Zoho checkout link** appears in emails only.
+1. **The webhook first. Done 2026-09-24; the functions deploy is pending owner approval.**
+   - `handleZohoWebhook` treated *every* subscription as Premium (`isPremium` plus 10 credits a month), because Zoho
+     routes by workflow rule and the code never checked the plan.
+   - Now only plan codes in `PREMIUM_PLANS` (`bible-sketch-premium`) can grant or remove Premium. Any other plan gets
+     a 400 "Unknown plan", which shows as a failed delivery in Zoho's webhook log, and changes nothing.
+   - `scripts/security-check.mjs` step: "a subscription on any other plan neither grants nor removes premium".
+2. **The prints plan:**
+   - add its code in a `PRINTS_PLANS` set;
+   - on each `live` delivery, set `printsUnlimitedUntil` to `current_term_ends_at` + 3 days. That's the same field as
+     the outage gift (§12.1), so no new flag is needed;
+   - on cancellation, do nothing: the date lapses by itself.
+3. **The 7-day link:**
+   - Emails link to `/offer/<token>` on the Worker. The token is an HMAC (a new Worker secret) over the uid, the
+     offer id and the expiry.
+   - A valid token redirects to the plan's Zoho checkout with `cf_cf_firebase_uid` filled in.
+   - An expired or bad token shows "This offer has ended", with a link to `/pricing`.
+   - The Zoho plan never appears on the pricing page. Its hosted checkout URL is unlisted, and a leaked link isn't
+     worth guarding.
 
 **Judge it after 60 days:**
 - how many people take the downsell;

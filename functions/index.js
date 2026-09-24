@@ -3118,6 +3118,8 @@ const zohoWebhookSecret = defineSecret("ZOHO_WEBHOOK_SECRET");
 // still process it; true = reject unauthenticated requests with 401.
 // Set ZOHO_ENFORCE_AUTH=true once Zoho sends the header, then redeploy.
 const ZOHO_ENFORCE_AUTH = process.env.ZOHO_ENFORCE_AUTH === 'true';
+// Zoho plan codes that mean Premium (the /pricing checkout URL ends with the plan code).
+const PREMIUM_PLANS = new Set(['bible-sketch-premium']);
 
 const safeEqual = (a, b) => {
   const ab = Buffer.from(String(a));
@@ -3286,6 +3288,14 @@ exports.handleZohoWebhook = onRequest({
 
     const subscriptionId = subscription.subscription_id;
     const subscriptionStatus = subscription.status;
+
+    // Zoho routes deliveries here by workflow rule, so a new plan wired to this URL without ?pack= would
+    // otherwise be granted (or have its cancellation remove) Premium. Only these plan codes touch premium.
+    const planCode = String(subscription.plan?.plan_code || '').toLowerCase();
+    if (!PREMIUM_PLANS.has(planCode)) {
+      console.error(`❌ Subscription ${subscriptionId} is on plan "${planCode}", not a premium plan; nothing granted`);
+      return res.status(400).send('Unknown plan');
+    }
 
     // 3. Extract Firebase UID from query param (preferred) or body (fallback)
     const firebaseUid = req.query.uid || extractFirebaseUid(req.body);

@@ -227,7 +227,7 @@ const token = { 'x-webhook-token': ZOHO_SECRET };
 // Zoho's real default payload (${JSONString}): only a `subscription` object. A pack purchase is a new $0
 // subscription; the Firebase UID is also in the customer's custom field.
 const zohoSub = (id, uid, extra = {}) => ({ subscription: {
-  subscription_id: id, status: 'live', current_term_starts_at: '2026-09-21',
+  subscription_id: id, status: 'live', current_term_starts_at: '2026-09-21', plan: { plan_code: 'bible-sketch-premium' },
   customer: { customer_id: 'c1', custom_field_hash: { cf_cf_firebase_uid: uid } }, ...extra,
 } });
 
@@ -265,6 +265,15 @@ await step('webhook grants a subscription once per billing term, renewals includ
   assert.equal(await credits(alice), c0 + 10, 'a retry must not grant again');
   await hook({ uid: alice.uid }, sub('2026-10-01'), token);
   assert.equal(await credits(alice), c0 + 20, 'a renewal grants again');
+});
+
+await step('a subscription on any other plan neither grants nor removes premium', async () => {
+  const other = (status) => zohoSub(`other-${run}-${status}`, alice.uid, { status, plan: { plan_code: 'prints-monthly' } });
+  const c0 = await credits(alice);
+  assert.equal((await hook({ uid: alice.uid }, other('live'), token)).status, 400);
+  assert.equal(await credits(alice), c0, 'an unknown plan must not grant credits');
+  assert.equal((await hook({ uid: alice.uid }, other('cancelled'), token)).status, 400);
+  assert.equal((await userDoc(alice)).get('isPremium'), true, 'cancelling another plan must not remove premium');
 });
 
 await step('webhook accepts a valid Zoho HMAC signature', async () => {
