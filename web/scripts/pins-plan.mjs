@@ -77,10 +77,12 @@ const items = year.items.map((i) => {
 const byId = new Map(items.map((i) => [i.id, i]));
 const seasons = new Map(year.seasons.map((s) => [s.id, s]));
 
-// Uses so far: entries with `plan` count exactly; older entries count against the item with the same page slug.
+// Uses so far: entries with `plan` count exactly; older entries count against the item with the same page slug;
+// Pins posted before the calendar count through pin-learn.json snapshots (pins-learn gives them a plan).
 function usesOf(list) {
   const uses = new Map(); // item id → [{ v, release }]
-  for (const e of list) {
+  const earlier = Object.values(learn.snapshots ?? {}).filter((s) => s.plan).map((s) => ({ plan: s.plan, release: s.created, board: s.board }));
+  for (const e of [...earlier, ...list]) {
     let id, v;
     if (e.plan) [id, v] = e.plan.split(':');
     else id = items.find((i) => i.board === e.board && i.slug === e.ref)?.id;

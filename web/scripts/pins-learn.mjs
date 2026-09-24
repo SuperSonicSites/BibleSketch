@@ -77,6 +77,15 @@ const itemFor = (board, pd) => {
     .filter(([, m]) => m && m[1] === pd.book && Number(m[2]) === pd.chapter && Number(m[3]) <= e && Number(m[4] ?? m[3]) >= s);
   return (hits.find(([, m]) => Number(m[3]) === s && Number(m[4] ?? m[3]) === e) ?? hits[0])?.[0] ?? null;
 };
+// "<item>:<variant>" when the page's age/style or font is one of the item's variants, else the item alone.
+const planOf = (item, pd) => {
+  if (!item) return null;
+  const v = item.variants.findIndex((code) => {
+    const f = year.variants[code];
+    return f.font ? f.font === pd.font_style : f.age === pd.age_group && f.style === pd.art_style;
+  });
+  return v >= 0 ? `${item.id}:${v}` : item.id;
+};
 
 // 1. Snapshots: lifetime numbers the first time a Pin is seen at day 180 or later, and at day 365.
 learn.snapshots ??= {};
@@ -110,7 +119,7 @@ for (const [pinId, s] of Object.entries(learn.snapshots).filter(([, x]) => x.d18
     profiled: tags.length > 0, image: sketch?.imageUrl ?? null,
     ref: pd.book ? `${pd.book} ${pd.chapter}:${pd.start_verse}${pd.end_verse ? `-${pd.end_verse}` : ''}` : null,
     ageStyle: pd.font_style ?? `${pd.age_group}/${pd.art_style}`,
-    plan: e?.plan ?? itemFor(s.board, pd)?.id ?? null,
+    plan: e?.plan ?? planOf(itemFor(s.board, pd), pd),
     meta: [
       `board:${s.board}`, pd.age_group && `age:${pd.age_group}`, pd.art_style && `style:${pd.art_style}`, pd.font_style && `font:${pd.font_style}`,
       pd.book && `book:${pd.book}`, e && `template:${e.template}`, e && `opener:${e.title.split(': ')[0]}`, planItem?.series && `series:${planItem.series}`,
@@ -126,6 +135,10 @@ if (listOnly) {
     .map((r) => [`${r.board} ${r.ref ?? ''}${r.profiled ? '' : ' (no profile)'}`, r.ageStyle, `${r.reach} c+s, ${r.resonance?.toFixed(1) ?? '-'}/1k`, r.sketchId, r.image])));
   process.exit(0);
 }
+
+// Every learned Pin counts as a use of its bank item for pins-plan's no-repeat rule, Pins posted before the
+// calendar existed included (only proven winners come back).
+for (const r of rows) if (r.plan) learn.snapshots[r.pinId].plan = r.plan;
 
 // 3. Ranks within each board, then what the ranks say.
 const reachPct = percentiles(rows, 'reach', (r) => r.board);
