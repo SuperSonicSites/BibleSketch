@@ -284,6 +284,31 @@ Google sends ~nothing (1 ranking keyword), so sign-ups ~ Pinterest: ~8% of click
 ~2,100 lifetime clicks); 4 of 183 paid (2.2%), $84.95 total, ~$21 per buyer, ~$0.46 per sign-up. Pinterest's
 conversion tag only records page visits (no sign-up or purchase events), and sign-ups don't store a source.
 
+**Growth projection (2026-09-24), to check each month against the account's 30-day numbers.**
+
+Model inputs:
+- the Nov-Dec 2025 cohort's per-Pin curve: ~4,600 lifetime impressions, peaking around month 4, then -6% a month;
+- 5 Pins a day;
+- 35% extra impressions from other people's repins;
+- rough seasonal factors: Christmas ×1.3, Easter ×1.35, summer ×0.85-0.9;
+- a soft ceiling at the niche leaders' 0.9-2.5M monthly views.
+
+Rates improve over the year as the learning loop kicks in (its first new Pins reach 180 days at the end of March
+2027). Monthly figures:
+
+| Month | Low: impressions / clicks / saves | Base | High |
+|---|---|---|---|
+| Today (Sep 2026) | 105k / 177 / 392 | same | same |
+| Dec 2026 | 205k / 330 / 615 | 264k / 490 / 910 | 327k / 665 / 1,210 |
+| Mar 2027 (Easter) | 404k / 660 / 1,210 | 606k / 1,190 / 2,110 | 838k / 1,870 / 3,230 |
+| Sep 2027 | 492k / 830 / 1,480 | 769k / 1,670 / 2,760 | 1.12M / 2,940 / 4,640 |
+| Dec 2027 | 637k / 1,080 / 1,910 | 1.0M / 2,210 / 3,610 | 1.47M / 3,970 / 6,180 |
+| Sep 2028 | 623k / 1,060 / 1,870 | 989k / 2,180 / 3,560 | 1.48M / 3,990 / 6,210 |
+
+Year 1 (Oct 2026 - Sep 2027) base: 5.5M impressions, 11k clicks, 19k saves. Year 2 base: 10.5M impressions, 23k
+clicks, 38k saves. The script is in the 2026-09-24 session scratchpad (project.py); rebuild it from this table if
+needed.
+
 **Monthly email report** (owner request 2026-09-24: text only, every ~30 days, **a quick TLDR, not an analytics
 dashboard**: keep it about 15 lines): the Worker's cron (`0 13 24 * *`, `web/wrangler.jsonc`; entry
 `web/src/worker.ts`) runs `emailReport()` in `web/src/lib/pinterest-email.ts`: one line for the account's last 30
