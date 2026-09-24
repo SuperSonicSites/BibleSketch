@@ -792,8 +792,8 @@ Every number here comes from `emailProfiles` (§6.2). Cohorts by sign-up month (
 9. **The $1.99 prints-only downsell (§12.20):**
    - test it: yes or no?
    - monthly, annual ($14.99), or both?
-   - The webhook now routes on the plan code (2026-09-24). Approve the `handleZohoWebhook` deploy before creating
-     the Zoho plan, then send its plan code so the prints path can be added.
+   - The webhook routes on the plan code (deployed 2026-09-24). Next: create
+     the Zoho plan and send its plan code, so the prints path can be added.
 10. **A standing approval** for the automated sequences once you've read the first versions, and later for the
    weekly flagship.
 
@@ -1014,7 +1014,7 @@ less churn.
 **The honest size:** at today's volume, a handful of subscribers. The value is the first purchase, not the $1.99.
 
 **Build (before the owner creates the plan in Zoho):**
-1. **The webhook first. Done 2026-09-24; the functions deploy is pending owner approval.**
+1. **The webhook first. Done and deployed 2026-09-24 (revision handlezohowebhook-00137).**
    - `handleZohoWebhook` treated *every* subscription as Premium (`isPremium` plus 10 credits a month), because Zoho
      routes by workflow rule and the code never checked the plan.
    - Now only plan codes in `PREMIUM_PLANS` (`bible-sketch-premium`) can grant or remove Premium. Any other plan gets

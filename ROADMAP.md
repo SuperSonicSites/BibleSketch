@@ -165,7 +165,7 @@ Built 2026-09-23 in `web/`: `src/data/pins.json` (the calendar), `src/lib/pins.t
   - (2026-09-24) opting in to the emails earns extra free prints (+5 proposed; plan §12.2);
   - (2026-09-24) the 85 sign-ups who couldn't make a page during the Jun-Sep outage get a month of unlimited prints with the apology email (`printsUnlimitedUntil`; plan §12.1).
   - (2026-09-24, proposed) a $1.99/month unlimited-prints plan, offered only by email for 7 days to people who run out of prints (plan §12.20, C7).
-- **Billing fix (2026-09-24; committed, not deployed):** `handleZohoWebhook` granted Premium to any subscription it received. Now only the `bible-sketch-premium` plan code grants or removes Premium. Other plans get a 400 and nothing changes. Security check 45/45.
+- **Billing fix (deployed 2026-09-24, revision handlezohowebhook-00137):** `handleZohoWebhook` granted Premium to any subscription it received. Now only the `bible-sketch-premium` plan code grants or removes Premium. Other plans get a 400 and nothing changes. Security check 45/45.
 - **Phases:**
   1. Consent, persona, the event pipeline, welcome and sort, activation and out-of-credits offers, and a reply Worker. Target Oct 9.
   2. The weekly "Sunday Prep" flagship, Advent/Christmas, after-the-sale emails and 9-word re-engagement. Live by Nov 10.
