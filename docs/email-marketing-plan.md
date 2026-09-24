@@ -17,9 +17,16 @@ domain, sender name, mailing address, consent wording, bonus amounts).
 
 ## 1. The philosophy (Dean Jackson, *Email Mastery*)
 
-Source: *Email Mastery*, Dean Jackson and Joe Polish, transcripts of I Love Marketing episodes 104-108
-(`https://s3.amazonaws.com/ilovemarketing/Email+Mastery.pdf`, 114 pages). What follows is a summary in our own
-words, not the book's text.
+- **Source:** *Email Mastery* by Dean Jackson (October 2013, 114 pages), the official PDF from I Love Marketing
+  (`https://s3.amazonaws.com/ilovemarketing/Email+Mastery.pdf`, the download link on ilovemarketing.com's Email
+  Mastery page).
+  - It's the same book sold as the *Email Mastery!* paperback (ISBN 9781492932802, 126 pages with the print front
+    matter). The book itself is Dean's welcome letter on the 9-word email, followed by I Love Marketing episodes
+    104-106 and 108 with Joe Polish.
+  - Checked against Dean's current guide (deanjackson.com, "The 9-Word Email") on 2026-09-24, which adds two
+    variations ("Would you like to get started...?", "Would you like to join us?") and one warning: don't blast the
+    whole database, target the people most likely to want it.
+- What follows is a summary in our own words, not the book's text.
 
 ### 1.1 Email is a conversation, not a broadcast
 - Write as one person to one person. The emails that work are **short, personal, and ask for a reply**. They read
@@ -130,9 +137,25 @@ Plus: **know your numbers.** What gets measured improves.
 - 183 accounts. **42 (23%) have ever made a page**, 4 have paid, and lifetime revenue is $84.95. That's about $0.46
   per sign-up.
 - About 22 sign-ups every 30 days. Most come from Pinterest, where one or two Pins bring most of them.
-- There was a 3.5-month generation outage (Jun-Sep 2026), which drags these numbers down.
-- The first lever is clear: **get people to make and print a page before selling anything.** Someone who never
-  makes a page never buys.
+
+**By sign-up month** (read-only aggregate, 2026-09-24):
+
+| Month | 11/25 | 12/25 | 1/26 | 2/26 | 3/26 | 4/26 | 5/26 | 6/26 | 7/26 | 8/26 | 9/26 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| Sign-ups | 12 | 7 | 37 | 20 | 18 | 20 | 14 | 12 | 13 | 12 | 18 |
+| Made a page | 12 | 3 | 11 | 4 | 5 | 4 | 1 | 0 | 0 | 0 | 2 |
+| Paid | 1 | 0 | 1 | 0 | 0 | 0 | 1 | 0 | 0 | 0 | 1 |
+
+**What it says** (it changes the plan; see §12):
+- **Making a page was already falling before the outage** (30% in January, 20% by April). From June to August,
+  during the generation outage, nobody could make one.
+- **People come to print ready-made pages, not to make their own.** Of the 85 people who signed up since Mar 26,
+  never made a page and never bought:
+  - 62 (73%) printed at least one gallery page;
+  - 5 used all 5 free prints and hit the print wall;
+  - all of them still have their 5 free page credits.
+- **So activation means a print or a page, and the real sales moment is the print wall.** Premium ($4.99 a month,
+  unlimited prints) is the natural offer there, more than a credit pack.
 
 ### 3.2 The offer ladder
 Prices come from `web/src/pages/pricing.astro`:
@@ -208,8 +231,8 @@ by the owner before it goes out. `{first}` is the first name (the email opens wi
 **W0 (clearly automatic):**
 > Hi {first},
 > Welcome to Bible Sketch! This is the automatic welcome, so here's everything in one place:
-> you have **5 free pages and 5 free prints**. The quickest way to start is with the page you came in on:
-> **[Make your own {story} page]**, ready in about 30 seconds.
+> you have **5 free pages and 5 free prints**. Here are more pages like the one you came for:
+> **[{story} pages, ready to print]**. Teaching something specific? **[Make your own]** in about 30 seconds.
 > — Renaud
 > *(super-signature, §5.9)*
 
@@ -283,6 +306,7 @@ by the owner before it goes out. `{first}` is the first name (the email opens wi
 | C3 | started checkout, no purchase in 1h | `anything I can help with?` | "Looks like you almost got the {pack}. Any question I can answer?" A reply is expected; no hard sell | buys |
 | C4 | 5+ pages or 3+ prints in 30 days, free or a pack buyer | `you're making a lot of pages` | Premium: unlimited prints and 10 new pages a month for $4.99 | subscribes |
 | C5 | teacher with 3+ pages | `for your whole class` | The Beacon (200 pages at 15¢), and the church plan once it exists | buys Beacon |
+| **C6** | **1 print left, or 0 prints left** (the print wall; §3.1) | `one print left` / `out of prints?` | "You've printed 5 pages. Premium is unlimited prints, plus 10 new pages a month, for $4.99. Cancel anytime. [Get Premium]" For a teacher, the Torch as well (80 prints come with it) | subscribes or buys |
 
 - **One conversion email a week at most.** People in the middle of activation don't get conversion emails.
 - The flagship's super-signature does the gentle, constant selling. The C-emails only fire on a real signal.
@@ -562,8 +586,11 @@ send next, and never ask what their behaviour already tells us.
   only insert them.
 
 ### 6.7 Resend setup
-- **Sending domain:** `mail.biblesketch.app`, with SPF, DKIM and DMARC in Cloudflare DNS. A subdomain keeps the root
-  domain's reputation safe.
+- **Sending domain:** the root domain `biblesketch.app`, so the From address reads `renaud@biblesketch.app`
+  (§12.11).
+  - Resend's records are DKIM on `resend._domainkey`, plus SPF and MX on its own `send.` subdomain (the return
+    path). Cloudflare Email Routing keeps the root MX, so receiving mail is untouched.
+  - Add a DMARC record at `p=none` first, then tighten it.
 - **Topics** (so people can leave one without leaving everything):
   - "Sunday Prep (weekly)";
   - "Offers & seasonal packs".
@@ -650,6 +677,9 @@ Every number here comes from `emailProfiles` (§6.2). Cohorts by sign-up month (
 |---|---|---|
 | Opt-in rate at sign-up | n/a | 50%+ |
 | **Activation:** a first page within 7 days | ~23% ever | **50%+** |
+| Activation, broad: a print or a page within 7 days | ~73% of recent sign-ups printed (§3.1) | 85%+ |
+| Print wall to paid (hit 0 prints, then paid within 30 days) | unknown | 15%+ |
+| Email-assisted revenue: purchases within 7 days of an email click | n/a | tracked monthly |
 | A first print within 14 days | unknown | 35%+ |
 | W1 reply rate (the sorting question) | n/a | 15%+ |
 | Flagship click rate | n/a | 8%+ |
@@ -666,7 +696,7 @@ Every number here comes from `emailProfiles` (§6.2). Cohorts by sign-up month (
   - a subject style: a plain topic vs a first name;
   - text-only vs one page image;
   - send day.
-- Record each result in this doc (§12).
+- Record each result in this doc (§13).
 
 ---
 
@@ -682,12 +712,21 @@ Every number here comes from `emailProfiles` (§6.2). Cohorts by sign-up month (
 9. No fake urgency, no guilt, and Scripture is never used as sales pressure.
 10. The CASL footer is there: name, address, unsubscribe, and why they're receiving it.
 11. Stop rules are set: buyers leave the sales sequences, and at most one conversion email a week.
-12. A test send to the owner, read on a phone.
+12. "re:" appears only when the email truly continues one we sent to that person (§12.10).
+13. Every personal field has a fallback, so no email ever shows an empty slot (§12.14).
+14. A test send to the owner, read on a phone.
 
 ---
 
 ## 10. Build order
 **Phase 0 (owner, now):** the steps in §11.
+
+**Phase 0.5 (this week, no Resend needed; §12.1-12.2):**
+- ship the consent checkbox and the persona question alone, storing to `private/profile`. Every week without it,
+  about 5 sign-ups arrive that we may never email;
+- ship the question for Google sign-ups too (§12.3);
+- prepare the outage win-back (§12.1) to go out as soon as Resend is verified, if the owner accepts the
+  implied-consent basis.
 
 **Phase 1 (about a week of build once Resend is ready; target Oct 9):**
 - **The data (§6.2-6.3):**
@@ -720,7 +759,7 @@ Every number here comes from `emailProfiles` (§6.2). Cohorts by sign-up month (
 ---
 
 ## 11. Owner steps and decisions
-1. **Create a Resend account.** Verify `mail.biblesketch.app` (Resend can add the Cloudflare DNS records). Then set
+1. **Create a Resend account.** Verify `biblesketch.app` (§6.7; Resend can add the Cloudflare DNS records). Then set
    these secrets yourself (§6.5):
    - `RESEND_API_KEY` and `RESEND_WEBHOOK_SECRET` as Firebase secrets
      (`firebase functions:secrets:set <NAME>`);
@@ -736,10 +775,165 @@ Every number here comes from `emailProfiles` (§6.2). Cohorts by sign-up month (
    - the seasonal bonus (proposed: +20% pages on packs during the window);
    - the referral (proposed: 5 and 5).
 6. **Implied consent** for the 4 past buyers: use it, or ask via the banner only?
-7. **A standing approval** for the automated sequences once you've read the first versions, and later for the
+7. **Urgent: the outage win-back (§12.1).** Send one short, honest email to the 85 people who signed up since
+   Mar 26 and never got to make a page, relying on CASL's 6-month implied consent for an inquiry? The April
+   sign-ups age out during October. A lawyer's 15-minute check is worth it.
+8. **Is the weekly page free to print (§12.4)?** Either it doesn't count against the 5 prints, or the consent
+   wording drops "free".
+9. **A standing approval** for the automated sequences once you've read the first versions, and later for the
    weekly flagship.
 
 ---
 
-## 12. Test results and changes
+## 12. What the first draft missed (review, 2026-09-24)
+
+Sorted by value. Each item says where it changes the plan.
+
+### 12.1 The outage cohort: the biggest single email we can send
+- **Who:** 85 people signed up between Mar 26 and today, never made a page and never bought.
+  - The generator was down from June to Sep 21.
+  - All of them still have their 5 free credits, and 73% printed a gallery page, so they wanted this.
+  - This is exactly the neglected-leads situation the 9-word email was invented for (§1.3).
+- **The legal basis is time-limited.** These users gave no express consent. CASL allows *implied* consent for 6
+  months after an inquiry, and a free account sign-up plausibly counts as one.
+  - The April sign-ups age out during October and the May ones in November, so this can't wait for phase 2.
+  - Owner decision, ideally with a 15-minute lawyer check (§11).
+  - Anyone older than 6 months only sees the in-app banner.
+- **Draft** (subject `{first}`; it carries the identification and unsubscribe footer like any other):
+  > Hi {first}, did you ever get your coloring page made? Our page maker was broken for part of the summer, and
+  > I'm sorry. It works again, and your 5 free pages are still in your account.
+  > — Renaud
+- **Order:** the oldest cohorts first.
+- **Replies:** go to the owner (the concierge).
+- **Follow-up:** people who reply "yes" or click get the regular opt-in question. **Without express consent from
+  that step, nobody gets a second marketing email once their 6 months are up.**
+
+### 12.2 Capture consent now, before anything else is built
+- Each week without the checkbox, about 5 new sign-ups arrive that we may never be allowed to email.
+- The 90 accounts from before Mar 26 are already out of reach except through the in-app banner.
+- Ship the checkbox and the persona question alone this week (§10, phase 0.5), storing to `private/profile`. The
+  consent record is what matters, and the sending can come later.
+
+### 12.3 Google sign-ups never see a form
+- Google sign-in is one click through a popup, so a checkbox on the email form misses them.
+- **Fix:** show one small welcome step after the first Google sign-in: the consent box, "I'm making pages for...",
+  and Continue.
+- **Check first:** the share of sign-ups that use Google (Auth `provider`).
+
+### 12.4 The "free weekly page" collides with the print wall
+- Printing a gallery page costs a free user one of their 5 prints (`grantDownload` in `web/src/lib/downloads.ts`).
+  So a free user who has used their 5 prints clicks the Thursday page and gets "No downloads left", right after the
+  checkbox promised a free page every week.
+- **Recommendation:** this week's flagship pages don't count against prints. `grantDownload` skips the decrement
+  for the week's sketch ids; it's a small change.
+  - It costs nothing (no generation), it builds the weekly habit, and the wall still applies to everything else.
+- **The alternative:** drop "free" from the consent wording. Owner decision (§11).
+
+### 12.5 People print first, and most are on phones
+- **§3.1 shows printing is the main behaviour.**
+  - Activation is measured as a print or a page (§8).
+  - W0 leads with more pages like the one they printed (§5.1).
+  - The print wall gets its own offer, C6 (§5.5).
+  - The first sync fills in past prints as 5 − `downloadsRemaining` for free users (prints were never logged).
+- **Pinterest traffic is mostly mobile, and printing from a phone is awkward.**
+  - Add a one-click **"email me this page to print later"**. It's a transactional email, and it gives people a
+    reason to trust our emails.
+  - Record the `device` on each event, so emails can say "open this on your computer to print".
+
+### 12.6 The verification email may be the real activation leak
+- Email-and-password sign-ups must verify before they can use the app (`signUpWithEmail` signs them out after
+  sending the link).
+- That email comes from Firebase's default `firebaseapp.com` address and template, which spam filters often catch.
+  Every email in this plan comes after that gate.
+- **Fixes:**
+  - **Check** how many accounts never verified (an Auth export, run by the owner; it contains personal data).
+  - **Send the verification email through Resend** from `biblesketch.app`. ROADMAP 1.3 already lists branded
+    transactional email.
+  - **Create a Resend contact only once the email is verified.** Mailing typos and bots hurts the sender
+    reputation.
+
+### 12.7 Duplicate and missed sends
+- **Duplicates:** Firebase triggers can run twice on a retry, which would mean two welcome emails.
+  - Keep `fired.<event>` timestamps on `emailProfiles` and skip repeats.
+- **Missed sends:** the nightly sync re-fires a missed `signed_up` (opted in and verified, but no W0 sent).
+- **Monitoring** (the lesson of the silent 3.5-month outage):
+  - a health line in the monthly report;
+  - an alert through the existing Cloudflare email channel when no email has gone out for 7 days, or when bounces
+    pass 2%.
+
+### 12.8 Don't send traffic into a broken generator
+- **Before each Broadcast,** the send job checks two things:
+  - a generation succeeded in the last 24 hours;
+  - the Gemini spend cap has headroom. The 2026-09-23 cap stopped every customer's generation.
+- If either fails, the send is held and the owner is told.
+- **Before Advent,** raise the cap for the expected spike.
+
+### 12.9 Email clicks would pollute the Pinterest learning loop
+- `pins-learn` judges images by Pinterest clicks and saves. If emails send people to Pins ("save this to your
+  board"), those Pins look better than they are, and the loop learns the wrong lesson.
+- **Rule:** emails link to the site, not to Pins.
+- If we ever ask for saves, record those Pins (an `emailPushed` flag in `pins.json`) so `pins-learn` leaves them out.
+
+### 12.10 Honest "re:" only
+- "re:" is used only when the email really continues one we sent to that person: W1 on top of W0, and check-ins on
+  their own thread.
+- A fake "re:" on a first contact is a misleading subject line, which CASL and the Competition Act forbid, and it
+  spends trust we need. (Added to the §9 checklist.)
+- **Test threading** in Gmail, Apple Mail and Outlook. Real threading may need `In-Reply-To` / `References` headers.
+
+### 12.11 The From address
+- Verifying `mail.biblesketch.app` would make the sender `renaud@mail.biblesketch.app`, which looks less personal.
+- Resend puts its return path on its own `send.` subdomain anyway, so verifying the root domain gives
+  `renaud@biblesketch.app` without touching the MX records that receive mail. (§6.7 and §11 are updated.)
+
+### 12.12 Summer and holidays
+- Sunday school mostly runs September to May, and many classes pause in June-August (VBS aside).
+- **In summer,** the flagship leans on "summer at home" for families and VBS for teachers.
+- Weeks with no class (the Sunday after Christmas, and Easter week for some) get a lighter email.
+
+### 12.13 Time zones
+- A Broadcast goes out at one time for everyone.
+- **Start** at 6:00 a.m. Eastern for all.
+- **Once the list is bigger,** send in time-zone batches (Eastern, Central, Mountain/Pacific, the rest) using
+  `timezone`.
+
+### 12.14 A fallback for every personal field
+Templates never show an empty slot:
+
+| Field | Fallback |
+|---|---|
+| no first name | "Hi," |
+| no next or landing story | this week's story |
+| no age group | Young Child |
+| no persona | the default teacher path |
+
+### 12.15 Testing without real sends
+- The emulators and any test setup never hold a real Resend key. A `DRY_RUN` mode logs emails instead of sending
+  them.
+- Webhook tests use Resend's test addresses (delivered, bounced and complained at `resend.dev`).
+
+### 12.16 Referral abuse
+- The referral pages are granted only after the friend verifies their email and prints or makes a page.
+- One reward per new person.
+
+### 12.17 Testimonials from replies
+- When a reply praises Bible Sketch, ask permission to quote it (first name and role only, e.g. "Sarah, Sunday
+  school teacher").
+- The quotes feed the site, the Pins and the super-signature.
+
+### 12.18 Measuring the lift honestly
+- At 20-40 sign-ups a month, a hold-out group would take a year to say anything.
+- **Instead,** compare each monthly cohort with the §3.1 baseline and track email-assisted revenue (§8).
+- **Once sign-ups pass about 100 a month,** keep 10% as a hold-out that gets only transactional email for their
+  first 90 days.
+
+### 12.19 The owner's time, and the owner's story
+- **Expected replies at today's rate:** a handful a month (22 sign-ups, about half opting in, about 15% replying to
+  W1). That's easy to answer by hand until phase 3 automates the simple ones.
+- **The strongest true line we have:** the owner teaches God's Big Story in Sunday school (the About page says so).
+  "I teach Sunday school too" is honest, and it makes every teacher email credible. Use it in W0 and T1.
+
+---
+
+## 13. Test results and changes
 *(Add a dated line for each test or change: what changed, the numbers, and what we kept.)*
