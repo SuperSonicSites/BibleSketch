@@ -788,7 +788,11 @@ Every number here comes from `emailProfiles` (§6.2). Cohorts by sign-up month (
    - Also approve the Worker deploy and the grant script.
 8. **Is the weekly page free to print (§12.4)?** Either it doesn't count against the 5 prints, or the consent
    wording drops "free".
-9. **A standing approval** for the automated sequences once you've read the first versions, and later for the
+9. **The $1.99 prints-only downsell (§12.20):**
+   - test it: yes or no?
+   - monthly, annual ($14.99), or both?
+   - Don't create the Zoho plan before the webhook routes on the plan code.
+10. **A standing approval** for the automated sequences once you've read the first versions, and later for the
    weekly flagship.
 
 ---
@@ -980,6 +984,39 @@ Templates never show an empty slot:
   W1). That's easy to answer by hand until phase 3 automates the simple ones.
 - **The strongest true line we have:** the owner teaches God's Big Story in Sunday school (the About page says so).
   "I teach Sunday school too" is honest, and it makes every teacher email credible. Use it in W0 and T1.
+
+### 12.20 Proposed test: a $1.99 "unlimited prints" plan, offered only by email (owner idea, 2026-09-24)
+**Why it fits:** most sign-ups print ready-made pages and never make their own (§3.1). A prints-only plan matches
+that, and a tiny price turns a free user into a customer with a card on file. Every later offer is then one click.
+
+**Why it isn't a pricing-page tier:**
+- **Payment fees:** about 30¢ + 3% of every charge, which is about 18% of $1.99. We keep about $1.63.
+- **Premium margin:** Premium ($4.99) keeps about $3.30 after fees and up to 10 generations (about $1.20).
+- **The risk:** on the pricing page, many people who'd have paid $4.99 would pick $1.99 instead.
+
+**So it's a downsell,** shown only to people who have already passed on Premium:
+- **the end of the outage month (§12.1):** "keep unlimited prints for $1.99 a month" (Premium stays as the option
+  that includes pages);
+- **a few days after hitting the print wall without buying** (C7, after C6);
+- **not on a fixed day 15:** most people have printed only 1-2 pages by then and don't feel the need yet. Use day 15
+  only as a fallback for people who have printed at least 3.
+
+**Consider an annual price** for teachers: $14.99 for a Sunday school year. It means one card fee instead of 12, and
+less churn.
+
+**The honest size:** at today's volume, a handful of subscribers. The value is the first purchase, not the $1.99.
+
+**Build (before the owner creates the plan in Zoho):**
+1. **The webhook first.** `handleZohoWebhook` currently treats *every* subscription as Premium: `isPremium` plus
+   10 credits a month. It must route on the plan code first.
+2. **The prints plan** sets `printsUnlimitedUntil` to the paid term's end + 3 days on each payment. That's the same
+   field as the outage gift (§12.1), so no new flag is needed.
+3. **The Zoho checkout link** appears in emails only.
+
+**Judge it after 60 days:**
+- how many people take the downsell;
+- whether $4.99 sales drop;
+- whether $1.99 subscribers later buy packs or upgrade.
 
 ---
 
