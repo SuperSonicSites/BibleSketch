@@ -42,6 +42,46 @@ As of **2026-09-24 03:30 UTC**:
   pages for Nov 6 onward and more Christmas scenes; read the paper/purple test mid-February; first day-30
   results read mid-November (strategy §4).
 
+## Daily scheduled task (`pinterest-daily`, owner request 2026-09-24)
+A Claude Code scheduled task in the desktop app (`C:\Users\renau\.claude\scheduled-tasks\pinterest-daily\SKILL.md`,
+every day at 7:00 local, runs only while the app is open) adds **5 reviewed Pins a day** with the procedure in
+"Generating a batch of pages" below. Owner-authorized scope: at most 10 generations per run on the master
+account; publishing the approved ones; editing `web/src/data/pins.json` and this file's Status block; pins-check,
+build, `npx wrangler deploy` (Worker only); commit and push those files to `main`; the alt-text pass. Nothing else.
+
+**Where the 5 go:** the earliest open ramp slots at least 7 days out and at most 60 days out (`dailyCap` in
+pins-check; never above it). At most 2 Pins of one board on a day. No open slot in that window: generate nothing.
+
+**Board mix of the 5** (by release date of each slot):
+- Oct 1 - Dec 15: 3 Sunday School + 2 Christmas (front-load Christmas; nothing Christmas after Dec 15).
+- Dec 16 - Jan 31: 4 Sunday School + 1 Scripture (only on days after Dec 20; Scripture is full until then).
+- Feb 1 - Easter Sunday (Mar 28, 2027): 3 Sunday School + 2 Easter.
+- Otherwise: 4 Sunday School + 1 Scripture. Adult board: none (paused).
+
+**Content** (what performs, "Reading performance" and the strategy):
+- Sunday School: Toddler/Sunday School for 2 of 3, Young Child/Sunday School for the rest; one key moment with
+  1-3 named characters in a full setting. Adam and Eve only in the Toddler style (the Young Child style draws them
+  nude but for hair). Order of preference: Genesis stories (creation, Eden, Noah, Babel, Abraham, Isaac, Jacob,
+  Joseph), then David, Jonah, Daniel, Moses (traditional bearded Moses), Joshua, Gideon, Samuel, Ruth, Esther,
+  Elijah, Jesus's miracles and parables (calming the storm, feeding the 5000, walking on water, Zacchaeus, lost
+  sheep, Good Samaritan, prodigal son, Jairus's daughter, Bartimaeus, Jesus and the children), Acts (Pentecost,
+  Peter's escape, Paul's shipwreck). Build short series (3-4 moments of one story on consecutive slots).
+- Christmas: nativity story moments (annunciation, Mary and Elizabeth, the road to Bethlehem, no room at the inn,
+  the manger, shepherds and angels, the star, three crowned wise men with gifts, flight to Egypt, Simeon), beloved
+  traditions (ox and donkey, three magi).
+- Easter: triumphal entry, Last Supper, Gethsemane (gentle), the empty tomb, the angel, Mary Magdalene, Emmaus,
+  Thomas; no crucifixion violence on kids' pages.
+- Scripture: one verse under 30 words (docs/pinterest-scripture-plan.md), adult looks, `plain` template.
+- Never a passage already scheduled on the same board within 30 days (pins-check warns), never a sketch already
+  on Pinterest, and pick moments the calendar doesn't have yet.
+
+**Run:** read the Status block; `git pull --ff-only` (stop if it fails or `pins.json` has uncommitted changes);
+generate 5 (Scenes: `kind: 'scene'`; verse: `kind: 'verse'`), review each up close, regenerate rejects (10
+generations max per run; stop after 3 failures in a row: likely the Gemini spend cap), publish the approved,
+write the entries (copy rules §3.3a; titles unique, no warnings on new entries), pins-check with no errors, build,
+deploy, check one new `/pin-img/`, run the alt-text pass (below), update the Status block's calendar table and
+open-slot count, commit (`pins.json`, this file) and push. Fewer than 5 approved is fine: never schedule a reject.
+
 ## Weekly: alt text on RSS-published Pins
 RSS can't carry alt text. In `web/`: `node scripts/pins-alt.mjs > alt.js`, then run its contents in the signed-in
 Pinterest tab (browser tool `javascript_exec`, or DevTools). Idempotent. Stops being needed once the API publisher
