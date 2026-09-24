@@ -109,9 +109,11 @@ Plus: **know your numbers.** What gets measured improves.
 
 ## 2. Voice and format rules for Bible Sketch
 
-- **From a person:** "Renaud at Bible Sketch" (owner to confirm the name). Replies go to `hello@biblesketch.app`,
-  which is already the only public contact address (ROADMAP 1, phase 1 decision), and they reach a human. Never
-  send from a `noreply` address.
+- **From a person:** "Renaud at Bible Sketch" `<renaud@e.biblesketch.app>` (owner to confirm the name).
+  - The sending domain is `e.biblesketch.app` (owner decision 2026-09-24; §6.7).
+  - Replies go back to that same address and are received by Resend (§6.8), and they reach a human.
+  - `hello@biblesketch.app` stays the public contact address on the site.
+  - Never send from a `noreply` address.
 - **Honest personal tone:** write like the owner, in first person. Never invent a personal circumstance ("I was just
   looking at your page this morning") that isn't true. Our readers are Christians, teachers and parents, and trust is
   the whole business. Automation that sounds personal is fine because the owner really does read the replies.
@@ -264,7 +266,7 @@ by the owner before it goes out. `{first}` is the first name (the email opens wi
 - **teacher, T1** (the day after the reply): *"Great! What are you teaching this Sunday?"*
   - The reply names a story, and we answer with that story's page, filled in for their class's age. That's the magic
     trick: they told us what they need and got it within minutes.
-  - In phase 1 the owner answers these; in phase 3 the reply Worker answers automatically (§6.8).
+  - In phase 1 the owner answers these; in phase 3 the reply handler answers automatically (§6.8).
 - **family, F1:** *"How old are your kids?"*
   - The reply sets `ageGroups`, using the app's values (Toddler, Young Child, Teen). Every
     later link then opens the generator at the right age.
@@ -334,7 +336,7 @@ by the owner before it goes out. `{first}` is the first name (the email opens wi
   - adult: *"Do you still color Bible verses for quiet time?"*
   - default: *"Do you still need Bible coloring pages for Sunday?"*
 - **Replies:**
-  - "yes": the reply Worker sends this week's Sunday Prep page and a gift of 3 pages (the bonus is owner-approved);
+  - "yes": the reply handler sends this week's Sunday Prep page and a gift of 3 pages (the bonus is owner-approved);
   - "no": we thank them and move them to seasonal-only emails;
   - anything else goes to the owner.
 - `quiet` (30-89 days) gets no special email. The weekly flagship is their reason to come back.
@@ -556,22 +558,21 @@ send next, and never ask what their behaviour already tells us.
   `purchased`, `premium_*` and `page_failed`. When a promised offer is open, it grants the bonus.
 - **New `onEventCreated`** on `users/{uid}/events`: updates the counters, and fires `page_printed` and
   `checkout_started`.
-- **New HTTPS `resendWebhook`:** checks Resend's signature (`RESEND_WEBHOOK_SECRET`), then records delivered,
-  opened, clicked, bounced, complained and unsubscribed in `emailProfiles`. A bounce or a complaint stops all
-  marketing to that person.
-- **New HTTPS `emailReply`:** called by the Email Worker (§6.8) with a shared secret (the purge secret's pattern,
-  in reverse). It stores the reply in `emailReplies`, applies the parsed answer, and fires `replied`.
+- **New HTTPS `resendWebhook`:** checks Resend's signature (`RESEND_WEBHOOK_SECRET`), then:
+  - records delivered, opened, clicked, bounced, complained and unsubscribed in `emailProfiles`. A bounce or a
+    complaint stops all marketing to that person;
+  - handles **`email.received`**, the replies (§6.8). It stores each reply in `emailReplies`, applies the parsed
+    answer, and fires `replied`.
 - **Nightly scheduled `emailSync`:**
   - recomputes `stage`, `activity`, the taste fields and `next_story` from the sources;
   - sends Resend only the contacts that changed (a hash comparison), throttled, because Resend's API rate limit is
     a few requests a second;
   - fires `went_dormant`.
 - **One Resend key, in one place:** only the functions hold `RESEND_API_KEY`.
-  - The Worker never talks to Resend. Prints travel through `events` docs, and replies through the `emailReply`
-    hook.
-  - Secrets, all set by the owner (Claude never handles them):
-    - `RESEND_API_KEY` and `RESEND_WEBHOOK_SECRET`: Firebase secrets;
-    - `EMAIL_HOOK_SECRET`: a Firebase secret and a Worker secret, with the same value.
+  - The Worker never talks to Resend. Prints travel through `events` docs, and replies arrive through Resend's
+    webhook.
+  - Secrets, both set by the owner as Firebase secrets (Claude never handles them): `RESEND_API_KEY` and
+    `RESEND_WEBHOOK_SECRET`.
 - **Deploys:** functions deploys with an explicit, quoted `--only` list (CLAUDE.md), and they're owner-approved.
   The `firestore.rules` change goes through `scripts/security-check.mjs` first (§6.10).
 
@@ -590,11 +591,15 @@ send next, and never ask what their behaviour already tells us.
   only insert them.
 
 ### 6.7 Resend setup
-- **Sending domain:** the root domain `biblesketch.app`, so the From address reads `renaud@biblesketch.app`
-  (§12.11).
-  - Resend's records are DKIM on `resend._domainkey`, plus SPF and MX on its own `send.` subdomain (the return
-    path). Cloudflare Email Routing keeps the root MX, so receiving mail is untouched.
-  - Add a DMARC record at `p=none` first, then tighten it.
+- **Sending domain:** `e.biblesketch.app` (owner decision 2026-09-24), so the sender is
+  `renaud@e.biblesketch.app` (§12.11).
+- **DNS, checked on 2026-09-24:**
+  - `resend._domainkey.e.biblesketch.app` (DKIM) is live;
+  - `send.e.biblesketch.app` has Resend's MX and SPF (the return path);
+  - `e.biblesketch.app` has an MX to Resend's inbound servers, so receiving is on;
+  - the root `_dmarc.biblesketch.app` is `p=none`, with reports to Cloudflare. It covers the subdomain, which meets
+    Gmail's and Yahoo's DMARC requirement. Tighten it to `quarantine` once reports show only aligned mail.
+  - The root MX (Cloudflare Email Routing) is untouched, so `hello@` and `reports@` keep working.
 - **Topics** (so people can leave one without leaving everything):
   - "Sunday Prep (weekly)";
   - "Offers & seasonal packs".
@@ -608,13 +613,19 @@ send next, and never ask what their behaviour already tells us.
   Automations, Topics). This product changes quickly.
 
 ### 6.8 Replies: the email concierge
-- Replies go to `hello@biblesketch.app`, through Cloudflare Email Routing, to an **Email Worker** (the `email()`
-  handler on `biblesketch-web`).
-- **Phase 1:** the Worker:
+- **The path:** a reply goes back to the sender, `renaud@e.biblesketch.app`. No Reply-To header is needed, and
+  replying to the same address feels personal.
+  - Resend receives it (the MX on `e.biblesketch.app`) and posts `email.received` to `resendWebhook`.
+  - That payload has only the metadata (from, to, subject, message id). The function fetches the body with Resend's
+    Received Emails API (`emails.receiving.get(email_id)`).
+- **Phase 1:** the function:
   - strips the quoted history and matches the sender to a uid;
   - parses the simple answers: the W1 keyword rules in §5.1, the age groups for F1, yes/no for the 9-word email;
-  - posts the result to the `emailReply` function (§6.5);
-  - forwards **every** reply to the owner's inbox. The owner is the concierge and answers the "love letters".
+  - stores the reply and the parsed answer (§6.5);
+  - forwards **every** reply to the owner's inbox through Resend (to `renaud@supersonicsites.com`, or wherever the
+    owner chooses), with the reply-to set to the person, so the owner can answer straight from Gmail. The owner is
+    the concierge and answers the "love letters".
+- **Replaced:** this path replaces the planned Cloudflare Email Worker and its shared `EMAIL_HOOK_SECRET`.
 - **Phase 3:** automatic answers to the easy, high-value replies:
   - "What are you teaching this Sunday?" gets back a link to that story, filled in for their age;
   - "yes" to a 9-word email gets this week's page and a gift.
@@ -707,7 +718,7 @@ Every number here comes from `emailProfiles` (§6.2). Cohorts by sign-up month (
 ## 9. Checklist for every email (run it before you ask the owner to approve)
 1. Who is it for (stage and persona), and what's **the one action**?
 2. What happens next after each possible answer or click? (The chess move is written down before sending.)
-3. From "Renaud at Bible Sketch", with replies going to `hello@biblesketch.app`.
+3. From "Renaud at Bible Sketch" `<renaud@e.biblesketch.app>`, so replies come back to us (§6.8).
 4. The subject: looks like a personal note, short, true, and matches the body.
 5. The body: under 100 words (flagship under 150), first person, and no invented personal circumstance.
 6. It leaves a reason to click or reply (don't solve the mystery).
@@ -745,7 +756,7 @@ Every number here comes from `emailProfiles` (§6.2). Cohorts by sign-up month (
   `emailSync`.
 - **Pre-filled generator links and the tracking tags (§6.6).**
 - **The emails:** the W0/W1 welcome and sort, activation A1-A3, and the conversion emails C1-C2.
-- **Replies:** the reply Worker and the `emailReply` hook (parse, store, forward to the owner).
+- **Replies:** `email.received` in `resendWebhook` (parse, store, forward to the owner; §6.8).
 - **Reporting:** email numbers in the monthly report (from `emailProfiles`).
 - **Deletion:** `onUserDeleted` cleanup, and the privacy policy update.
 
@@ -765,14 +776,14 @@ Every number here comes from `emailProfiles` (§6.2). Cohorts by sign-up month (
 ---
 
 ## 11. Owner steps and decisions
-1. **Create a Resend account.** Verify `biblesketch.app` (§6.7; Resend can add the Cloudflare DNS records). Then set
-   these secrets yourself (§6.5):
-   - `RESEND_API_KEY` and `RESEND_WEBHOOK_SECRET` as Firebase secrets
-     (`firebase functions:secrets:set <NAME>`);
-   - `EMAIL_HOOK_SECRET`, a random value of your choice, as a Firebase secret and as a Worker secret
-     (`npx wrangler secret put EMAIL_HOOK_SECRET` in `web/`).
-2. **Sender:** is "Renaud at Bible Sketch", with replies to `hello@biblesketch.app`, OK? Where should replies be
-   forwarded?
+1. **Resend:**
+   - The account is created and `e.biblesketch.app` is set up (2026-09-24; the DNS is live, §6.7). Confirm it shows
+     "Verified" in Resend.
+   - Then set two Firebase secrets yourself (§6.5), with `firebase functions:secrets:set <NAME>`:
+     - `RESEND_API_KEY`;
+     - `RESEND_WEBHOOK_SECRET`, which you get when the webhook endpoint is created in phase 1.
+2. **Sender:** is "Renaud at Bible Sketch" `<renaud@e.biblesketch.app>` OK? Which inbox should replies be forwarded
+   to (`renaud@supersonicsites.com`?)?
 3. **A mailing address** for the footer (CASL).
 4. **Approve** the consent checkbox wording and the persona question (§6.3), and the privacy policy update (§6.10).
 5. **Bonus amounts:**
@@ -936,9 +947,12 @@ Sorted by value. Each item says where it changes the plan.
 - **Test threading** in Gmail, Apple Mail and Outlook. Real threading may need `In-Reply-To` / `References` headers.
 
 ### 12.11 The From address
-- Verifying `mail.biblesketch.app` would make the sender `renaud@mail.biblesketch.app`, which looks less personal.
-- Resend puts its return path on its own `send.` subdomain anyway, so verifying the root domain gives
-  `renaud@biblesketch.app` without touching the MX records that receive mail. (§6.7 and §11 are updated.)
+- **The owner chose `e.biblesketch.app`** (2026-09-24), so the sender is `renaud@e.biblesketch.app`.
+  - I had recommended the root domain for the most personal-looking address. The subdomain's advantage is that its
+    sending reputation is kept apart from `biblesketch.app`.
+  - Most inboxes show the display name ("Renaud at Bible Sketch") far more than the address, so the personal feel
+    comes from the name, the short text and real replies.
+- **The receiving MX on the subdomain** lets replies come straight back through Resend (§6.8).
 
 ### 12.12 Summer and holidays
 - Sunday school mostly runs September to May, and many classes pause in June-August (VBS aside).

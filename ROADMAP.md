@@ -167,7 +167,7 @@ Built 2026-09-23 in `web/`: `src/data/pins.json` (the calendar), `src/lib/pins.t
   - (2026-09-24, proposed) a $1.99/month unlimited-prints plan, offered only by email for 7 days to people who run out of prints (plan §12.20, C7).
 - **Billing fix (deployed 2026-09-24, revision handlezohowebhook-00137):** `handleZohoWebhook` granted Premium to any subscription it received. Now only the `bible-sketch-premium` plan code grants or removes Premium. Other plans get a 400 and nothing changes. Security check 45/45.
 - **Phases:**
-  1. Consent, persona, the event pipeline, welcome and sort, activation and out-of-credits offers, and a reply Worker. Target Oct 9.
+  1. Consent, persona, the event pipeline, welcome and sort, activation and out-of-credits offers, and reply handling through Resend (sending domain `e.biblesketch.app`, owner decision 2026-09-24). Target Oct 9.
   2. The weekly "Sunday Prep" flagship, Advent/Christmas, after-the-sale emails and 9-word re-engagement. Live by Nov 10.
   3. Referrals, automatic concierge answers, Premium annual, the church path. January 2027.
 - **Waiting on the owner steps** in the plan's §11: the Resend account and domain, sender, mailing address, consent wording, bonus amounts.

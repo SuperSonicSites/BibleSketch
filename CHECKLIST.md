@@ -46,7 +46,7 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
     - The API key is in `C:\Users\renau\Coding\BibleSketch-recovered-prod\.env` (as `RESEND_API`). That's outside the project and not in git, but nothing reads it there.
     - Move it into Firebase's secret store: in `C:\Users\renau\Coding\BibleSketch-astro`, run `firebase functions:secrets:set RESEND_API_KEY --project biblesketch-5104c` and paste the key when asked.
     - Then delete that `.env`: a plain-text key in an old folder is one more place to leak.
-  - [ ] Verify the sending domain `biblesketch.app` in Resend (Resend can add the Cloudflare DNS records; its return path goes on a `send.` subdomain, and Email Routing keeps receiving mail).
+  - [ ] **Sending domain `e.biblesketch.app`** (owner's choice, 2026-09-24). The DNS was checked the same day: DKIM, the `send.e` return path, the receiving MX, and the root DMARC `p=none`, which covers the subdomain. Confirm Resend shows the domain as "Verified", and keep "receiving" on, because replies come back through it (plan §6.8).
   - **Urgent decision (plan §12.1):** a one-time, honest win-back email to the 85 people who signed up since Mar 26 and never got to make a page (the generator was down Jun-Sep), relying on CASL implied consent. The April sign-ups age out during October. Decided 2026-09-24: the gift is a month of unlimited prints. Still open: the implied-consent basis (a lawyer check is worth it), plus approval of the Worker deploy and the grant script.
   - **Opt-in bonus** (decided 2026-09-24: extra free prints for joining the emails): confirm the number (+5 proposed) and the checkbox wording.
   - [x] **Billing webhook fix deployed** (2026-09-24, owner-approved; revision handlezohowebhook-00137; unsigned calls still 401). Only the Premium plan code grants Premium.
@@ -54,11 +54,12 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
     - decide yes or no, and monthly, annual ($14.99), or both;
     - if yes, create the plan in Zoho Billing (no automation rule is needed yet) and give Claude its plan code;
     - keep it off the pricing page: the offer only goes out by email.
-  - Set the secrets yourself (plan §6.5):
-    - `RESEND_API_KEY` and `RESEND_WEBHOOK_SECRET` as Firebase secrets (`firebase functions:secrets:set <NAME>`);
-    - `EMAIL_HOOK_SECRET` (any random value) as both a Firebase secret and a Worker secret (`npx wrangler secret put EMAIL_HOOK_SECRET` in `web/`).
+  - Set the secrets yourself as Firebase secrets (plan §6.5; `firebase functions:secrets:set <NAME>`):
+    - `RESEND_API_KEY` (above);
+    - `RESEND_WEBHOOK_SECRET`, when Claude creates the webhook in phase 1.
+    - No Worker secret is needed: replies come back through Resend, not a Cloudflare Email Worker.
 - [ ] **Decisions (plan §11):**
-  - the sender name ("Renaud at Bible Sketch"?) and where replies to hello@biblesketch.app go;
+  - the sender name ("Renaud at Bible Sketch" `<renaud@e.biblesketch.app>`?) and which inbox replies are forwarded to;
   - the mailing address for the CASL footer;
   - the consent checkbox wording and the persona question;
   - the bonus amounts (first purchase, win-back, seasonal, referral);
