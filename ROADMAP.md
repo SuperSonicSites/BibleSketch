@@ -146,10 +146,13 @@ Built 2026-09-23 in `web/`: `src/data/pins.json` (the calendar), `src/lib/pins.t
   - visual profiles, and a winners-vs-losers visual study, become composition notes.
 
   Backend: `createSketch` takes the master-only `guidance` (and a verse `composition`), and every generation keeps
-  its brief, guidance, models, references and prompt version on its private ledger doc. **That backend part is not
-  deployed yet.** The emulator security check passed on 2026-09-24 (44/44, including the new master-guidance
-  step). What's left is the owner's `firebase deploy --only "functions:createSketch,functions:editSketch"` (CHECKLIST).
-  Until then createSketch ignores `guidance`. Details: runbook "Daily scheduled task".
+  its brief, guidance, models, references and prompt version on its private ledger doc. **Deployed 2026-09-24**
+  (createSketch, editSketch) after the emulator security check passed (44/44). Verified live:
+  - a master generation with guidance (Genesis 8:11) drew exactly the moment asked for;
+  - its brief, guidance, models, refs and prompt version are on the private `generations/` doc;
+  - the public sketch doc has no prompt fields.
+
+  Details: runbook "Daily scheduled task".
 - Not verified yet: the `security-check.mjs` step for the master account's 250 cap (the emulators were held by another session on 2026-09-23). Run it with the next emulator suite.
 - Local test of `/pin-img`: set `"remote": true` on the `images` binding in `wrangler.jsonc` (local mode can't draw overlays), and remove it after.
 
