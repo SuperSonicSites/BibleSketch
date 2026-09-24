@@ -6,17 +6,26 @@ Owner-only steps: CHECKLIST, "Pinterest auto-publish".
 
 ## Status (update this block at the end of every Pinterest session)
 
-As of **2026-09-24 00:40 UTC**:
-- **Calendar** (`web/src/data/pins.json`, 155 entries, `pins-check`: no errors):
+As of **2026-09-24 03:30 UTC**:
+- **Calendar** (`web/src/data/pins.json`, 173 entries, `pins-check`: no errors):
 
   | Board | Pins | Dates |
   |---|---|---|
   | Christmas | 40 | Sept 23 - Dec 19 |
   | Scripture | 74 | Sept 24 - Dec 20 (all verse art, `plain` template) |
-  | Sunday School | 41 | Sept 25 - Nov 13 (one a day Oct 1 - Nov 5) |
+  | Sunday School | 59 | Sept 25 - Nov 13 (one a day Oct 1 - Nov 5, plus the Genesis 1-4 series Oct 2 - 30) |
 
-  Ramp capacity through Dec 20 is ~370; **216 slots are open**, first open day Oct 2. Sunday School has nothing after
+  Ramp capacity through Dec 20 is ~370; **198 slots are open**, first open day Oct 9. Sunday School has nothing after
   Nov 13 and Christmas is thin in December by design (front-loaded).
+- **Genesis 1-4 series** (2026-09-24, owner request after the stats showed Genesis 1-4 Pins earn 62% of clicks):
+  18 reviewed pages on the Sunday School board every day or two from Oct 2 to Oct 30, in story order: Creation days
+  1-7 (opener "Days of Creation Coloring Pages"), "very good", Adam's breath of life, tending the garden, Eve,
+  the fruit, hiding, garments of skin, leaving Eden, Cain and Abel (x2). 23 generated, 5 rejected and left private
+  (broken border; implied nudity in the realistic Young Child style; lone figure; thin lines). Lesson: for Adam
+  and Eve, the Toddler style keeps them modest (behind flowers, with animals); the Young Child style drew Eve
+  covered only by her hair twice. Cain's angry face (Gen 4:3-5) was kept on purpose: the verse says so.
+- **Alt text**: every Pin on the active boards has alt text (the 18 missing ones, mostly old Genesis Pins, were
+  written from their images and set 2026-09-24). New RSS Pins still need the weekly pass.
 - **Feeds connected** (Pinterest > Settings > Bulk create Pins): `christmas.xml` (Sept 23), `scripture.xml`
   (Sept 24 00:01 UTC). **Not yet:** `sunday-school.xml` (connect after 2026-09-25 00:00 UTC, when its first Pin is
   in the feed; Pinterest refuses an empty feed). `easter.xml` from Feb 1. `adult.xml` stays unconnected (paused).
@@ -25,8 +34,9 @@ As of **2026-09-24 00:40 UTC**:
   Connected to @biblesketch in Sandbox. 3 Sandbox test Pins exist (boards "Sandbox - christmas/scripture/
   sunday-school", visible only to us).
 - **Stats through the API** since 2026-09-24: https://biblesketch.app/api/pinterest/report (see "Reading
-  performance"). Baseline below. **Monthly email report** to renaud@supersonicsites.com on the 24th (first one
-  sent by hand 2026-09-24).
+  performance"). Baseline below. **Monthly email report** to renaud@supersonicsites.com, CC
+  brent@supersonicsites.com, on the 24th (first one sent by hand 2026-09-24). Brent's address was added as an
+  Email Routing destination 2026-09-24 and gets his copy once he clicks Cloudflare's verification link.
 - **Open decisions** (CHECKLIST): AI disclosure label on API Pins; "Free Printable" wording on the kids' banners.
 - **Next jobs:** connect `sunday-school.xml` (Sept 25 after 8 pm EDT); weekly alt text; generate Sunday School
   pages for Nov 6 onward and more Christmas scenes; read the paper/purple test mid-February; first day-30
@@ -130,7 +140,7 @@ Baseline 2026-09-24 (compare at the day-30 read, mid-November):
   clicks, 3.4x the outbound per Pin of everything else (5.2 vs 1.6). The calendar has one Genesis 1-4 entry (Nov 3). Top Pin: "Creation Narrative ... Gen 1:20-22" (20,327
   impressions, 50 outbound clicks in 90 days).
 - Top 10 Pins = 45% of impressions, 50% of outbound. 30 Pins had under 100 impressions in 90 days.
-- 18 Pins lack alt text (16 of them Genesis/creation Pins, including the top Pin).
+- 18 Pins lacked alt text (16 of them Genesis/creation Pins, including the top Pin); all set the same day.
 
 **Monthly email report** (owner request 2026-09-24: text only, every ~30 days, **a quick TLDR, not an analytics
 dashboard**: keep it about 15 lines): the Worker's cron (`0 13 24 * *`, `web/wrangler.jsonc`; entry
@@ -144,8 +154,11 @@ copy. Preview without sending: `/api/pinterest/report?tldr` (owner session). It 
 Email Routing (`send_email` binding `REPORT_EMAIL`, raw MIME: the structured `send()` is refused without Email
 Sending onboarding) to a verified destination address, from reports@biblesketch.app. If building fails, a
 "FAILED" email with the error goes out instead (e.g. Pinterest disconnected). Send one now: the "Email the
-monthly report now" button on /api/pinterest (owner session). Changing the recipient: it must be a verified
-Email Routing destination address, and both `TO` and `destination_address` change.
+monthly report now" button on /api/pinterest (owner session). Recipients: `TO` and `CC` in
+`pinterest-email.ts` and `allowed_destination_addresses` in `wrangler.jsonc`; each must be a verified Email Routing
+destination (`npx wrangler email routing addresses list`; add one with `... addresses create <email>`, then the
+person clicks the verification link). Raw MIME has one envelope recipient, so each CC is a separate send of the same
+message; a failed CC is logged and doesn't fail the report.
 
 **Internal API (fallback):** in the signed-in Pinterest tab, `/resource/BoardFeedResource/get/` with `source_url` and header
 `X-Pinterest-PWS-Handler: www/[username]/[slug].js` returns each Pin's `creator_analytics` (lowercase keys:

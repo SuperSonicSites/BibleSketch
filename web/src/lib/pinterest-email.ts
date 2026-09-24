@@ -11,20 +11,26 @@ import { BOARD_NAMES, api, report } from './pinterest.ts';
 const E = env as unknown as { PINTEREST: KVNamespace; REPORT_EMAIL: { send(m: EmailMessage): Promise<void> } };
 
 const FROM = 'reports@biblesketch.app';
-const TO = 'renaud@supersonicsites.com'; // also the binding's destination_address (wrangler.jsonc)
+// Every recipient must be a verified Email Routing destination address and listed in the binding's
+// allowed_destination_addresses (wrangler.jsonc).
+const TO = 'renaud@supersonicsites.com';
+const CC = ['brent@supersonicsites.com']; // owner request 2026-09-24
 
-// Email Routing (no Email Sending onboarding) only takes raw MIME messages; the structured send() is refused.
-function send(subject: string, text: string, html?: string) {
+// Email Routing (no Email Sending onboarding) only takes raw MIME messages, one envelope recipient each: the same
+// message goes to TO and to each CC. A CC that fails (e.g. not verified yet) is logged and doesn't fail the report.
+async function send(subject: string, text: string, html?: string) {
   const part = (type: string, body: string) => [`Content-Type: ${type}; charset=utf-8`, 'Content-Transfer-Encoding: 8bit', '', body];
   const boundary = `b-${crypto.randomUUID()}`;
   const body = html
     ? [`Content-Type: multipart/alternative; boundary="${boundary}"`, '', `--${boundary}`, ...part('text/plain', text),
       `--${boundary}`, ...part('text/html', html), `--${boundary}--`]
     : part('text/plain', text);
-  return E.REPORT_EMAIL.send(new EmailMessage(FROM, TO, [
-    `From: Bible Sketch <${FROM}>`, `To: ${TO}`, `Subject: ${subject}`, `Date: ${new Date().toUTCString()}`,
+  const raw = [
+    `From: Bible Sketch <${FROM}>`, `To: ${TO}`, `Cc: ${CC.join(', ')}`, `Subject: ${subject}`, `Date: ${new Date().toUTCString()}`,
     `Message-ID: <${crypto.randomUUID()}@biblesketch.app>`, 'MIME-Version: 1.0', ...body,
-  ].join('\r\n').replace(/\r?\n/g, '\r\n')));
+  ].join('\r\n').replace(/\r?\n/g, '\r\n');
+  await E.REPORT_EMAIL.send(new EmailMessage(FROM, TO, raw));
+  for (const cc of CC) await E.REPORT_EMAIL.send(new EmailMessage(FROM, cc, raw)).catch((e) => console.error('[pinterest] report cc', cc, e));
 }
 
 const SNAPSHOT = 'report:last'; // { date, boards: { [boardId]: { impression, outbound_click } } }
