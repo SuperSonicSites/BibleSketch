@@ -4199,7 +4199,12 @@ const zohoToken = async (fresh = false) => {
     }),
   });
   const out = await res.json().catch(() => ({}));
-  if (!out.access_token) throw new Error(`Zoho token ${res.status} ${out.error || ''} ${out.error_description || ''}`);
+  if (!out.access_token) {
+    // Shapes only, never values: tells a mangled paste (quotes, a missing piece) from a mismatched client.
+    const shape = (v) => `${v.length}${v.startsWith('1000.') ? '/1000.' : ''}${/^[!-~]+$/.test(v) ? '' : '/odd-chars'}`;
+    const [id, secret, refresh] = [zohoClientId, zohoClientSecret, zohoRefreshToken].map((s) => s.value().trim());
+    throw new Error(`Zoho token ${res.status} ${out.error || ''} ${out.error_description || ''} (shapes id ${shape(id)}, secret ${shape(secret)}, refresh ${shape(refresh)})`);
+  }
   // The token answer names this account's API server (www.zohoapis.ca for Canada).
   zohoAccess = { token: out.access_token, api: out.api_domain || 'https://www.zohoapis.ca', expires: Date.now() + (out.expires_in || 3600) * 1000 };
   await ref.set(zohoAccess);
