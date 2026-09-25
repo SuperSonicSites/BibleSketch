@@ -6,7 +6,7 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
 
 ### Start here (priority order, updated 2026-09-24 night)
 1. **Approve the phase 0.5 deploys and the privacy text** (Lifecycle email, below). Every day without it, about one sign-up arrives that we may never email.
-2. **Send Claude a mailing address** for the emails and the privacy page (CASL, below). It's needed before the first marketing email.
+2. **Free weekly page for subscribers:** decide yes or no, and the final checkbox wording, before the phase 0.5 deploy (Claude's question of 2026-09-24).
 3. **Before mid-October: the outage win-back decision** (Lifecycle email, below). The April sign-ups age out of CASL's 6-month window during October.
 4. **Zoho Mail alias** so you can answer as `hello@biblesketch.app` (below).
 5. **Brent's Cloudflare verification click** (below).
@@ -78,7 +78,7 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
   - the weekly email, in 2;
   - Resend, in 5;
   - how opt-in and unsubscribe work, in 7.4.
-- [ ] **A mailing address** (a PO box is fine). CASL requires it in every marketing email and in the consent request, where a link to the privacy page counts. Claude adds it to the privacy page and the email footer.
+- [x] **Mailing address (decided 2026-09-24):** Supersonic Sites Inc., 109b - 1917 Peninsula Rd, Ucluelet, BC V0R 3A0, Canada, from supersonicsites.com. It's in the privacy page's Contact section, which the sign-up box links to, and in the email footer.
 - [ ] **Still open:**
   - implied consent for the 4 past buyers;
   - the other bonus amounts (first purchase, win-back, seasonal, referral) when those emails are built.

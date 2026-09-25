@@ -129,7 +129,7 @@ Plus: **know your numbers.** What gets measured improves.
 - **One action:** one reply or one link destination per email. The welcome and the flagship are the only
   exceptions: one main link plus the super-signature.
 - **Super-signature:** on every marketing email, 3 offers under the sign-off, chosen by the reader's stage (§5.9).
-- **Footer (CASL):** business name, mailing address, unsubscribe link, and the reason they're getting the email.
+- **Footer (CASL):** "Bible Sketch · Supersonic Sites Inc., 109b - 1917 Peninsula Rd, Ucluelet, BC V0R 3A0, Canada · hello@biblesketch.app · Unsubscribe", plus one line saying why they're getting the email (owner decision 2026-09-24: the Supersonic Sites address from supersonicsites.com; the privacy page names the same operator).
 
 ---
 
@@ -677,7 +677,7 @@ send next, and never ask what their behaviour already tells us.
 - Bible Sketch is run from Canada, so **treat every contact under CASL**. It's stricter than the US CAN-SPAM Act.
 - **Express consent:** the unticked box, with the date, the exact wording and the source stored (§6.2).
 - **Every marketing email shows:**
-  - the business name and a mailing address (the owner provides one; a PO box works);
+  - the business name and mailing address: Supersonic Sites Inc., 109b - 1917 Peninsula Rd, Ucluelet, BC V0R 3A0, Canada (decided 2026-09-24);
   - a working unsubscribe link. Resend handles it immediately, and CASL allows up to 10 business days.
 - **Existing users:** only the new opt-in reaches them. The in-app banner asks, and asking by email is itself a
   marketing message.
@@ -803,7 +803,7 @@ The original list:
      - `RESEND_API_KEY`;
      - `RESEND_WEBHOOK_SECRET`, which you get when the webhook endpoint is created in phase 1.
 2. **Sender (decided 2026-09-24):** "Renaud from Bible Sketch" `<renaud@e.biblesketch.app>`, with replies to `hello@biblesketch.app`, which forwards to the owner's Zoho inbox.
-3. **A mailing address** for the footer (CASL).
+3. **Mailing address (decided 2026-09-24):** Supersonic Sites Inc., 109b - 1917 Peninsula Rd, Ucluelet, BC V0R 3A0, Canada, as shown on supersonicsites.com. It's in the email footer and on the privacy page.
 4. **Approve** the consent checkbox wording and the persona question (§6.3), and the privacy policy update (§6.10).
 5. **Bonus amounts:**
    - **the opt-in bonus** (decided: extra free prints; proposed: +5; §12.2);
