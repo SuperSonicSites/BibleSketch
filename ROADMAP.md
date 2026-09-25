@@ -174,6 +174,10 @@ Built 2026-09-23 in `web/`: `src/data/pins.json` (the calendar), `src/lib/pins.t
     CHECKLIST 0a).
   - (2026-09-25) **phase 2 offers give prints, not credits** ("prints is what people want"): the Advent/seasonal bonus,
     the re-engagement gift and any other phase 2 gift are extra prints. Phase 2 started 2026-09-25.
+  - (2026-09-25) Sunday Prep: 12 issues approved, Oct 8 to Dec 24 (Jonah, Zacchaeus, David, Daniel, the loaves,
+    Zechariah, Ruth, then Advent: Gabriel, Elizabeth, Joseph's dream, the road to Bethlehem, Christmas night).
+  - (2026-09-25) **Advent offer = unlimited prints for a limited time**, like the outage gift (owner). Details to
+    confirm: window, claim by click or automatic, who.
   - (2026-09-24) the weekly Thursday page is free to print from the email only (a signed PDF link, plan §6.6), and the consent box says so. Replies go to hello@biblesketch.app; the sender is "Renaud from Bible Sketch"; the mailing address is Supersonic Sites Inc., Ucluelet, BC.
 - **Billing (deployed 2026-09-24; the plan-code fix in revision 00137, then the Unlimited Prints plans in revision 00138 with Worker 637f9390):** `handleZohoWebhook` granted Premium to any subscription it received. Now only the `bible-sketch-premium` plan code grants or removes Premium. Other plans get a 400 and nothing changes. Security check 45/45.
 - **Phases:**
