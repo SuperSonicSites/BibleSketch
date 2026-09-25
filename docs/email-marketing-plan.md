@@ -1265,15 +1265,28 @@ less churn.
      (`functions/index.js` section 18):
      - creates the buyer as a **USD** Zoho customer, with the uid custom field the webhook reads, once, and keeps its
        id as `zohoCustomerUsdId`;
-     - then opens a hosted page for that customer with the USD price set per checkout (packs are the $0 plan plus
-       their add-on at quantity 1).
+     - then opens a hosted page for that customer with the product's **USD price list**.
+       - "US Bible Sketch Premium" (`9037000000287019`) holds Premium $4.99, Prints $1.99 and Prints yearly $19.99.
+         The Prints prices were added by Claude on 2026-09-25.
+       - Spark, Torch and Beacon each have their own list: the $0 plan plus one package of 20, 80 or 200 at $4.99,
+         $14.99 or $29.99.
+       - So prices are changed in Zoho > Product Catalog > Price Lists, together with `web/src/lib/checkout.ts`.
    - **After payment:** Zoho redirects to `/checkout/done`, which moves the whole tab to the pricing page's
      thank-you banner. That banner also sends the Zaraz purchase events.
-   - **Needs:**
-     - the Zoho API client: `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET` and `ZOHO_REFRESH_TOKEN` as Firebase secrets, with
-       the scopes `ZohoSubscriptions.customers.CREATE,ZohoSubscriptions.hostedpages.CREATE`;
-     - `ZOHO_ORG_ID` in `functions/.env`;
-     - USD enabled in Zoho, with a gateway that charges USD.
+   - **Zoho, checked and set by Claude in the owner's browser (2026-09-25):**
+     - organization 110000236578 (set as `ZOHO_ORG_ID` in `functions/.env`), base currency CAD;
+     - USD is enabled, with automatic exchange rates;
+     - Stripe ("Supersonic Sites", cards) is the gateway, and it charges in the invoice's currency;
+     - the customer field "User ID (Do not Touch)" is `cf_cf_firebase_uid`, mandatory, and shown in the portal and on
+       hosted pages. **Hide it (Show in Customer Portal/HostedPage: No) only after the pricing page uses
+       `/checkout`:** the old links fill it from the URL;
+     - "Allow duplicates for customer display name" was turned **on**, so a buyer's USD customer can share a name with
+       their old CAD one;
+     - there's no iframe or allowed-domain setting on the hosted page templates.
+   - **Still needed:** the Zoho API client (a Self Client at https://api-console.zohocloud.ca). The owner sets
+     `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET` and `ZOHO_REFRESH_TOKEN` as Firebase secrets, with the scopes
+     `ZohoSubscriptions.customers.CREATE,ZohoSubscriptions.hostedpages.CREATE`. The Canadian servers are
+     `accounts.zohocloud.ca` for tokens, and the API server the token answer names (`www.zohoapis.ca`).
    - **Go-live order:**
      1. deploy `createCheckout` and `emailAction`;
      2. open one real checkout per plan and check the price and currency, without paying;

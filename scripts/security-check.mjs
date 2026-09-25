@@ -251,7 +251,7 @@ await step('offer link: opens the on-site Prints checkout until the offer ends',
   assert.equal((await fetch(url('offer-tok'), { redirect: 'manual' })).status, 410);
 });
 
-await step('createCheckout: signed-in, verified accounts only; the Prints plans need a live offer; the server sets the USD prices', async () => {
+await step('createCheckout: signed-in, verified accounts only; the Prints plans need a live offer; USD price lists', async () => {
   const anon = clientApp('anon-checkout');
   await signInAnonymously(anon.auth);
   await callFails(anon.fn('createCheckout', { plan: 'premium' }), 'unauthenticated', 'anonymous');
@@ -263,12 +263,14 @@ await step('createCheckout: signed-in, verified accounts only; the Prints plans 
   await callFails(dora.fn('createCheckout', { plan: 'prints-monthly', offer: 'offer-tok' }), 'permission-denied', 'expired offer');
   await adminPatch(`emailProfiles/${dora.uid}`, offers('c7', { token: { stringValue: 'offer-tok' }, expiresAt: later() }));
   const yearly = await dora.fn('createCheckout', { plan: 'prints-yearly', offer: 'offer-tok' });
-  assert.deepEqual(yearly.page.plan, { plan_code: 'bible-sketch-prints-yearly', price: 19.99 });
+  assert.deepEqual(yearly.page.plan, { plan_code: 'bible-sketch-prints-yearly' });
+  assert.equal(yearly.page.pricebook_id, '9037000000287019');
   assert.equal(yearly.page.redirect_url, 'https://biblesketch.app/checkout/done?plan=prints-yearly');
   const torch = await dora.fn('createCheckout', { plan: 'torch', offer: 'ignored' });
-  assert.deepEqual(torch.page.plan, { plan_code: 'Torch', price: 0 });
-  assert.deepEqual(torch.page.addons, [{ addon_code: '80credits', quantity: 1, price: 14.99 }]);
-  assert.equal((await dora.fn('createCheckout', { plan: 'premium' })).page.plan.price, 4.99);
+  assert.deepEqual(torch.page.plan, { plan_code: 'Torch' });
+  assert.deepEqual(torch.page.addons, [{ addon_code: '80credits', quantity: 80 }]);
+  assert.equal(torch.page.pricebook_id, '9037000000294193');
+  assert.equal((await dora.fn('createCheckout', { plan: 'premium' })).page.pricebook_id, '9037000000287019');
 });
 
 await step('first-pack bonus: a pack bought inside the C2 window adds 10 pages, once', async () => {

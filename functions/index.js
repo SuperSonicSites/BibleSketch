@@ -4158,30 +4158,30 @@ exports.emailReply = onRequest({ secrets: [workerPurgeSecret], timeoutSeconds: 3
 // 18. ON-SITE CHECKOUT (web /checkout/<plan>; docs/email-marketing-plan.md §12.20)
 // ---------------------------------------------------------
 // The buyer stays on biblesketch.app: this opens a Zoho Billing hosted page for one plan and the page shows it in an
-// iframe (Zoho hides its own header and footer there). Prices are USD, set here per checkout (owner, 2026-09-25: we
-// are international), so they don't depend on the CAD prices on Zoho's plans. The buyer is a Zoho customer in USD
-// carrying the uid custom field the billing webhook reads; it is created on the first checkout and kept on the
-// user doc. The Prints plans are email-only: they need a live offer token from emailProfiles (section 17).
+// iframe (Zoho hides its own header and footer there). Prices are USD (owner, 2026-09-25: we are international), from
+// Zoho's USD price lists (Product Catalog > Price Lists; checked 2026-09-25), not the CAD plan prices. The buyer is a
+// Zoho customer in USD carrying the uid custom field the billing webhook reads; it is created on the first checkout
+// and kept on the user doc. The Prints plans are email-only: they need a live offer token from emailProfiles (§17).
 const zohoClientId = defineSecret('ZOHO_CLIENT_ID');
 const zohoClientSecret = defineSecret('ZOHO_CLIENT_SECRET');
 const zohoRefreshToken = defineSecret('ZOHO_REFRESH_TOKEN');
 const zohoOrgId = defineString('ZOHO_ORG_ID', { default: '' });
-const ZOHO_ACCOUNTS = 'https://accounts.zoho.ca'; // the Canada data center (billing.zohosecure.ca)
-const ZOHO_API = 'https://www.zohoapis.ca/billing/v1';
+const ZOHO_ACCOUNTS = 'https://accounts.zohocloud.ca'; // the Canada data center (subscriptions.zohocloud.ca)
 const ZOHO_UID_FIELD = 'User ID (Do not Touch)'; // the customer custom field behind cf_cf_firebase_uid
-// Packs are a $0 plan plus a one-time add-on (the webhook's workflow rules key on the product).
+// Packs are a $0 plan plus a one-time add-on priced as one package (the webhook's workflow rules key on the product).
+// USD price lists: "US Bible Sketch Premium" holds Premium $4.99, Prints $1.99 and $19.99; each pack has its own.
 const CHECKOUT_PLANS = {
-  premium: { plan: 'bible-sketch-premium', price: 4.99 },
-  'prints-monthly': { plan: 'bible-sketch-prints-monthly', price: 1.99, offerOnly: true },
-  'prints-yearly': { plan: 'bible-sketch-prints-yearly', price: 19.99, offerOnly: true },
-  spark: { plan: 'Spark', price: 0, addon: { addon_code: '20credits', quantity: 1, price: 4.99 } },
-  torch: { plan: 'Torch', price: 0, addon: { addon_code: '80credits', quantity: 1, price: 14.99 } },
-  beacon: { plan: '200credits', price: 0, addon: { addon_code: '200credit', quantity: 1, price: 29.99 } },
+  premium: { plan: 'bible-sketch-premium', pricebook: '9037000000287019' },
+  'prints-monthly': { plan: 'bible-sketch-prints-monthly', pricebook: '9037000000287019', offerOnly: true },
+  'prints-yearly': { plan: 'bible-sketch-prints-yearly', pricebook: '9037000000287019', offerOnly: true },
+  spark: { plan: 'Spark', pricebook: '9037000000292005', addon: { addon_code: '20credits', quantity: 20 } },
+  torch: { plan: 'Torch', pricebook: '9037000000294193', addon: { addon_code: '80credits', quantity: 80 } },
+  beacon: { plan: '200credits', pricebook: '9037000000294245', addon: { addon_code: '200credit', quantity: 200 } },
 };
 
-let zohoAccess = null; // { token, expires }: one access token per instance, refreshed a minute early
+let zohoAccess = null; // { token, api, expires }: one access token per instance, refreshed a minute early
 const zohoToken = async () => {
-  if (zohoAccess && zohoAccess.expires > Date.now() + 60000) return zohoAccess.token;
+  if (zohoAccess && zohoAccess.expires > Date.now() + 60000) return zohoAccess;
   const res = await fetch(`${ZOHO_ACCOUNTS}/oauth/v2/token`, {
     method: 'POST',
     body: new URLSearchParams({
@@ -4191,14 +4191,16 @@ const zohoToken = async () => {
   });
   const out = await res.json().catch(() => ({}));
   if (!out.access_token) throw new Error(`Zoho token ${res.status} ${out.error || ''}`);
-  zohoAccess = { token: out.access_token, expires: Date.now() + (out.expires_in || 3600) * 1000 };
-  return zohoAccess.token;
+  // The token answer names this account's API server (www.zohoapis.ca for Canada).
+  zohoAccess = { token: out.access_token, api: out.api_domain || 'https://www.zohoapis.ca', expires: Date.now() + (out.expires_in || 3600) * 1000 };
+  return zohoAccess;
 };
 const zohoPost = async (path, body) => {
-  const res = await fetch(`${ZOHO_API}${path}`, {
+  const { token, api } = await zohoToken();
+  const res = await fetch(`${api}/billing/v1${path}`, {
     method: 'POST',
     headers: {
-      authorization: `Zoho-oauthtoken ${await zohoToken()}`, 'content-type': 'application/json',
+      authorization: `Zoho-oauthtoken ${token}`, 'content-type': 'application/json',
       'X-com-zoho-subscriptions-organizationid': zohoOrgId.value(),
     },
     body: JSON.stringify(body),
@@ -4227,7 +4229,8 @@ exports.createCheckout = onCall({ secrets: [zohoClientId, zohoClientSecret, zoho
   if (plan === 'premium' && user.isPremium) throw new HttpsError('failed-precondition', 'ALREADY_PREMIUM');
 
   const page = {
-    plan: { plan_code: p.plan, price: p.price },
+    plan: { plan_code: p.plan },
+    pricebook_id: p.pricebook,
     ...(p.addon && { addons: [p.addon] }),
     redirect_url: `https://biblesketch.app/checkout/done?plan=${plan}`,
   };
