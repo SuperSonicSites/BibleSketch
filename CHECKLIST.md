@@ -23,6 +23,9 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
    - The Worker forwards every message to renaud@supersonicsites.com first, exactly as today.
    - Then it acts on "unsubscribe" replies and answers to "a class, or your kids at home?".
    - Test it: send "hello" to hello@. It should arrive in Zoho as before.
+   - **2026-09-25, tried and rolled back:** Claude switched the rule with `wrangler email routing rules update` and
+     sent a test from Resend (renaud@e.biblesketch.app). It bounced within 2 seconds, so the rule was put back to
+     forwarding. The cause isn't known yet, and the forward-only path hadn't been tested with a Resend sender.
 1. **Test the opt-in live:** sign in on biblesketch.app. The banner appears once; click "Yes, sign me up", then Account should show 5 more Downloads/Prints. This also puts your account on the list.
 2. **Check the test email** (sent Sep 25 to renaud@supersonicsites.com). The real one goes to 80 people on **Tue Sep 29 at 11:00 AM ET**, after Claude's name review of Sep 25. To change or stop it, cancel in Resend > Emails, or tell Claude before Monday night (the Resend MCP is connected).
 3. **Zoho Mail alias** so you can answer as `hello@biblesketch.app` (below).

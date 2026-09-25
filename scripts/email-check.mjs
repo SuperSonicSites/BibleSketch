@@ -105,6 +105,10 @@ const quoted = '\n\nOn Tue, Oct 13, 2026 at 9:00 AM Renaud from Bible Sketch <re
 for (const [subject, text, want] of [
   ['Unsubscribe', '', 'unsubscribe'],
   ['re: quick question', 'Please remove me from this list', 'unsubscribe'],
+  ['re: out of prints?', 'Unsubscribe' + quoted, 'unsubscribe'],
+  ['re: out of prints?', "I don't want to unsubscribe, but could you send fewer emails?", null],
+  ['re: quick question', 'Do not unsubscribe me', null],
+  ['re: one print left', 'Love these pages! My printer jammed and I lost a print, can I get it back? If not, remove me I guess.', null],
   [W1, 'For my Sunday school class!' + quoted, 'teacher'],
   [W1, 'My kids at home, we homeschool', 'family'],
   ['Re: your 5 extra prints', 'Just for me, I color in the evenings', 'adult'],

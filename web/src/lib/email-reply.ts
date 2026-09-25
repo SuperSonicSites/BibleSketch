@@ -16,7 +16,10 @@ export function newText(text: string): string {
 
 export function parseReply(subject: string, text: string): Parsed | null {
   const t = newText(text).toLowerCase();
-  if (/unsubscribe/i.test(subject) || /\b(unsubscribe|remove me|stop (emailing|sending))\b/.test(t.slice(0, 300))) {
+  // An unsubscribe only when it's the whole message ("unsubscribe", "please remove me"), or the subject says so (the
+  // mailto fallback). A longer reply that mentions it ("I don't want to unsubscribe, but...") goes to the owner.
+  const short = t.length <= 60 && !/\b(not|don'?t|do not|never)\b/.test(t);
+  if (/unsubscribe/i.test(subject) || (short && /\b(unsubscribe|remove me|stop (emailing|sending))\b/.test(t))) {
     return { kind: 'unsubscribe' };
   }
   // The sorting question (W1, and the banner's "your 5 extra prints" note), answered in a few words.

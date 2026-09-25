@@ -872,7 +872,9 @@ The original list:
       starts a generation;
     - `email()` in `src/worker.ts` forwards every hello@ message to the owner first, then posts easy answers (an
       unsubscribe, the sorting question) to `emailReply`. It uses the purge hook's shared secret, so there's no new
-      secret to set.
+      secret to set. It never answers anyone: every reply is the owner's to answer. An unsubscribe counts only when
+      the whole reply is a few words ("unsubscribe", "please remove me"; no "not"/"don't") or the subject says
+      unsubscribe (owner, 2026-09-25: real replies are long and mixed, so a mention inside one is left to the owner).
   - `scripts/email-backfill.mjs`: run once on 2026-09-25 (184 accounts: 42 made a page, 4 bought, 1 opted in).
   - The emails:
     - W0, W1 and the banner's `joined` note (which asks the sorting question too);
