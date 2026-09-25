@@ -4,8 +4,13 @@ The plan for Bible Sketch's lifecycle and marketing email: the philosophy (Dean 
 applies to our users, the campaigns, the system that sends them, and the build order. **Read §1 and §2 before
 writing or editing any email**, and check every draft against the checklist in §9.
 
-**Status (2026-09-24):** plan only, nothing built or sent. Waiting on the owner steps in §11 (Resend account and
-domain, sender name, mailing address, consent wording, bonus amounts).
+**Status (2026-09-25):**
+- **Live:**
+  - phase 0.5 (the opt-in capture, +5 prints);
+  - the outage win-back, queued for Sep 29.
+- **Phase 1 is built and deployed but not sending (§10).** The owner has 15 test emails to approve. Sending starts
+  when `config/email` gets `live: true`.
+- **The live words of every email are in `functions/email.js`.** §5 holds the drafts they came from.
 
 - Owner decisions so far: emails are for **sign-ups**, whose data lives in **Firebase**, sent through **Resend**.
   No Zoho integration (purchases already land in Firestore through our webhook). Every campaign is automated, and
@@ -709,12 +714,18 @@ The senders never overlap: each has its own purpose and audience, and Resend is 
    - the profile trigger skips changes that came from Resend, so it never pushes them back.
 8. **One reply path:** `hello@` (§6.8). Resend's receiving is only a forward-to-`hello@` fallback.
 
-**Live today (2026-09-24):**
+**Live today (2026-09-25):**
 - the Firebase, Zoho and Cloudflare emails above;
 - the opt-in capture;
-- the +5 bonus, which is a data change, not an email.
+- the +5 bonus, which is a data change, not an email;
+- the outage win-back, queued in Resend for Sep 29.
 
-No Resend email is built or sending yet.
+**Built and not sending yet:** the phase 1 sequences (§10), which wait for `config/email.live`.
+- In our code the lanes are:
+  - `due()` in `functions/email.js`;
+  - one email a day and 3 a week at most;
+  - one offer a week;
+  - no print offer while printing is unlimited, nor within 14 days of the outage offer.
 
 ### 6.10 Privacy, security and deletion
 - **Collect nothing sensitive:** no church name, no denomination, no children's names or exact ages (age groups
@@ -827,7 +838,56 @@ The original list:
   outage grant script;
 - prepare the outage win-back (§12.1) to go out as soon as Resend is verified.
 
-**Phase 1 (about a week of build once Resend is ready; target Oct 9):**
+**Phase 1: built and deployed 2026-09-25, not sending yet.**
+- **Go live:**
+  - the owner approves the 15 test emails (sent 2026-09-25);
+  - then `config/email` gets `live: true` (a data write, owner-approved).
+  - Until then `emailTick` only logs, every 30 minutes, which email each person is due.
+- **The design changed from the Resend Automations below** (checked against Resend's docs, 2026-09-25): our own
+  functions decide and send, one email at a time, through Resend's send API.
+  - The reason: the stop rules, the 3-a-week and 1-a-day caps, quiet hours (8 a.m. to 8 p.m. their time) and the
+    "re:" threading all live in one tested file, not in a graph in Resend's dashboard.
+  - Resend contacts, topics and Broadcasts come with the weekly flagship in phase 2. `RESEND_ADMIN_KEY` is for that.
+- **Built:**
+  - `functions/email.js`: every email's words, `render()` (CASL footer, one-click unsubscribe headers) and `due()`,
+    the rules for who gets what, when. `node scripts/email-check.mjs` tests the rules, renders every email, and
+    `--render=<email>` writes test sends.
+  - `functions/index.js` section 17:
+    - `emailProfiles/{uid}`: the email choice mirrored by `onPrivateProfileWritten`, the counters kept by the new
+      `onTransactionCreated` (pages made, the first page, bought), the unsubscribe token, open offers, and `fired`
+      (when each email went out);
+    - `emailTick` (every 30 minutes; at most 40 sends a tick, for Resend's 100 a day);
+    - `emailAction` (the unsubscribe and offer links);
+    - `emailReply` (answers read from replies);
+    - `onUserDeleted` also deletes `emailProfiles` and `emailReplies`.
+  - The Worker:
+    - `/api/email/unsubscribe|offer` forwards to `emailAction`, so the links stay on biblesketch.app;
+    - the generator reads `?book=&chapter=&verse=&to=&age=&style=` (or `&font=`). It fills the form in and never
+      starts a generation;
+    - `email()` in `src/worker.ts` forwards every hello@ message to the owner first, then posts easy answers (an
+      unsubscribe, the sorting question) to `emailReply`. It uses the purge hook's shared secret, so there's no new
+      secret to set.
+  - `scripts/email-backfill.mjs`: run once on 2026-09-25 (184 accounts: 42 made a page, 4 bought, 1 opted in).
+  - The emails:
+    - W0, W1 and the banner's `joined` note (which asks the sorting question too);
+    - A1-A3, C1, C2 (with the +10 first-pack bonus, granted by `onTransactionCreated`), C6, C7 with its day-5 and
+      last-day notes;
+    - the outage follow-ups O23, O27 and O30 (Oct 22, 26 and 28).
+    - O27, O30 and C7 link to the 7-day Prints offer (`/api/email/offer`, which redirects to the Zoho checkout until it
+      ends).
+  - The security check has 5 more steps (53 in all), and every one passes.
+- **Changed from the drafts in §5:**
+  - A1 goes on day 2 (W1 has day 1);
+  - A2 asks "how did it turn out?" a day after the first page, because we don't record prints yet;
+  - A3's subject is `3 pages ready to print`, with the 3 newest pages from the master account;
+  - the super-signature appears only in W0 (§9 item 7), with offers that are true today.
+- **Left for later:**
+  - the `events` collection (prints, checkout clicks), which would feed A2's print check and C3;
+  - `resendWebhook` (Resend already suppresses bounces and complaints, and shows opens and clicks);
+  - the Resend contacts sync;
+  - the email numbers in the monthly report, due before its Oct 24 run.
+
+The original phase 1 list:
 - **The data (§6.2-6.3):**
   - `private/profile` with its rules and security-check steps;
   - the first-touch capture and the sign-up questions;
@@ -1186,3 +1246,8 @@ less churn.
 
 ## 13. Test results and changes
 *(Add a dated line for each test or change: what changed, the numbers, and what we kept.)*
+
+- **2026-09-25, phase 1 test sends:** all 15 emails went to the owner (renaud@supersonicsites.com) through the
+  Resend MCP, with real subjects, sample data and placeholder links (`u=test`).
+  - Resend accepted the custom `Message-ID` / `In-Reply-To` headers used for the "re:" threads.
+  - Waiting on the owner's approval.

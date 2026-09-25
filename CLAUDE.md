@@ -20,6 +20,7 @@ Bible Sketch (https://biblesketch.app) turns Bible verses into printable colorin
 ## Email
 
 - Lifecycle and marketing email to sign-ups: [docs/email-marketing-plan.md](docs/email-marketing-plan.md). It covers the Dean Jackson philosophy, voice rules, campaigns, the Firestore → Resend system and CASL. Read its §1-2 and use the §9 checklist before writing any email; ROADMAP 1.6 tracks the build. Sending to real users is owner-approved until the owner grants a standing approval.
+- The engine (phase 1, 2026-09-25): `functions/email.js` holds every email's words and `due()`, the rules for who gets what, when; `emailTick` (functions/index.js section 17) sends through Resend every 30 minutes. It sends nothing until `config/email` has `live: true` (an owner-approved data write); until then it logs what it would send. Changing an email's words changes live email: get the owner's approval of a test send first (`node scripts/email-check.mjs --render=<owner email>`, then the Resend MCP).
 
 ## Facts you can't infer from the code
 
@@ -43,9 +44,10 @@ Bible Sketch (https://biblesketch.app) turns Bible verses into printable colorin
 
 ```bash
 scripts/emulators.cmd                    # full emulator suite; app at http://localhost:5000
-node scripts/security-check.mjs          # 45 checks; must all pass (restart the emulators between runs)
+node scripts/security-check.mjs          # 53 checks; must all pass (restart the emulators between runs)
 node scripts/check-hosting-public.mjs    # before any Hosting change (add --live before a functions deploy)
 node --check functions/index.js
+node scripts/email-check.mjs             # after touching functions/email.js (rules, words) or web/src/lib/email-reply.ts
 ```
 
 - Emulator notes: after many runs in one day, delete `rateLimits/global_<YYYY-MM-DD>` in the Firestore emulator or the cap test fails. The Hosting emulator ignores `firebase.json` headers; check headers on a preview channel.

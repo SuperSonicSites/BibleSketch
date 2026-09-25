@@ -3,7 +3,7 @@
 //
 // Runs against local emulators only:
 //   functions/.secret.local  GEMINI_API_KEY=<any dummy>  ZOHO_WEBHOOK_SECRET=localtestsecret123
-//                            WORKER_PURGE_SECRET=localpurgesecret
+//                            WORKER_PURGE_SECRET=localpurgesecret  RESEND_API_KEY=<any dummy>
 //   functions/.env.local     ZOHO_ENFORCE_AUTH=true  WORKER_PURGE_URL=http://127.0.0.1:8788/api/purge
 //                            FAKE_GEMINI=1 (createSketch/editSketch use a fake Gemini, emulator only)
 //   hosting-public/          the live hosting files (functions render the pages)
@@ -196,6 +196,91 @@ await step('the first opt-in earns 5 bonus prints, once, even after opting out a
   const bonuses = (await getDocs(collection(dora.db, 'users', dora.uid, 'transactions'))).docs
     .filter((d) => d.get('description') === 'Email opt-in bonus');
   assert.equal(bonuses.length, 1);
+});
+
+// ---------------------------------------------------------------- lifecycle email (functions/email.js, index.js 17)
+const adminDoc = async (path) => (await (await fetch(`${FIRESTORE}/${path}`, { headers: { authorization: 'Bearer owner' } })).json()).fields;
+const adminPatch = (path, fields) => fetch(`${FIRESTORE}/${path}?${Object.keys(fields).map((k) => `updateMask.fieldPaths=${k}`).join('&')}`, {
+  method: 'PATCH', headers: { 'content-type': 'application/json', authorization: 'Bearer owner' }, body: JSON.stringify({ fields }),
+});
+const offers = (id, fields) => ({ offers: { mapValue: { fields: { [id]: { mapValue: { fields } } } } } });
+const tick = async () => (await fetch(`${FN}/emailTickNow`)).json();
+const later = () => ({ timestampValue: new Date(Date.now() + 86400000).toISOString() });
+
+await step('email: the choice is mirrored server-side with an unsubscribe token, clients can\'t read it, pages are counted, the welcome is due', async () => {
+  await waitFor(async () => (await adminDoc(`emailProfiles/${dora.uid}`))?.unsubToken, 'emailProfiles mirror');
+  const e = await adminDoc(`emailProfiles/${dora.uid}`);
+  assert.equal(e.optIn.booleanValue, true);
+  assert.equal(e.optInSource.stringValue, 'signup');
+  await waitFor(async () => (await adminDoc(`emailProfiles/${alice.uid}`))?.pagesMade?.integerValue === '1', 'usage counted');
+  await denied(getDoc(doc(dora.db, 'emailProfiles', dora.uid)), 'own emailProfile');
+  await denied(getDoc(doc(bob.db, 'emailReplies', 'x')), 'emailReplies');
+  await denied(getDoc(doc(bob.db, 'config', 'email')), 'config');
+  const due = await tick();
+  assert.ok(due.some((d) => d.uid === dora.uid && d.id === 'w0'), 'w0 due');
+  assert.ok(!due.some((d) => d.uid === alice.uid || d.uid === bob.uid), 'nobody who never opted in');
+});
+
+await step('unsubscribe link: a GET only asks, a POST with the right token unsubscribes, a wrong token changes nothing; opting in again in the app resubscribes', async () => {
+  const token = (await adminDoc(`emailProfiles/${dora.uid}`)).unsubToken.stringValue;
+  const url = (t) => `${FN}/emailAction?a=unsubscribe&u=${dora.uid}&t=${t}`;
+  const oneClick = { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: 'List-Unsubscribe=One-Click' };
+  assert.equal((await fetch(url('wrong'), oneClick)).status, 404);
+  assert.equal((await fetch(url(token))).status, 200);
+  assert.equal((await getDoc(choiceRef(dora))).get('emailOptIn'), true, 'a GET changes nothing');
+  assert.equal((await fetch(url(token), oneClick)).status, 200);
+  assert.equal((await getDoc(choiceRef(dora))).get('emailOptIn'), false);
+  assert.ok(!(await tick()).some((d) => d.uid === dora.uid), 'no email after unsubscribing');
+  await allowed(setDoc(choiceRef(dora), optIn({ optInSource: 'account' }), { merge: true }), 'opt in again');
+  await waitFor(async () => {
+    const p = await adminDoc(`emailProfiles/${dora.uid}`);
+    return p.optIn.booleanValue && !p.unsubscribedAt;
+  }, 'resubscribed');
+});
+
+await step('offer link: redirects to the Prints checkout with the uid until the offer ends', async () => {
+  const url = (t) => `${FN}/emailAction?a=offer&u=${dora.uid}&t=${t}`;
+  await adminPatch(`emailProfiles/${dora.uid}`, offers('c7', { token: { stringValue: 'offer-tok' }, expiresAt: later() }));
+  const r = await fetch(url('offer-tok'), { redirect: 'manual' });
+  assert.equal(r.status, 302);
+  assert.ok(r.headers.get('location').endsWith(`/bible-sketch-prints-monthly?cf_cf_firebase_uid=${dora.uid}`), r.headers.get('location'));
+  assert.equal((await fetch(url('nope'), { redirect: 'manual' })).status, 410);
+  await adminPatch(`emailProfiles/${dora.uid}`, offers('c7', { token: { stringValue: 'offer-tok' }, expiresAt: { timestampValue: new Date(Date.now() - 1000).toISOString() } }));
+  assert.equal((await fetch(url('offer-tok'), { redirect: 'manual' })).status, 410);
+});
+
+await step('first-pack bonus: a pack bought inside the C2 window adds 10 pages, once', async () => {
+  await adminPatch(`emailProfiles/${dora.uid}`, offers('c2', { expiresAt: later() }));
+  const before = await credits(dora);
+  const buy = () => fetch(`${FIRESTORE}/users/${dora.uid}/transactions`, {
+    method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer owner' },
+    body: JSON.stringify({ fields: { type: { stringValue: 'credit_purchase' }, pack: { stringValue: 'spark' } } }),
+  });
+  await buy();
+  await waitFor(async () => (await credits(dora)) === before + 10, 'bonus pages');
+  await buy();
+  await sleep(3000);
+  assert.equal(await credits(dora), before + 10, 'only once');
+  assert.equal((await adminDoc(`emailProfiles/${dora.uid}`)).bought.booleanValue, true);
+});
+
+await step('emailReply: needs the shared secret; replies are applied and kept, and go with the account', async () => {
+  const post = (secret, body) => fetch(`${FN}/emailReply`, {
+    method: 'POST', headers: { 'content-type': 'application/json', ...(secret && { 'x-purge-secret': secret }) }, body: JSON.stringify(body),
+  });
+  const unsub = { from: dora.email, subject: 'Unsubscribe', text: '', kind: 'unsubscribe' };
+  assert.equal((await post(null, unsub)).status, 403);
+  assert.equal((await post('wrong', unsub)).status, 403);
+  assert.equal((await post(PURGE_SECRET, { ...unsub, kind: 'delete' })).status, 400);
+  assert.equal((await post(PURGE_SECRET, { from: dora.email, subject: 're: Your Bible Sketch account', text: 'my class', kind: 'persona', value: 'teacher' })).status, 200);
+  assert.equal((await getDoc(choiceRef(dora))).get('persona'), 'teacher');
+  assert.equal((await post(PURGE_SECRET, unsub)).status, 200);
+  assert.equal((await getDoc(choiceRef(dora))).get('emailOptIn'), false);
+  const replies = async () => ((await (await fetch(`${FIRESTORE}/emailReplies`, { headers: { authorization: 'Bearer owner' } })).json()).documents || [])
+    .filter((d) => d.fields.uid.stringValue === dora.uid).length;
+  assert.equal(await replies(), 2);
+  await allowed(deleteDoc(doc(dora.db, 'users', dora.uid)), 'delete the account');
+  await waitFor(async () => !(await adminDocExists(`emailProfiles/${dora.uid}`)) && (await replies()) === 0, 'email records deleted');
 });
 
 // ---------------------------------------------------------------- sketches

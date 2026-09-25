@@ -156,6 +156,25 @@ export default function Generator({ kind }: { kind: Kind }) {
   const [tooLong, setTooLong] = useState(false);
   const [celebrate, setCelebrate] = useState(false);
 
+  // Email links open the form filled in (docs/email-marketing-plan.md §6.6): ?book=&chapter=&verse=&to=&age=&style=
+  // (or &font= for verse art). Filling in never generates: a click must never spend a credit.
+  useEffect(() => {
+    const q = new URLSearchParams(location.search);
+    const book = q.get('book');
+    if (!book || !BIBLE_BOOKS.includes(book)) return;
+    const n = (k: string) => { const v = Number(q.get(k)); return Number.isInteger(v) && v > 0 && v < 200 ? v : undefined; };
+    const startVerse = n('verse') ?? 1;
+    const endVerse = n('to');
+    setRef({ book, chapter: n('chapter') ?? 1, startVerse, ...(kind === 'scene' && endVerse && endVerse > startVerse ? { endVerse } : {}) });
+    const a = q.get('age') ?? '';
+    if (STYLES_BY_AGE[a]) {
+      setAge(a);
+      setStyle(STYLES_BY_AGE[a].includes(q.get('style') ?? '') ? q.get('style')! : STYLES_BY_AGE[a][0]);
+    }
+    const f = q.get('font');
+    if (f && FONTS.some(([name]) => name === f)) setFont(f);
+  }, []);
+
   const show = (s: Sketch, fresh: boolean) => {
     setResult(s);
     history.replaceState(null, '', `${location.pathname}?sketch=${encodeURIComponent(s.id)}`);

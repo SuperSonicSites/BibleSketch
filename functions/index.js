@@ -3497,8 +3497,13 @@ exports.onUserDeleted = onDocumentDeleted("users/{uid}", async (event) => {
     ...kept,
     deletedAt: FieldValue.serverTimestamp()
   });
-  // The email choice and sign-up context go with the account (the opt-in bonus marker stays, so it's paid once).
-  await admin.firestore().doc(`users/${event.params.uid}/private/profile`).delete();
+  // The email choice, sign-up context and email records go with the account (the opt-in bonus marker stays, so
+  // it's paid once).
+  const db = admin.firestore();
+  await db.doc(`users/${event.params.uid}/private/profile`).delete();
+  await db.doc(`emailProfiles/${event.params.uid}`).delete();
+  const replies = await db.collection('emailReplies').where('uid', '==', event.params.uid).get();
+  await Promise.all(replies.docs.map((d) => d.ref.delete()));
 });
 
 // ---------------------------------------------------------
@@ -3842,14 +3847,17 @@ exports.cleanupDeletedAccounts = onSchedule({ schedule: "every 60 minutes", time
 // ---------------------------------------------------------
 // 16. EMAIL OPT-IN BONUS (docs/email-marketing-plan.md §12.2)
 // ---------------------------------------------------------
-// The first opt-in on an account (sign-up checkbox or banner, users/{uid}/private/profile) earns bonus prints.
+// Every write is mirrored to emailProfiles (section 17). The first opt-in on an account (sign-up checkbox or banner,
+// users/{uid}/private/profile) earns bonus prints.
 // The marker in processedWebhooks is never deleted, so opting out and back in, or deleting and recreating the
 // user doc, never pays twice. Opting out later doesn't take the prints back.
 const OPT_IN_BONUS_PRINTS = 5;
 exports.onPrivateProfileWritten = onDocumentWritten("users/{uid}/private/{docId}", async (event) => {
   const uid = event.params.uid;
-  if (event.params.docId !== 'profile' || event.data?.after?.get('emailOptIn') !== true) return;
-  if (event.data.before?.get('emailOptIn') === true) return;
+  const after = event.data?.after;
+  if (event.params.docId !== 'profile' || !after?.exists) return;
+  await mirrorEmailChoice(uid, after.data());
+  if (after.get('emailOptIn') !== true || event.data.before?.get('emailOptIn') === true) return;
   const db = admin.firestore();
   const userRef = db.collection('users').doc(uid);
   const markerRef = db.collection('processedWebhooks').doc(`optin_bonus_${uid}`);
@@ -3865,4 +3873,267 @@ exports.onPrivateProfileWritten = onDocumentWritten("users/{uid}/private/{docId}
     return true;
   });
   if (granted) console.log(`[optin] +${OPT_IN_BONUS_PRINTS} prints for ${uid}`);
+});
+
+// ---------------------------------------------------------
+// 17. LIFECYCLE EMAIL (docs/email-marketing-plan.md §5-6, §6.11, §12.1, §12.20)
+// ---------------------------------------------------------
+// emailProfiles/{uid} is server only (no rule matches it, so clients are denied): the email choice mirrored from
+// private/profile, the counters the rules need, the unsubscribe token, open offers, and when each email went out
+// (`fired`). emailTick asks functions/email.js which email each person is due and sends it through Resend.
+// Nothing is sent until the owner sets config/email {live: true}; until then each tick only logs what it would send.
+const EM = require('./email');
+const resendApiKey = defineSecret('RESEND_API_KEY');
+const EMAIL_LINKS = 'https://biblesketch.app/api/email'; // the Worker forwards these to emailAction
+const PURCHASES = new Set(['credit_purchase', 'subscription', 'prints_subscription']);
+const MAX_SENDS_PER_TICK = 40; // Resend's free plan allows 100 a day
+const ms = (v) => v?.toMillis?.() ?? (typeof v === 'string' ? Date.parse(v) || 0 : Number(v) || 0);
+const newToken = () => crypto.randomBytes(16).toString('base64url');
+// Constant-time, so a token or secret can't be guessed byte by byte from response timing.
+const sameSecret = (a, b) => {
+  const h = (x) => crypto.createHash('sha256').update(String(x)).digest();
+  return crypto.timingSafeEqual(h(a), h(b));
+};
+const pause = (t) => new Promise((r) => setTimeout(r, t));
+const offerUrl = (uid, token) => `${EMAIL_LINKS}/offer?u=${encodeURIComponent(uid)}&t=${token}`;
+
+// private/profile -> emailProfiles, so a tick needs one read per person. A new opt-in after an unsubscribe clears
+// it: only the person, in the app, can resubscribe (§6.11 rule 1).
+const mirrorEmailChoice = (uid, d) => admin.firestore().runTransaction(async (tx) => {
+  const ref = admin.firestore().doc(`emailProfiles/${uid}`);
+  const cur = await tx.get(ref);
+  const update = {
+    optIn: d.emailOptIn === true, optInSource: d.optInSource ?? null, optInAt: d.optInAt ?? null,
+    persona: d.persona ?? null, timezone: d.timezone ?? null, landingPath: d.signup?.path ?? null,
+  };
+  if (!cur.get('unsubToken')) update.unsubToken = newToken();
+  const unsubscribed = ms(cur.get('unsubscribedAt'));
+  if (update.optIn && unsubscribed && ms(d.optInAt) > unsubscribed) update.unsubscribedAt = FieldValue.delete();
+  tx.set(ref, update, { merge: true });
+});
+
+// Both the unsubscribe link and an "unsubscribe" reply: every marketing email stops at once.
+const unsubscribe = async (uid, source) => {
+  const db = admin.firestore();
+  await db.doc(`emailProfiles/${uid}`).set({ optIn: false, unsubscribedAt: FieldValue.serverTimestamp() }, { merge: true });
+  await db.doc(`users/${uid}/private/profile`).set({
+    emailOptIn: false, optOutAt: FieldValue.serverTimestamp(), optOutSource: source, updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+};
+
+// The counters the rules read, and the first-pack bonus C2 promises (granted here, once, inside its window).
+// Existing history was counted once by scripts/email-backfill.mjs.
+const pageRef = (description) => /^(?:Generated|Verse Art): (.+)$/.exec(description || '')?.[1] ?? null;
+exports.onTransactionCreated = onDocumentCreated("users/{uid}/transactions/{id}", async (event) => {
+  const t = event.data?.data();
+  const uid = event.params.uid;
+  if (!t || !(t.type === 'usage' || PURCHASES.has(t.type))) return;
+  const db = admin.firestore();
+  const ref = db.doc(`emailProfiles/${uid}`);
+  const bonus = await db.runTransaction(async (tx) => {
+    const cur = await tx.get(ref);
+    if (t.type === 'usage') {
+      tx.set(ref, {
+        pagesMade: FieldValue.increment(1),
+        ...(!cur.get('firstPageAt') && { firstPageAt: t.timestamp ?? FieldValue.serverTimestamp(), firstPageRef: pageRef(t.description) }),
+      }, { merge: true });
+      return false;
+    }
+    const offer = cur.get('offers')?.c2;
+    const grant = t.type === 'credit_purchase' && Boolean(offer) && !offer.redeemedAt && Date.now() <= ms(offer.expiresAt);
+    tx.set(ref, { bought: true, ...(grant && { offers: { c2: { redeemedAt: FieldValue.serverTimestamp() } } }) }, { merge: true });
+    if (grant) {
+      const userRef = db.doc(`users/${uid}`);
+      tx.update(userRef, { credits: FieldValue.increment(EM.FIRST_PACK_BONUS), updatedAt: FieldValue.serverTimestamp() });
+      tx.create(userRef.collection('transactions').doc(), {
+        userId: uid, amount: EM.FIRST_PACK_BONUS, description: 'First pack bonus', type: 'bonus', timestamp: FieldValue.serverTimestamp(),
+      });
+    }
+    return grant;
+  });
+  if (bonus) console.log(`[email] first pack bonus: +${EM.FIRST_PACK_BONUS} credits for ${uid}`);
+});
+
+// W0: the book of the coloring page they landed on, when it's a public one.
+const landingBook = async (db, path) => {
+  const id = /^\/coloring-page\/[^/]+\/([^/?#]+)/.exec(path || '')?.[1];
+  if (!id || !isDocId(id)) return null;
+  const s = await db.doc(`sketches/${id}`).get();
+  return s.get('isPublic') === true ? s.get('promptData.book') ?? null : null;
+};
+
+// A3: the 3 newest finished pages from the master (Pinterest) account, from 3 different books.
+const masterPicks = async (db) => {
+  const snap = await db.collection('sketches').where('userId', '==', MASTER_UID).where('isPublic', '==', true).get();
+  const books = new Set();
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+    .filter((s) => s.type === 'scene' && !s.isBookmark && s.promptData?.book)
+    .sort((a, b) => ms(b.createdAt) - ms(a.createdAt))
+    .filter((s) => !books.has(s.promptData.book) && books.add(s.promptData.book))
+    .slice(0, 3)
+    .map(({ id, promptData: { book, chapter, start_verse: v, end_verse: to } }) => {
+      const ref = `${book} ${chapter}:${v}${to > v ? `-${to}` : ''}`;
+      const slug = `${book}-${chapter}-${v}${to > v ? `-${to}` : ''}`.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+      return { label: ref, path: `/coloring-page/${slug}/${encodeURIComponent(id)}` };
+    });
+};
+
+// Everyone who opted in, plus the outage cohort while its follow-ups run (§12.1).
+const emailCandidates = async (db, now) => {
+  const docs = new Map((await db.collection('emailProfiles').where('optIn', '==', true).get()).docs.map((d) => [d.id, d]));
+  const outage = new Set();
+  if (now >= EM.OUTAGE.checkIn - EM.DAY && now < EM.OUTAGE.until) {
+    const markers = await db.collection('processedWebhooks')
+      .where('status', 'in', ['outage_email_scheduled', 'outage_email_rescheduled']).get();
+    markers.docs.forEach((m) => outage.add(m.id.slice('outage2026_'.length)));
+  }
+  const missing = [...outage].filter((uid) => !docs.has(uid));
+  for (let i = 0; i < missing.length; i += 100) {
+    (await db.getAll(...missing.slice(i, i + 100).map((uid) => db.doc(`emailProfiles/${uid}`)))).forEach((d) => docs.set(d.id, d));
+  }
+  docs.delete(MASTER_UID);
+  return { docs, outage };
+};
+
+async function runEmailTick(now = Date.now(), { dryRun = false } = {}) {
+  const db = admin.firestore();
+  const live = !dryRun && (await db.doc('config/email').get()).get('live') === true;
+  const { docs, outage } = await emailCandidates(db, now);
+  const uids = [...docs.keys()];
+  const auth = new Map();
+  const users = new Map();
+  for (let i = 0; i < uids.length; i += 100) {
+    const chunk = uids.slice(i, i + 100);
+    (await admin.auth().getUsers(chunk.map((uid) => ({ uid })))).users.forEach((a) => auth.set(a.uid, a));
+    (await db.getAll(...chunk.map((uid) => db.doc(`users/${uid}`)))).forEach((d) => d.exists && users.set(d.id, d.data()));
+  }
+  const decisions = [];
+  let picks;
+  for (const uid of uids) {
+    const a = auth.get(uid);
+    const u = users.get(uid);
+    if (!a || !u) continue;
+    const e = docs.get(uid).data() || {};
+    const c7 = e.offers?.c7;
+    const s = {
+      verified: a.emailVerified, email: a.email, createdAt: ms(u.createdAt) || Date.parse(a.metadata.creationTime),
+      optIn: e.optIn === true, optInSource: e.optInSource, persona: e.persona, timezone: e.timezone,
+      credits: typeof u.credits === 'number' ? u.credits : null,
+      printsLeft: typeof u.downloadsRemaining === 'number' ? u.downloadsRemaining : null,
+      unlimitedUntil: ms(u.printsUnlimitedUntil), isPremium: u.isPremium === true, bought: e.bought === true,
+      pagesMade: e.pagesMade || 0, firstPageAt: ms(e.firstPageAt), unsubscribedAt: ms(e.unsubscribedAt),
+      fired: Object.fromEntries(Object.entries(e.fired || {}).map(([k, v]) => [k, ms(v)])),
+      offers: c7 ? { c7: { expiresAt: ms(c7.expiresAt) } } : {}, outage: outage.has(uid),
+    };
+    const id = EM.due(s, now);
+    if (!id) continue;
+    decisions.push({ uid, id });
+    if (!live) { console.log(`[emailTick] ${dryRun ? 'test' : 'not live'}: ${id} due for ${uid}`); continue; }
+
+    const at = Timestamp.fromMillis(now);
+    const unsubToken = e.unsubToken || newToken();
+    const update = { fired: { [id]: at }, ...(!e.unsubToken && { unsubToken }) };
+    const p = {
+      uid, email: a.email, first: EM.firstName(a.displayName), optInAt: ms(e.optInAt), timezone: e.timezone,
+      unsubUrl: `${EMAIL_LINKS}/unsubscribe?u=${encodeURIComponent(uid)}&t=${unsubToken}`,
+      printsLeft: s.printsLeft, unlimitedUntil: s.unlimitedUntil, persona: e.persona, firstPageRef: e.firstPageRef,
+      outageSubject: EM.firstName(a.displayName) ?? 'quick question',
+    };
+    if (id === 'w0') p.landingBook = await landingBook(db, e.landingPath);
+    if (id === 'a3') p.picks = picks ??= await masterPicks(db);
+    if (id === 'c2') {
+      p.offerEnds = EM.offerEnd(now);
+      update.offers = { c2: { sentAt: at, expiresAt: Timestamp.fromMillis(p.offerEnds) } };
+    }
+    if (id === 'c7') {
+      const token = newToken();
+      Object.assign(p, { offerStart: now, offerEnds: EM.offerEnd(now), offerUrl: offerUrl(uid, token) });
+      update.offers = { c7: { token, sentAt: at, expiresAt: Timestamp.fromMillis(p.offerEnds) } };
+    }
+    if (id === 'c7b' || id === 'c7c') Object.assign(p, { offerStart: ms(c7.sentAt), offerEnds: ms(c7.expiresAt), offerUrl: offerUrl(uid, c7.token) });
+    if (id === 'o27' || id === 'o30') {
+      const token = e.offers?.outage?.token || newToken();
+      p.offerUrl = offerUrl(uid, token);
+      if (!e.offers?.outage) update.offers = { outage: { token, sentAt: at, expiresAt: Timestamp.fromMillis(EM.OUTAGE.offerUntil) } };
+    }
+    const key = `${id}_${uid}${id.startsWith('c7') ? `_${p.offerStart}` : ''}`;
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${resendApiKey.value()}`, 'content-type': 'application/json', 'Idempotency-Key': key },
+      body: JSON.stringify(EM.render(id, p, now)),
+    });
+    const out = await res.json().catch(() => ({}));
+    if (res.status === 429 || res.status >= 500) { console.warn(`[emailTick] Resend ${res.status}, stopping this tick`); break; }
+    // A rejected email isn't retried (it would fail every tick); the error stays on the profile.
+    if (res.ok) Object.assign(update, { lastEmail: { id, emailId: out.id ?? null, at }, emailsSent: FieldValue.increment(1) });
+    else { update.lastError = { id, status: res.status, message: String(out.message || '').slice(0, 200), at }; console.error(`[emailTick] ${id} for ${uid}: ${res.status}`); }
+    await docs.get(uid).ref.set(update, { merge: true });
+    if (decisions.length >= MAX_SENDS_PER_TICK) break;
+    await pause(600); // Resend allows a few requests a second
+  }
+  return decisions;
+}
+
+exports.emailTick = onSchedule({ schedule: "every 30 minutes", timeoutSeconds: 300, secrets: [resendApiKey] }, async () => {
+  const d = await runEmailTick();
+  if (d.length) console.log(`[emailTick] ${d.length} due: ${d.map((x) => x.id).join(' ')}`);
+});
+
+// Emulator only: one tick now (or at ?now=<ms>) that returns its decisions and sends nothing (security-check).
+if (process.env.FUNCTIONS_EMULATOR === 'true') {
+  exports.emailTickNow = onRequest(async (req, res) => res.json(await runEmailTick(Number(req.query.now) || Date.now(), { dryRun: true })));
+}
+
+// Links in the emails, through the Worker's /api/email/<action>. Unsubscribe is one click from the mail app
+// (RFC 8058: a POST unsubscribes); a GET shows a button instead, so link scanners can't unsubscribe anyone. The
+// offer link redirects to the Prints plan's checkout until the offer ends.
+const emailPage = (res, status, title, body) => res.status(status).set('Cache-Control', 'no-store').type('html').send(
+  `<!doctype html><meta charset="utf-8"><meta name="robots" content="noindex"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title>`
+  + `<body style="font-family:system-ui,sans-serif;max-width:32rem;margin:4rem auto;padding:0 1rem;color:#1f2937"><h1 style="font-size:1.5rem">${title}</h1>${body}`
+  + '<p><a href="https://biblesketch.app/" style="color:#7c3aed">Back to Bible Sketch</a></p>');
+exports.emailAction = onRequest({ timeoutSeconds: 30 }, async (req, res) => {
+  const { a, u, t } = req.query;
+  if (typeof u !== 'string' || typeof t !== 'string' || !t || !isDocId(u)) {
+    return emailPage(res, 400, 'Link not recognised', '<p>This link is incomplete. Write to <a href="mailto:hello@biblesketch.app">hello@biblesketch.app</a> and we’ll sort it out.</p>');
+  }
+  const e = (await admin.firestore().doc(`emailProfiles/${u}`).get()).data() || {};
+  if (a === 'unsubscribe') {
+    if (!e.unsubToken || !sameSecret(e.unsubToken, t)) {
+      return emailPage(res, 404, 'Link not recognised', '<p>Write to <a href="mailto:hello@biblesketch.app?subject=Unsubscribe">hello@biblesketch.app</a> and we’ll take you off the list.</p>');
+    }
+    if (req.method === 'POST') {
+      await unsubscribe(u, 'link');
+      return emailPage(res, 200, 'You’re unsubscribed', '<p>You won’t get any more emails from Bible Sketch, apart from receipts for anything you buy. Changed your mind? You can sign up again in your account.</p>');
+    }
+    return emailPage(res, 200, 'Unsubscribe from Bible Sketch emails?', '<form method="post"><button style="font:inherit;padding:.6rem 1.2rem;border-radius:.5rem;border:0;background:#7c3aed;color:#fff;cursor:pointer">Unsubscribe</button></form>');
+  }
+  if (a === 'offer') {
+    const offer = Object.values(e.offers || {}).find((o) => o?.token && sameSecret(o.token, t));
+    if (!offer || Date.now() > ms(offer.expiresAt)) {
+      return emailPage(res, 410, 'This offer has ended', '<p>See what’s available now on the <a href="https://biblesketch.app/pricing" style="color:#7c3aed">pricing page</a>.</p>');
+    }
+    return res.redirect(302, `${EM.PRINTS_PLAN_URL}?cf_cf_firebase_uid=${encodeURIComponent(u)}`);
+  }
+  return emailPage(res, 404, 'Link not recognised', '<p>This link is incomplete.</p>');
+});
+
+// Replies to hello@ that the Email Worker could read (web/src/worker.ts): an unsubscribe, or the answer to the
+// sorting question. The Worker forwards every reply to the owner first; this only records and applies it. It uses
+// the purge hook's shared secret, in the other direction.
+exports.emailReply = onRequest({ secrets: [workerPurgeSecret], timeoutSeconds: 30 }, async (req, res) => {
+  const secret = workerPurgeSecret.value();
+  if (req.method !== 'POST' || !secret || !sameSecret(req.get('x-purge-secret') || '', secret)) return res.status(403).send('Forbidden');
+  const { from, subject, text, kind, value } = req.body || {};
+  if (typeof from !== 'string' || !['unsubscribe', 'persona'].includes(kind)
+    || (kind === 'persona' && !['teacher', 'family', 'adult'].includes(value))) return res.status(400).send('Bad request');
+  let user;
+  try { user = await admin.auth().getUserByEmail(from); } catch { return res.status(200).send('No account'); }
+  const db = admin.firestore();
+  await db.collection('emailReplies').add({
+    uid: user.uid, at: FieldValue.serverTimestamp(), subject: String(subject || '').slice(0, 200),
+    text: String(text || '').slice(0, 2000), parsed: { kind, value: value ?? null },
+  });
+  if (kind === 'unsubscribe') await unsubscribe(user.uid, 'reply');
+  else await db.doc(`users/${user.uid}/private/profile`).set({ persona: value, personaSource: 'reply', updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  res.status(200).send('ok');
 });

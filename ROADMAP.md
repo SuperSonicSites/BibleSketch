@@ -169,7 +169,14 @@ Built 2026-09-23 in `web/`: `src/data/pins.json` (the calendar), `src/lib/pins.t
 - **Billing (deployed 2026-09-24; the plan-code fix in revision 00137, then the Unlimited Prints plans in revision 00138 with Worker 637f9390):** `handleZohoWebhook` granted Premium to any subscription it received. Now only the `bible-sketch-premium` plan code grants or removes Premium. Other plans get a 400 and nothing changes. Security check 45/45.
 - **Phases:**
   0.5. **Live 2026-09-24:** the opt-in box and persona question at sign-up, the one-time banner, the private email record, +5 prints on the first opt-in, the first-visit record, and the privacy text.
-  1. The event pipeline,
+  1. **Built and deployed 2026-09-25, not sending** until the owner approves the 15 test emails and
+     `config/email.live` is set:
+     - the welcome and sort, activation, the credit and print offers (with the 7-day $1.99 offer link and the +10
+       first-pack bonus), and the outage follow-ups;
+     - `emailTick` sends through Resend;
+     - unsubscribe links, the hello@ reply reader, and prefilled generator links.
+
+     Plan §10. Left for later: print events, the Resend webhook and contacts sync, and the monthly report numbers.
   2. The weekly "Sunday Prep" flagship, Advent/Christmas, after-the-sale emails and 9-word re-engagement. Live by Nov 10.
   3. Referrals, automatic concierge answers, Premium annual, the church path. January 2027.
 - **Waiting on the owner steps** in the plan's §11: the Resend account and domain, sender, mailing address, consent wording, bonus amounts.

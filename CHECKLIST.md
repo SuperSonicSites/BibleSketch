@@ -4,7 +4,14 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
 
 ## Open
 
-### Start here (priority order, updated 2026-09-24 night)
+### Start here (priority order, updated 2026-09-25)
+0. **Approve the 15 phase 1 emails** (test sends of Sep 25 to renaud@supersonicsites.com; plan §10). Reply "approved", or say what to change. Once they're approved, Claude sets `config/email` `live: true` and the sequences start (W0 for new sign-ups, the outage follow-ups from Oct 22, and so on).
+   - The links in the tests are placeholders (`u=test`): "Unsubscribe" says "Link not recognised" and "Keep printing" says "This offer has ended". In the real emails they're personal and work.
+   - The +10 first-pack bonus in C2 ("get any pack by <date> and I'll add 10 extra pages") is live code. Approving C2 approves the bonus.
+0b. **Point hello@ at the Worker** so replies are read automatically, after you've approved the emails: Cloudflare > biblesketch.app > Email > Email Routing > Routing rules > `hello@biblesketch.app` > Edit > Action: **Send to a Worker** > `biblesketch-web` > Save.
+   - The Worker forwards every message to renaud@supersonicsites.com first, exactly as today.
+   - Then it acts on "unsubscribe" replies and answers to "a class, or your kids at home?".
+   - Test it: send "hello" to hello@. It should arrive in Zoho as before.
 1. **Test the opt-in live:** sign in on biblesketch.app. The banner appears once; click "Yes, sign me up", then Account should show 5 more Downloads/Prints. This also puts your account on the list.
 2. **Check the test email** (sent Sep 25 to renaud@supersonicsites.com). The real one goes to 80 people on **Tue Sep 29 at 11:00 AM ET**, after Claude's name review of Sep 25. To change or stop it, cancel in Resend > Emails, or tell Claude before Monday night (the Resend MCP is connected).
 3. **Zoho Mail alias** so you can answer as `hello@biblesketch.app` (below).
@@ -48,10 +55,7 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
   - [x] **Deployed 2026-09-24, owner-approved:** webhook revision handlezohowebhook-00138 (unsigned calls still 401) and Worker version 637f9390 (pages 200, print endpoint 401 on a bad token, the live `store` chunk has the dated-pass check).
   - [x] **Self-cancellation and tax check: done by the owner's browser agent (2026-09-24).** Claude hasn't seen the report: paste it if US buyers were shown Canadian tax. Original item: **Turn on self-cancellation in the Zoho customer portal** (Settings > Customer Portal: allow cancelling at the end of the current term). Right now subscribers can't cancel on their own, but Premium and the prints plans both say "Cancel anytime". That's a consumer-protection risk (online sign-ups must be cancellable online in several places, California among them) and a source of chargebacks. The webhook already handles end-of-term cancellations.
   - [x] **Sales tax check:** the checkout showed GST 5% + BC PST 7% on top of the price. Confirm Zoho charges these by the customer's address, not on every sale: open a hosted page, enter a US address, and don't pay. Exports of digital services to non-residents are usually zero-rated for GST, but ask your accountant.
-  - Set the secrets yourself as Firebase secrets (plan §6.5; `firebase functions:secrets:set <NAME>`):
-    - `RESEND_API_KEY` (above);
-    - `RESEND_WEBHOOK_SECRET`, when Claude creates the webhook in phase 1.
-    - `EMAIL_HOOK_SECRET` (any random value) as a Firebase secret and a Worker secret, when Claude builds the `hello@` reply reader in phase 1 (plan §6.8).
+  - Secrets (plan §6.5): `RESEND_API_KEY` is set. No other secret is needed for phase 1: the reply reader reuses the purge hook's shared secret. `RESEND_WEBHOOK_SECRET` waits for the Resend webhook, which isn't built yet.
 - [ ] **Personal mail as @biblesketch.app, at no extra cost** (plan §6.7): receive through Cloudflare Email Routing, send from Zoho Mail. Keep the MX on Cloudflare: moving it breaks the monthly report and the forwarding.
   1. **Receive:** Cloudflare > biblesketch.app > Email > Email Routing > Routing rules: forward `hello@` (and `renaud@`, if you want it) to `renaud@supersonicsites.com`.
   2. **Send:** Zoho Mail Admin Console > Domains: add `biblesketch.app`. It looks already verified: the `zoho-verification` TXT record exists. Skip the MX step.
@@ -87,9 +91,7 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
 - [ ] **Still open:**
   - implied consent for the 4 past buyers;
   - the other bonus amounts (first purchase, win-back, seasonal, referral) when those emails are built.
-- [ ] **A second Resend API key with full access,** for phase 1: contacts, topics and the webhook. The current `RESEND_API_KEY` can only send, which is good; keep it for sending.
-  - Create "Bible Sketch app (full access)" in Resend > API Keys.
-  - Save it yourself as the Firebase secret `RESEND_ADMIN_KEY`.
+- [x] **A second Resend API key with full access** (added by the owner, 2026-09-25). Nothing uses it yet: contacts, topics and Broadcasts come with the weekly flagship in phase 2. The send-only `RESEND_API_KEY` does all phase 1 sending.
 - [ ] **Check how many accounts never verified their email (§12.6).** It's an Auth export, so you run it, because it contains personal data. Claude can give you the command. If the number is high, the verification email is the first thing to fix.
 - [ ] **Later:** a standing approval for the automated emails, once you've read the first versions (§11).
 
