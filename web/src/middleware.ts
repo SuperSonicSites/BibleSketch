@@ -33,5 +33,38 @@ export const onRequest = defineMiddleware((ctx, next) => {
   if (clean !== pathname) {
     return new Response(null, { status: 301, headers: { Location: clean + search, 'Cache-Control': 'public, max-age=300' } });
   }
+  if (pathname.startsWith('/checkout/')) return withCheckoutPolicy(ctx.url.origin, next());
   return next();
 });
+
+// The payment pages (/checkout/*) carry a strict Content-Security-Policy. Scripts may only come from our build
+// (/_astro/), from Google sign-in, or be the inline scripts this response really contains (hashed here); frames may
+// only be Zoho's payment form and our own auth frame. So anything added to the page after it leaves us, such as the
+// Zaraz trackers Cloudflare injects, is refused: payment pages carry no third-party scripts.
+const toBase64 = (buf: ArrayBuffer) => btoa(String.fromCharCode(...new Uint8Array(buf)));
+async function withCheckoutPolicy(origin: string, pending: Promise<Response>) {
+  const res = await pending;
+  if (!(res.headers.get('content-type') ?? '').includes('text/html')) return res;
+  const html = await res.text();
+  const inline = [...html.matchAll(/<script(?![^>]*\ssrc=)[^>]*>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
+  const hashes = await Promise.all(inline.map(async (body) =>
+    `'sha256-${toBase64(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(body)))}'`));
+  // Local previews talk to the emulators (functions, auth and its sign-in frame, Firestore).
+  const local = origin.startsWith('http://localhost') ? ' http://localhost:5001 http://localhost:9099 http://localhost:8080' : '';
+  const policy = [
+    "default-src 'self'",
+    `script-src ${origin}/_astro/ https://apis.google.com ${[...new Set(hashes)].join(' ')}`,
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: https:",
+    "font-src 'self'",
+    `connect-src 'self' https://*.googleapis.com https://us-central1-biblesketch-5104c.cloudfunctions.net${local}`,
+    `frame-src 'self' https://*.zohosecure.ca${local ? ' http://localhost:9099' : ''}`,
+    "frame-ancestors 'self'",
+    "form-action 'self'",
+    "base-uri 'none'",
+    "object-src 'none'",
+  ].join('; ');
+  const headers = new Headers(res.headers);
+  headers.set('Content-Security-Policy', policy);
+  return new Response(html, { status: res.status, statusText: res.statusText, headers });
+}

@@ -24,19 +24,3 @@ export const CHECKOUT: Record<string, CheckoutPlan> = {
   torch: { name: 'The Torch', price: 14.99, cadence: 'one time', perks: ['80 credits to make pages of your own', '80 prints', 'Credits never expire'] },
   beacon: { name: 'The Beacon', price: 29.99, cadence: 'one time', perks: ['200 credits to make pages of your own', '200 prints', 'Credits never expire'] },
 };
-
-declare const zaraz: {
-  track: (name: string, payload: Record<string, unknown>) => void;
-  ecommerce: (name: string, payload: Record<string, unknown>) => void;
-} | undefined;
-
-// The add-to-cart events the pricing page used to send before leaving for Zoho.
-export function trackAddToCart(plan: string, user: { uid: string; email?: string | null }) {
-  const p = CHECKOUT[plan];
-  if (!p || typeof zaraz === 'undefined') return;
-  zaraz.ecommerce('Product Added', { value: p.price, currency: 'USD', products: [{ product_id: plan, name: p.name, price: p.price }] });
-  zaraz.track('AddToCart', {
-    value: p.price, currency: 'USD', content_name: p.name, em: user.email, external_id: user.uid,
-    event_id: `addtocart_${user.uid}_${Date.now()}`,
-  });
-}

@@ -4,7 +4,6 @@
 import { useEffect, useState } from 'react';
 import { useStore } from '@nanostores/react';
 import { $authReady, $user, requireAuth } from '../lib/store.ts';
-import { trackAddToCart } from '../lib/checkout.ts';
 
 const MESSAGES: Record<string, string> = {
   OFFER_ENDED: 'This offer has ended, or it was sent to a different account. If you have more than one account, sign in with the one the email went to.',
@@ -29,7 +28,6 @@ export default function Checkout({ plan, offer, offerUid }: { plan: string; offe
     try {
       const { callFunction } = await import('../lib/generate.ts');
       const r = await callFunction<{ url: string }>('createCheckout', { plan, ...(offer && { offer }) });
-      trackAddToCart(plan, u);
       setUrl(r.url);
     } catch (e) {
       setError(MESSAGES[(e as Error).message] ?? FALLBACK);
