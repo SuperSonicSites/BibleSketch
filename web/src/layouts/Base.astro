@@ -15,10 +15,11 @@ interface Props {
   twitterCard?: 'summary' | 'summary_large_image';
   robots?: string; // e.g. 'noindex, follow'; default: indexable with large image previews
   schemas?: string[]; // pre-serialized JSON-LD (lib/sketch.ts jsonLd)
+  bare?: boolean; // no header or footer (the checkout: nothing to click away to)
 }
 const {
   title, ogTitle = title, description, canonical, image, imageAlt = description, ogType = 'article',
-  twitterCard = 'summary_large_image', robots = 'max-image-preview:large', schemas = [],
+  twitterCard = 'summary_large_image', robots = 'max-image-preview:large', schemas = [], bare = false,
 } = Astro.props;
 ---
 <!doctype html>
@@ -74,11 +75,11 @@ const {
   <body>
     <noscript><img height="1" width="1" style="display:none;" alt="" src="https://ct.pinterest.com/v3/?event=init&tid=2614149303230&noscript=1" /></noscript>
     <div class="min-h-screen bg-[#FFF7ED] text-[#1F2937] pb-0 font-sans selection:bg-[#FCD34D] selection:text-[#7C3AED] flex flex-col">
-      <Header />
+      {!bare && <Header />}
       <div class="flex-grow">
         <slot />
       </div>
-      <Footer />
+      {!bare && <Footer />}
     </div>
     <ModalHost client:idle />
     <script>import '../scripts/page.ts';</script>

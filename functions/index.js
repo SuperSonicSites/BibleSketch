@@ -3461,7 +3461,7 @@ const { onDocumentCreated, onDocumentDeleted } = require("firebase-functions/v2/
 // Without this, deleting your own doc and signing back in resets you to the 5 welcome credits,
 // and a premium user whose account deletion half-failed would come back without premium.
 const RESTORED_USER_FIELDS = ['credits', 'downloadsRemaining', 'isPremium', 'planStatus',
-  'zohoSubscriptionId', 'zohoCustomerId', 'subscriptionStartDate', 'lastRenewal'];
+  'zohoSubscriptionId', 'zohoCustomerId', 'zohoCustomerUsdId', 'subscriptionStartDate', 'lastRenewal'];
 
 exports.onUserCreated = onDocumentCreated("users/{uid}", async (event) => {
   const snap = event.data;
@@ -4101,7 +4101,7 @@ if (process.env.FUNCTIONS_EMULATOR === 'true') {
 
 // Links in the emails, through the Worker's /api/email/<action>. Unsubscribe is one click from the mail app
 // (RFC 8058: a POST unsubscribes); a GET shows a button instead, so link scanners can't unsubscribe anyone. The
-// offer link redirects to the Prints plan's checkout (monthly, or yearly with &p=yearly) until the offer ends.
+// offer link opens the on-site checkout for the Prints plan (monthly, or yearly with &p=yearly) until the offer ends.
 const emailPage = (res, status, title, body) => res.status(status).set('Cache-Control', 'no-store').type('html').send(
   `<!doctype html><meta charset="utf-8"><meta name="robots" content="noindex"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title>`
   + `<body style="font-family:system-ui,sans-serif;max-width:32rem;margin:4rem auto;padding:0 1rem;color:#1f2937"><h1 style="font-size:1.5rem">${title}</h1>${body}`
@@ -4128,7 +4128,7 @@ exports.emailAction = onRequest({ timeoutSeconds: 30 }, async (req, res) => {
       return emailPage(res, 410, 'This offer has ended', '<p>See what’s available now on the <a href="https://biblesketch.app/pricing" style="color:#7c3aed">pricing page</a>.</p>');
     }
     const plan = req.query.p === 'yearly' ? 'yearly' : 'monthly';
-    return res.redirect(302, `${EM.PRINTS_PLANS[plan]}?cf_cf_firebase_uid=${encodeURIComponent(u)}`);
+    return res.redirect(302, `https://biblesketch.app/checkout/prints-${plan}?u=${encodeURIComponent(u)}&t=${encodeURIComponent(t)}`);
   }
   return emailPage(res, 404, 'Link not recognised', '<p>This link is incomplete.</p>');
 });
@@ -4152,4 +4152,104 @@ exports.emailReply = onRequest({ secrets: [workerPurgeSecret], timeoutSeconds: 3
   if (kind === 'unsubscribe') await unsubscribe(user.uid, 'reply');
   else await db.doc(`users/${user.uid}/private/profile`).set({ persona: value, personaSource: 'reply', updatedAt: FieldValue.serverTimestamp() }, { merge: true });
   res.status(200).send('ok');
+});
+
+// ---------------------------------------------------------
+// 18. ON-SITE CHECKOUT (web /checkout/<plan>; docs/email-marketing-plan.md §12.20)
+// ---------------------------------------------------------
+// The buyer stays on biblesketch.app: this opens a Zoho Billing hosted page for one plan and the page shows it in an
+// iframe (Zoho hides its own header and footer there). Prices are USD, set here per checkout (owner, 2026-09-25: we
+// are international), so they don't depend on the CAD prices on Zoho's plans. The buyer is a Zoho customer in USD
+// carrying the uid custom field the billing webhook reads; it is created on the first checkout and kept on the
+// user doc. The Prints plans are email-only: they need a live offer token from emailProfiles (section 17).
+const zohoClientId = defineSecret('ZOHO_CLIENT_ID');
+const zohoClientSecret = defineSecret('ZOHO_CLIENT_SECRET');
+const zohoRefreshToken = defineSecret('ZOHO_REFRESH_TOKEN');
+const zohoOrgId = defineString('ZOHO_ORG_ID', { default: '' });
+const ZOHO_ACCOUNTS = 'https://accounts.zoho.ca'; // the Canada data center (billing.zohosecure.ca)
+const ZOHO_API = 'https://www.zohoapis.ca/billing/v1';
+const ZOHO_UID_FIELD = 'User ID (Do not Touch)'; // the customer custom field behind cf_cf_firebase_uid
+// Packs are a $0 plan plus a one-time add-on (the webhook's workflow rules key on the product).
+const CHECKOUT_PLANS = {
+  premium: { plan: 'bible-sketch-premium', price: 4.99 },
+  'prints-monthly': { plan: 'bible-sketch-prints-monthly', price: 1.99, offerOnly: true },
+  'prints-yearly': { plan: 'bible-sketch-prints-yearly', price: 19.99, offerOnly: true },
+  spark: { plan: 'Spark', price: 0, addon: { addon_code: '20credits', quantity: 1, price: 4.99 } },
+  torch: { plan: 'Torch', price: 0, addon: { addon_code: '80credits', quantity: 1, price: 14.99 } },
+  beacon: { plan: '200credits', price: 0, addon: { addon_code: '200credit', quantity: 1, price: 29.99 } },
+};
+
+let zohoAccess = null; // { token, expires }: one access token per instance, refreshed a minute early
+const zohoToken = async () => {
+  if (zohoAccess && zohoAccess.expires > Date.now() + 60000) return zohoAccess.token;
+  const res = await fetch(`${ZOHO_ACCOUNTS}/oauth/v2/token`, {
+    method: 'POST',
+    body: new URLSearchParams({
+      grant_type: 'refresh_token', refresh_token: zohoRefreshToken.value().trim(),
+      client_id: zohoClientId.value().trim(), client_secret: zohoClientSecret.value().trim(),
+    }),
+  });
+  const out = await res.json().catch(() => ({}));
+  if (!out.access_token) throw new Error(`Zoho token ${res.status} ${out.error || ''}`);
+  zohoAccess = { token: out.access_token, expires: Date.now() + (out.expires_in || 3600) * 1000 };
+  return zohoAccess.token;
+};
+const zohoPost = async (path, body) => {
+  const res = await fetch(`${ZOHO_API}${path}`, {
+    method: 'POST',
+    headers: {
+      authorization: `Zoho-oauthtoken ${await zohoToken()}`, 'content-type': 'application/json',
+      'X-com-zoho-subscriptions-organizationid': zohoOrgId.value(),
+    },
+    body: JSON.stringify(body),
+  });
+  const out = await res.json().catch(() => ({}));
+  if (!res.ok || out.code !== 0) throw new Error(`Zoho ${path} ${res.status} ${out.code} ${out.message || ''}`);
+  return out;
+};
+
+exports.createCheckout = onCall({ secrets: [zohoClientId, zohoClientSecret, zohoRefreshToken], timeoutSeconds: 30 }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid || request.auth.token.firebase?.sign_in_provider === 'anonymous') throw new HttpsError('unauthenticated', 'Please sign in.');
+  if (request.auth.token.email_verified !== true) throw new HttpsError('failed-precondition', 'EMAIL_NOT_VERIFIED');
+  const { plan, offer } = request.data || {};
+  const p = Object.hasOwn(CHECKOUT_PLANS, plan) ? CHECKOUT_PLANS[plan] : null;
+  if (!p) throw new HttpsError('invalid-argument', 'Unknown plan.');
+  const db = admin.firestore();
+  if (p.offerOnly) {
+    const e = (await db.doc(`emailProfiles/${uid}`).get()).data() || {};
+    const live = typeof offer === 'string' && offer && Object.values(e.offers || {})
+      .some((o) => o?.token && sameSecret(o.token, offer) && Date.now() <= ms(o.expiresAt));
+    if (!live) throw new HttpsError('permission-denied', 'OFFER_ENDED');
+  }
+  const userRef = db.doc(`users/${uid}`);
+  const user = (await userRef.get()).data() || {};
+  if (plan === 'premium' && user.isPremium) throw new HttpsError('failed-precondition', 'ALREADY_PREMIUM');
+
+  const page = {
+    plan: { plan_code: p.plan, price: p.price },
+    ...(p.addon && { addons: [p.addon] }),
+    redirect_url: `https://biblesketch.app/checkout/done?plan=${plan}`,
+  };
+  // Emulator only: no Zoho call; returns what would be sent (scripts/security-check.mjs).
+  if (process.env.FUNCTIONS_EMULATOR === 'true' && process.env.ZOHO_FAKE === '1') {
+    return { url: 'https://example.invalid/zoho-checkout', page };
+  }
+  try {
+    let customerId = user.zohoCustomerUsdId;
+    if (!customerId) {
+      const a = await admin.auth().getUser(uid);
+      const created = await zohoPost('/customers', {
+        display_name: a.displayName || a.email, email: a.email, currency_code: 'USD',
+        custom_fields: [{ label: ZOHO_UID_FIELD, value: uid }],
+      });
+      customerId = created.customer.customer_id;
+      await userRef.set({ zohoCustomerUsdId: customerId }, { merge: true });
+    }
+    const out = await zohoPost('/hostedpages/newsubscription', { customer_id: customerId, ...page });
+    return { url: out.hostedpage.url };
+  } catch (e) {
+    console.error('[checkout]', plan, uid, e.message);
+    throw new HttpsError('unavailable', 'CHECKOUT_UNAVAILABLE');
+  }
 });

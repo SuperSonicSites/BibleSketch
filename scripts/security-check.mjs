@@ -238,17 +238,37 @@ await step('unsubscribe link: a GET only asks, a POST with the right token unsub
   }, 'resubscribed');
 });
 
-await step('offer link: redirects to the Prints checkout with the uid until the offer ends', async () => {
+await step('offer link: opens the on-site Prints checkout until the offer ends', async () => {
   const url = (t) => `${FN}/emailAction?a=offer&u=${dora.uid}&t=${t}`;
   await adminPatch(`emailProfiles/${dora.uid}`, offers('c7', { token: { stringValue: 'offer-tok' }, expiresAt: later() }));
   const r = await fetch(url('offer-tok'), { redirect: 'manual' });
   assert.equal(r.status, 302);
-  assert.ok(r.headers.get('location').endsWith(`/bible-sketch-prints-monthly?cf_cf_firebase_uid=${dora.uid}`), r.headers.get('location'));
+  assert.equal(r.headers.get('location'), `https://biblesketch.app/checkout/prints-monthly?u=${dora.uid}&t=offer-tok`);
   const y = await fetch(`${url('offer-tok')}&p=yearly`, { redirect: 'manual' });
-  assert.ok(y.headers.get('location').endsWith(`/bible-sketch-prints-yearly?cf_cf_firebase_uid=${dora.uid}`), y.headers.get('location'));
+  assert.equal(y.headers.get('location'), `https://biblesketch.app/checkout/prints-yearly?u=${dora.uid}&t=offer-tok`);
   assert.equal((await fetch(url('nope'), { redirect: 'manual' })).status, 410);
   await adminPatch(`emailProfiles/${dora.uid}`, offers('c7', { token: { stringValue: 'offer-tok' }, expiresAt: { timestampValue: new Date(Date.now() - 1000).toISOString() } }));
   assert.equal((await fetch(url('offer-tok'), { redirect: 'manual' })).status, 410);
+});
+
+await step('createCheckout: signed-in, verified accounts only; the Prints plans need a live offer; the server sets the USD prices', async () => {
+  const anon = clientApp('anon-checkout');
+  await signInAnonymously(anon.auth);
+  await callFails(anon.fn('createCheckout', { plan: 'premium' }), 'unauthenticated', 'anonymous');
+  const erin = await makeUser('erin', { verified: false });
+  await callFails(erin.fn('createCheckout', { plan: 'premium' }), 'failed-precondition', 'unverified email');
+  await callFails(dora.fn('createCheckout', { plan: 'gold' }), 'invalid-argument', 'unknown plan');
+  await callFails(dora.fn('createCheckout', { plan: '__proto__' }), 'invalid-argument', 'prototype key');
+  await callFails(dora.fn('createCheckout', { plan: 'prints-monthly' }), 'permission-denied', 'no offer');
+  await callFails(dora.fn('createCheckout', { plan: 'prints-monthly', offer: 'offer-tok' }), 'permission-denied', 'expired offer');
+  await adminPatch(`emailProfiles/${dora.uid}`, offers('c7', { token: { stringValue: 'offer-tok' }, expiresAt: later() }));
+  const yearly = await dora.fn('createCheckout', { plan: 'prints-yearly', offer: 'offer-tok' });
+  assert.deepEqual(yearly.page.plan, { plan_code: 'bible-sketch-prints-yearly', price: 19.99 });
+  assert.equal(yearly.page.redirect_url, 'https://biblesketch.app/checkout/done?plan=prints-yearly');
+  const torch = await dora.fn('createCheckout', { plan: 'torch', offer: 'ignored' });
+  assert.deepEqual(torch.page.plan, { plan_code: 'Torch', price: 0 });
+  assert.deepEqual(torch.page.addons, [{ addon_code: '80credits', quantity: 1, price: 14.99 }]);
+  assert.equal((await dora.fn('createCheckout', { plan: 'premium' })).page.plan.price, 4.99);
 });
 
 await step('first-pack bonus: a pack bought inside the C2 window adds 10 pages, once', async () => {

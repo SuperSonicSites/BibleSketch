@@ -1,6 +1,7 @@
 // /pricing behaviour (bundle `fq` + checkout `D`, docs/bundle-map/pricing-billing.md §4, §6).
 // The checkout URL must stay byte-compatible: the Zoho webhook reads the uid from `cf_cf_firebase_uid`.
 import { $authReady, $profile, $user, requireAuth } from '../lib/store.ts';
+import { CHECKOUT } from '../lib/checkout.ts';
 
 declare const zaraz: {
   track: (name: string, payload: Record<string, unknown>) => void;
@@ -56,13 +57,15 @@ $profile.subscribe((p) => {
 // session was restored, so em/external_id were empty), then drop the params without a new history entry.
 const params = new URLSearchParams(location.search);
 const pack = params.get('purchase');
-const plan = params.get('subscription') === 'success' ? 'premium' : pack && CREDITS[pack] ? pack : null;
+const prints = pack === 'prints-monthly' || pack === 'prints-yearly';
+const plan = params.get('subscription') === 'success' ? 'premium' : pack && (CREDITS[pack] || prints) ? pack : null;
 if (plan) {
   const orderId = params.get('order_id');
   history.replaceState(null, '', location.pathname);
-  success.querySelector('[data-title]')!.textContent = plan === 'premium' ? 'Welcome to Premium! 🎉' : 'Credits Added! 🎉';
+  success.querySelector('[data-title]')!.textContent = plan === 'premium' ? 'Welcome to Premium! 🎉' : prints ? 'Unlimited printing is on! 🎉' : 'Credits Added! 🎉';
   success.querySelector('[data-subtitle]')!.textContent = plan === 'premium'
     ? 'Your subscription is being activated. Features will unlock momentarily.'
+    : prints ? 'Print or download any page, as often as you like. It unlocks in a moment.'
     : `${CREDITS[plan]} credits + ${CREDITS[plan]} bonus prints have been added to your account.`;
   success.hidden = false;
   member.hidden = true;
@@ -75,9 +78,9 @@ if (plan) {
     queueMicrotask(() => unsubscribe());
     if (typeof zaraz === 'undefined') return;
     const user = $user.get();
-    const price = PRICE[plan];
+    const price = CHECKOUT[plan].price;
     const order = orderId || `${plan === 'premium' ? 'premium' : `pack_${plan}`}_${Date.now()}`;
-    zaraz.ecommerce('Order Completed', { value: price, currency: 'USD', order_id: order, products: [{ product_id: plan, name: productName(plan), price }] });
+    zaraz.ecommerce('Order Completed', { value: price, currency: 'USD', order_id: order, products: [{ product_id: plan, name: CHECKOUT[plan].name, price }] });
     zaraz.track('Purchase', {
       value: price, currency: 'USD', order_id: order, em: user?.email, external_id: user?.uid,
       event_id: orderId || `purchase_${user?.uid}_${Date.now()}`,

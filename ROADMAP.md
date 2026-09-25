@@ -169,6 +169,9 @@ Built 2026-09-23 in `web/`: `src/data/pins.json` (the calendar), `src/lib/pins.t
     $19.99 a year ("that's $1.67 a month"). The Zoho Prints plans must be switched from CAD. The emails say
     "credits" (to make a page of your own) and "prints" (to print any page), as the site does. Offers about a
     balance wait until it has stayed put for 3 days (owner suggested about 7; plan §10).
+  - (2026-09-25) checkout moves on-site: `/checkout/<plan>` is a distraction-free page with Zoho's form in an iframe,
+    in USD through Zoho's API. It's built and waiting on the Zoho API client and USD setup (plan §12.20 item 4,
+    CHECKLIST 0a).
   - (2026-09-24) the weekly Thursday page is free to print from the email only (a signed PDF link, plan §6.6), and the consent box says so. Replies go to hello@biblesketch.app; the sender is "Renaud from Bible Sketch"; the mailing address is Supersonic Sites Inc., Ucluelet, BC.
 - **Billing (deployed 2026-09-24; the plan-code fix in revision 00137, then the Unlimited Prints plans in revision 00138 with Worker 637f9390):** `handleZohoWebhook` granted Premium to any subscription it received. Now only the `bible-sketch-premium` plan code grants or removes Premium. Other plans get a 400 and nothing changes. Security check 45/45.
 - **Phases:**

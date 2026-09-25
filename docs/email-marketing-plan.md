@@ -1251,13 +1251,33 @@ less churn.
        recommendation.
      - **Zoho has to match:** the two Prints plans were created in CAD (2.79 and 20.99). They must charge US$1.99 and
        US$19.99 before any email with the offer goes live (CHECKLIST).
-3. **The 7-day link:**
-   - Emails link to `/offer/<token>` on the Worker. The token is an HMAC (a new Worker secret) over the uid, the
-     offer id and the expiry.
-   - A valid token redirects to the plan's Zoho checkout with `cf_cf_firebase_uid` filled in.
-   - An expired or bad token shows "This offer has ended", with a link to `/pricing`.
-   - The Zoho plan never appears on the pricing page. Its hosted checkout URL is unlisted, and a leaked link isn't
-     worth guarding.
+3. **The 7-day link (built 2026-09-25):**
+   - Emails link to `/api/email/offer?u=<uid>&t=<token>`, adding `&p=yearly` for the yearly plan.
+   - The token is random and kept in `emailProfiles.offers` (no shared secret).
+   - While the offer is open, the link opens the on-site checkout (4). After that it shows "This offer has ended",
+     with a link to `/pricing`.
+   - `createCheckout` checks the token again, so the Prints plans can't be bought without a live offer.
+4. **The on-site checkout (owner decision 2026-09-25; built, waiting on the Zoho setup):**
+   - `/checkout/<plan>` for premium, prints-monthly, prints-yearly, spark, torch and beacon is a distraction-free page:
+     no header or footer, an order summary, and Zoho's payment form in an iframe. Zoho hides its own header and
+     footer there, so there's nothing to click away to.
+   - **Why the API:** Zoho's plain checkout links can't choose a currency. The `createCheckout` function
+     (`functions/index.js` section 18):
+     - creates the buyer as a **USD** Zoho customer, with the uid custom field the webhook reads, once, and keeps its
+       id as `zohoCustomerUsdId`;
+     - then opens a hosted page for that customer with the USD price set per checkout (packs are the $0 plan plus
+       their add-on at quantity 1).
+   - **After payment:** Zoho redirects to `/checkout/done`, which moves the whole tab to the pricing page's
+     thank-you banner. That banner also sends the Zaraz purchase events.
+   - **Needs:**
+     - the Zoho API client: `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET` and `ZOHO_REFRESH_TOKEN` as Firebase secrets, with
+       the scopes `ZohoSubscriptions.customers.CREATE,ZohoSubscriptions.hostedpages.CREATE`;
+     - `ZOHO_ORG_ID` in `functions/.env`;
+     - USD enabled in Zoho, with a gateway that charges USD.
+   - **Go-live order:**
+     1. deploy `createCheckout` and `emailAction`;
+     2. open one real checkout per plan and check the price and currency, without paying;
+     3. switch the pricing page buttons to `/checkout/<plan>` (`web/src/scripts/pricing.ts`) and deploy the Worker.
 
 **Judge it after 60 days:**
 - how many people take the downsell;
