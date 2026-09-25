@@ -80,6 +80,9 @@ const PRINTS_YEAR = '$19.99 for a whole year (that’s $1.67 a month)';
 // page. "Pages" alone means finished coloring pages.
 const PREMIUM_LINE = 'Want to make pages of your own too? Premium is $4.99 a month and includes 10 credits.';
 const yearly = (url) => `${url}&p=yearly`;
+// $19.99 against 12 x $1.99 = $23.88: 16% off.
+const PRINTS_YEAR_DEAL = '$19.99 for a whole year (save 16%: that’s $1.67 a month)';
+const ADVENT_LINKS = (p) => `[Monthly](${p.offerUrl}) · [Yearly, save 16%](${yearly(p.offerUrl)})`;
 
 // The Sunday Prep free page (§6.6): a signed, expiring link to the print PDF, checked by the Worker
 // (web/src/lib/free-link.ts) with the same secret. `expSec` is Unix seconds.
@@ -190,21 +193,21 @@ const EMAILS = {
       ],
     };
   },
+  // One offer only, no credits (owner, 2026-09-25): unlimited prints of any page, with the yearly saving spelled out.
   adv: (p) => ({
     subject: 'unlimited prints for Advent',
     body: [
-      `It’s Advent! Until ${longDate(p.offerEnds, p.timezone)}, you can have unlimited prints for ${PRINTS}: every Advent page, every Sunday page, as often as you like. Cancel anytime. [Get unlimited prints](${p.offerUrl})`,
-      `Printing every week? It’s ${PRINTS_YEAR}: [the yearly plan](${yearly(p.offerUrl)})`,
-      PREMIUM_LINE,
+      `It’s Advent! Until ${longDate(p.offerEnds, p.timezone)}, you can get unlimited prints: print any page on Bible Sketch, from the gallery, from these emails or pages you made yourself, as often as you like.`,
+      `It’s ${PRINTS}, or ${PRINTS_YEAR_DEAL}. Cancel anytime. ${ADVENT_LINKS(p)}`,
     ],
   }),
   adv2: (p) => ({
     subject: 're: unlimited prints for Advent',
-    body: [`A quick reminder: unlimited prints for ${PRINTS}, or ${PRINTS_YEAR}, are yours until ${longDate(p.offerEnds, p.timezone)}, Christmas pages included. [Monthly](${p.offerUrl}) · [Yearly](${yearly(p.offerUrl)})`],
+    body: [`A quick reminder: unlimited prints of any page, Christmas pages included, for ${PRINTS} or ${PRINTS_YEAR_DEAL}, until ${longDate(p.offerEnds, p.timezone)}. ${ADVENT_LINKS(p)}`],
   }),
   adv3: (p) => ({
     subject: 'last day',
-    body: [`Today is the last day of the Advent offer: unlimited prints for ${PRINTS}, or ${PRINTS_YEAR}. After tonight the links stop working. [Monthly](${p.offerUrl}) · [Yearly](${yearly(p.offerUrl)})`],
+    body: [`Today is the last day of the Advent offer: unlimited prints of any page for ${PRINTS}, or ${PRINTS_YEAR_DEAL}. After tonight the links stop working. ${ADVENT_LINKS(p)}`],
   }),
   o23: (p) => ({
     subject: `re: ${p.outageSubject || 'quick question'}`,
