@@ -4023,10 +4023,39 @@ const emailCandidates = async (db, now) => {
   return { docs, outage };
 };
 
+// A Sunday Prep issue waiting for approval is emailed to the owner once, as it will look, with a working free-page
+// link. scripts/sunday-prep.mjs writes the issue (clearing previewedAt on each change) and approves it.
+const OWNER_EMAIL = 'renaud@supersonicsites.com';
+const issueFor = (d, id) => {
+  const sendAt = ms(d.sendAt);
+  return { date: id, sendAt, subject: d.subject, story: d.story, text: d.text, ref: d.ref,
+    freeUrl: EM.freeUrl(d.sketchId, Math.floor(sendAt / 1000) + EM.FREE_LINK_DAYS * 86400, workerPurgeSecret.value()) };
+};
+async function previewIssues(db, now) {
+  const drafts = (await db.collection('sundayPrep').where('sendAt', '>', Timestamp.fromMillis(now)).get()).docs
+    .filter((d) => d.get('approved') !== true && !d.get('previewedAt'));
+  for (const d of drafts) {
+    const mail = EM.render('sp', { uid: 'owner', email: OWNER_EMAIL, first: 'Renaud', optInAt: now, unsubUrl: `${EM.SITE}/`, issue: issueFor(d.data(), d.id) }, ms(d.get('sendAt')));
+    mail.subject = `[DRAFT for ${d.id}] ${mail.subject}`;
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${resendApiKey.value()}`, 'content-type': 'application/json', 'Idempotency-Key': `sp-draft_${d.id}_${d.updateTime.toMillis()}` },
+      body: JSON.stringify(mail),
+    });
+    if (res.ok) await d.ref.update({ previewedAt: FieldValue.serverTimestamp() });
+    else console.error(`[emailTick] Sunday Prep draft ${d.id}: Resend ${res.status}`);
+  }
+}
+
 async function runEmailTick(now = Date.now(), { dryRun = false } = {}) {
   const db = admin.firestore();
   const live = !dryRun && (await db.doc('config/email').get()).get('live') === true;
   const { docs, outage } = await emailCandidates(db, now);
+  // This week's Sunday Prep issue: approved, and sent in the last 2 days (sundayPrep/<Thursday>, §5.4).
+  const issueDoc = (await db.collection('sundayPrep').where('sendAt', '<=', Timestamp.fromMillis(now))
+    .where('sendAt', '>', Timestamp.fromMillis(now - 2 * EM.DAY)).get()).docs.find((d) => d.get('approved') === true);
+  const issue = issueDoc && { date: issueDoc.id, sendAt: ms(issueDoc.get('sendAt')) };
+  if (live) await previewIssues(db, now);
   const uids = [...docs.keys()];
   const auth = new Map();
   const users = new Map();
@@ -4059,7 +4088,7 @@ async function runEmailTick(now = Date.now(), { dryRun = false } = {}) {
       unlimitedUntil: ms(u.printsUnlimitedUntil), isPremium: u.isPremium === true, bought: e.bought === true,
       pagesMade: e.pagesMade || 0, firstPageAt: ms(e.firstPageAt), unsubscribedAt: ms(e.unsubscribedAt),
       fired: Object.fromEntries(Object.entries(e.fired || {}).map(([k, v]) => [k, ms(v)])),
-      offers: c7 ? { c7: { expiresAt: ms(c7.expiresAt) } } : {}, outage: outage.has(uid),
+      offers: c7 ? { c7: { expiresAt: ms(c7.expiresAt) } } : {}, outage: outage.has(uid), issue,
     };
     const id = EM.due(s, now);
     if (!id) continue;
@@ -4079,6 +4108,7 @@ async function runEmailTick(now = Date.now(), { dryRun = false } = {}) {
     const parent = e.sentIds?.[EM.REPLIES[id]];
     if (parent) p.inReplyTo = await sentMessageId(parent).catch(() => null);
     if (id === 'a3') p.picks = picks ??= await masterPicks(db);
+    if (id === 'sp') Object.assign(p, { bought: s.bought, isPremium: s.isPremium, issue: issueFor(issueDoc.data(), issueDoc.id) });
     if (id === 'c2') {
       p.offerEnds = EM.offerEnd(now, e.timezone);
       update.offers = { c2: { sentAt: at, expiresAt: Timestamp.fromMillis(p.offerEnds) } };
@@ -4094,7 +4124,7 @@ async function runEmailTick(now = Date.now(), { dryRun = false } = {}) {
       p.offerUrl = offerUrl(uid, token);
       if (!e.offers?.outage) update.offers = { outage: { token, sentAt: at, expiresAt: Timestamp.fromMillis(EM.OUTAGE.offerUntil) } };
     }
-    const key = `${id}_${uid}${id.startsWith('c7') ? `_${p.offerStart}` : ''}`;
+    const key = `${id}_${uid}${id.startsWith('c7') ? `_${p.offerStart}` : ''}${id === 'sp' ? `_${issue.date}` : ''}`;
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { authorization: `Bearer ${resendApiKey.value()}`, 'content-type': 'application/json', 'Idempotency-Key': key },
@@ -4113,7 +4143,7 @@ async function runEmailTick(now = Date.now(), { dryRun = false } = {}) {
   return decisions;
 }
 
-exports.emailTick = onSchedule({ schedule: "every 30 minutes", timeoutSeconds: 300, secrets: [resendApiKey, resendAdminKey] }, () => runEmailTick());
+exports.emailTick = onSchedule({ schedule: "every 30 minutes", timeoutSeconds: 300, secrets: [resendApiKey, resendAdminKey, workerPurgeSecret] }, () => runEmailTick());
 
 // Emulator only: one tick now (or at ?now=<ms>) that returns its decisions and sends nothing (security-check).
 if (process.env.FUNCTIONS_EMULATOR === 'true') {

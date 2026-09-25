@@ -7,7 +7,7 @@ import { createRequire } from 'node:module';
 import { writeFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 
-const { EMAILS, render, due, firstName, offerEnd, OUTAGE, DAY, HOUR } = createRequire(import.meta.url)('../functions/email.js');
+const { EMAILS, render, due, firstName, offerEnd, freeUrl, OUTAGE, DAY, HOUR } = createRequire(import.meta.url)('../functions/email.js');
 
 // A Tuesday, 11 a.m. Eastern.
 const NOW = Date.parse('2026-10-13T15:00:00Z');
@@ -71,6 +71,27 @@ assert.equal(at({ ...cohort, createdAt: Date.parse('2026-04-01T00:00:00Z'), optI
 assert.equal(at({ ...cohort, unlimitedUntil: OUTAGE.until + 30 * DAY }, OUTAGE.ends + HOUR), null, 'already on a Prints plan');
 // No print offer within 14 days of the outage offer.
 assert.equal(at({ ...old, printsLeft: 0, outage: true, fired: { ...old.fired, o30: NOW - 3 * DAY } }), null);
+// Sunday Prep: this week's issue from its send time for 2 days, once, never in someone's first 7 days.
+const issue = { date: '2026-10-15', sendAt: Date.parse('2026-10-15T12:00:00Z') }; // Thu 8 a.m. Eastern
+const thu = issue.sendAt + HOUR;
+assert.equal(at({ ...old, issue }, thu), 'sp');
+assert.equal(at({ ...old, issue }, issue.sendAt - HOUR), null, 'not before its time');
+assert.equal(at({ ...old, issue, fired: { ...old.fired, sp: thu } }, thu + 21 * HOUR), null, 'once');
+assert.equal(at({ ...old, issue, fired: { ...old.fired, sp: issue.sendAt - 7 * DAY } }, thu), 'sp', 'last week’s doesn’t count');
+assert.equal(at({ ...old, issue }, issue.sendAt + 3 * DAY), null, 'too late');
+assert.notEqual(at({ ...old, issue, createdAt: thu - 3 * DAY }, thu), 'sp', 'first 7 days');
+assert.equal(at({ ...old, issue, optIn: false }, thu), null);
+assert.equal(at({ ...old, issue, timezone: 'America/Vancouver' }, thu), null, '6 a.m. in Vancouver');
+// Its free link is one the Worker accepts, for that sketch only, until it expires.
+const { validFreeLink } = await import('../web/src/lib/free-link.ts');
+const exp = Math.floor(NOW / 1000) + 3600;
+const tok = new URL(freeUrl('abc123', exp, 'secret')).searchParams.get('t');
+assert.equal(await validFreeLink('secret', 'abc123', tok, NOW), true);
+assert.equal(await validFreeLink('secret', 'other', tok, NOW), false);
+assert.equal(await validFreeLink('wrong', 'abc123', tok, NOW), false);
+assert.equal(await validFreeLink('secret', 'abc123', tok, NOW + 2 * HOUR), false, 'expired');
+assert.equal(await validFreeLink('secret', 'abc123', 'x', NOW), false);
+
 // Names.
 for (const [n, want] of [['Sarah Jones', 'Sarah'], ['TEACHER', null], ['LyndaSpector', 'Lynda'], ['LaToya', 'LaToya'], ['', null]]) {
   assert.equal(firstName(n), want, n);
@@ -82,20 +103,25 @@ const sample = {
   unsubUrl: 'https://biblesketch.app/api/email/unsubscribe?u=test&t=test', landingBook: 'Luke', printsLeft: 10,
   firstPageRef: 'Mark 4:39', offerStart: NOW, offerEnds: offerEnd(NOW), offerUrl: 'https://biblesketch.app/api/email/offer?u=test&t=test',
   outageSubject: 'Renaud',
+  issue: {
+    date: '2026-10-15', subject: 'Sunday: Jonah and the big fish', story: 'Jonah and the big fish', ref: ['Jonah', 1, 17],
+    text: 'This week’s story is Jonah. Kids always remember the fish, but the surprise is chapter 3: God asks Jonah a second time.',
+    freeUrl: freeUrl('We00Ov9kuCvTi2Za34d3', 1790000000, 'test'),
+  },
   picks: [
     { label: 'Luke 2:15-16', path: '/coloring-page/luke-2-15-16/We00Ov9kuCvTi2Za34d3' },
     { label: 'Mark 4:39', path: '/coloring-page/mark-4-39/k8SwvZ2J8jALuFiS3UPW' },
     { label: 'Joshua 1:9', path: '/coloring-page/joshua-1-9/WrFh8ilVdsYQzrxmChsO' },
   ],
 };
-const bare = { uid: 'test', email: 'a@example.com', unsubUrl: sample.unsubUrl, optInAt: NOW, printsLeft: 10, offerStart: NOW, offerEnds: offerEnd(NOW), offerUrl: sample.offerUrl, picks: sample.picks };
+const bare = { uid: 'test', email: 'a@example.com', unsubUrl: sample.unsubUrl, optInAt: NOW, printsLeft: 10, offerStart: NOW, offerEnds: offerEnd(NOW), offerUrl: sample.offerUrl, picks: sample.picks, issue: sample.issue };
 for (const id of Object.keys(EMAILS)) {
   for (const p of [sample, bare]) {
     const e = render(id, p, NOW);
     for (const part of [e.text, e.html, e.subject]) assert.ok(!/undefined|null|NaN|Invalid Date/.test(part), `${id}: ${part}`);
     assert.ok(e.text.includes('Supersonic Sites Inc.') && e.html.includes('Unsubscribe'), id);
     const words = e.text.split('\n\n--')[0].split(/\s+/).length;
-    assert.ok(words <= (id === 'w0' ? 190 : 110), `${id}: ${words} words`);
+    assert.ok(words <= ({ w0: 190, sp: 140 }[id] ?? 110), `${id}: ${words} words`);
   }
 }
 // Replies to hello@ (web/src/lib/email-reply.ts): only clear answers are acted on.

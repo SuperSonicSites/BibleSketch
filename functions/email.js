@@ -2,6 +2,7 @@
 // person is due next. Pure functions, no Firebase: scripts/email-check.mjs tests the rules and renders test sends.
 'use strict';
 
+const crypto = require('crypto');
 const SITE = 'https://biblesketch.app';
 const FROM = 'Renaud from Bible Sketch <renaud@e.biblesketch.app>';
 const REPLY_TO = 'hello@biblesketch.app';
@@ -72,6 +73,12 @@ const PRINTS_YEAR = '$19.99 for a whole year (that’s $1.67 a month)';
 // page. "Pages" alone means finished coloring pages.
 const PREMIUM_LINE = 'Want to make pages of your own too? Premium is $4.99 a month and includes 10 credits.';
 const yearly = (url) => `${url}&p=yearly`;
+
+// The Sunday Prep free page (§6.6): a signed, expiring link to the print PDF, checked by the Worker
+// (web/src/lib/free-link.ts) with the same secret. `expSec` is Unix seconds.
+const freeUrl = (sketchId, expSec, secret) =>
+  `${SITE}/api/free/${encodeURIComponent(sketchId)}?t=${expSec}.${crypto.createHmac('sha256', secret).update(`free:${sketchId}:${expSec}`).digest('base64url')}`;
+const FREE_LINK_DAYS = 28;
 
 // Each email: subject, paragraphs ([label](url) marks a link), and optional super-signature lines.
 // `p` is the person (built by emailTick in index.js); every field used here has a fallback (§12.14).
@@ -154,6 +161,27 @@ const EMAILS = {
     subject: 'last day',
     body: [`Today is the last day of your offer: unlimited prints for ${PRINTS}, or ${PRINTS_YEAR}. After tonight the links stop working. [Monthly](${p.offerUrl}) · [Yearly](${yearly(p.offerUrl)})`],
   }),
+  // The weekly flagship (§5.4). `p.issue` is this week's sundayPrep/<Thursday> doc, written by
+  // scripts/sunday-prep.mjs and approved by the owner: subject, story, text (1-2 sentences), ref, freeUrl.
+  sp: (p, now) => {
+    const i = p.issue;
+    const c = `sp-${i.date}`;
+    return {
+      subject: i.subject,
+      body: [
+        i.text,
+        `Here’s the page, free to print from this email (no sign-in, and it doesn’t use a print): [${i.story}, ready to print](${i.freeUrl}) · [on A4 paper](${i.freeUrl}&paper=a4)`,
+        `Need it simpler, or for older kids? [Make your own version](${maker(p, c, i.ref)})`,
+      ],
+      sig: [
+        [season(now).line, link('/gallery', `${c}-sig`, { tag: season(now).tag })],
+        ['Make your own page from any Bible passage, for any age, in about 30 seconds.', link('/', `${c}-sig`)],
+        p.bought || p.isPremium
+          ? ['Teaching a group? The Beacon is 200 credits and 200 prints for $29.99, and credits never expire.', link('/pricing', `${c}-sig`)]
+          : [`Printing every week? Premium is ${PREMIUM} for unlimited prints, plus 10 credits.`, link('/pricing', `${c}-sig`)],
+      ],
+    };
+  },
   o23: (p) => ({
     subject: `re: ${p.outageSubject || 'quick question'}`,
     body: [`What have you printed so far? Printing is still unlimited for you until ${shortDate(OUTAGE.until)}, and I’d love to hear what you’re using the pages for.`],
@@ -229,6 +257,11 @@ function due(s, now = Date.now()) {
   const times = Object.values(f).filter(Boolean);
   if (times.some((t) => ago(t) < 20 * HOUR)) return null; // one email a day at most
   if (times.filter((t) => ago(t) < 7 * DAY).length >= 3) return null; // three a week at most
+
+  // Sunday Prep: this week's approved issue, from its send time (Thu 8 a.m. ET, then 8 a.m. local) for 2 days;
+  // not in someone's first 7 days, while the activation emails run.
+  const i = s.issue;
+  if (s.optIn && i && now >= i.sendAt && now < i.sendAt + 2 * DAY && (f.sp || 0) < i.sendAt && ago(s.createdAt) >= 7 * DAY) return pick('sp');
 
   if (s.optIn && f.w0) {
     if (!f.w1 && !s.persona && ago(f.w0) >= DAY && ago(f.w0) < 7 * DAY) return pick('w1');
@@ -331,4 +364,4 @@ function renderReceipt(t, p) {
   };
 }
 
-module.exports = { EMAILS, REPLIES, render, renderReceipt, due, firstName, offerEnd, OUTAGE, OFFER_DAYS, FIRST_PACK_BONUS, PRINTS_PLANS, STUCK_MS, SITE, DAY, HOUR };
+module.exports = { EMAILS, REPLIES, render, renderReceipt, due, firstName, offerEnd, freeUrl, FREE_LINK_DAYS, OUTAGE, OFFER_DAYS, FIRST_PACK_BONUS, PRINTS_PLANS, STUCK_MS, SITE, DAY, HOUR };

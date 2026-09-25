@@ -657,6 +657,15 @@ send next, and never ask what their behaviour already tells us.
   - Optional: a daily scheduled task drafts replies for the owner to approve.
 
 ### 6.9 The weekly flagship job
+- **Built 2026-09-25, simpler than below:** no Resend Broadcast. The flagship is email `sp` in `functions/email.js`,
+  sent by `emailTick` like the others (same footer, unsubscribe, caps and quiet hours). How it works:
+  - An issue is a `sundayPrep/<Thursday>` doc with the subject, story, 1-2 sentences, a public sketch and its ref.
+    `scripts/sunday-prep.mjs` writes it and refuses a reused sketch or a story repeated within 52 weeks.
+  - The next `emailTick` emails the owner a `[DRAFT for <date>]` copy with a working link. After the owner OKs it,
+    `--approve` sets it live.
+  - It goes out from Thursday 8 a.m. ET (8 a.m. local further west) for 2 days, to everyone opted in for 7+ days.
+  - The free page is `/api/free/<sketchId>?t=<exp>.<sig>`: the print PDF, with no sign-in and no print spent. It is
+    signed with the purge secret (no new secret) and valid for 28 days.
 - A scheduled job runs on Wednesday. It could be a step in a Claude scheduled task (`email-weekly`) or a Worker
   cron.
 - **Steps:**
