@@ -6,7 +6,7 @@ Owner-only steps: CHECKLIST, "Pinterest auto-publish".
 
 ## Status (update this block at the end of every Pinterest session)
 
-As of **2026-09-24 11:10 UTC** (first `pinterest-daily` run):
+As of **2026-09-25** (second `pinterest-daily` run, stopped: browser signed out; calendar unchanged since 2026-09-24):
 - **Calendar** (`web/src/data/pins.json`, 178 entries, `pins-check`: no errors):
 
   | Board | Pins | Dates |
@@ -23,6 +23,12 @@ As of **2026-09-24 11:10 UTC** (first `pinterest-daily` run):
   Oct 15 (Gen 15:5), Oct 17 (Gen 21:2-3). Next runs: continue Abraham (three visitors Gen 18:2, Isaac and Rebekah,
   Jacob's ladder), then Babel and Joseph. `pins-alt.mjs` cuts alt text short when the description quotes a verse
   with a full stop inside (Joshua 1:9); that Pin's alt was set by hand.
+  2026-09-25: **nothing generated.** The in-app browser was signed out of both biblesketch.app ("Log In", no
+  Firebase user) and Pinterest, so the run stopped before generating; no alt text set. Bank refilled (+20 items:
+  8 Christmas, among them the Magnificat, Caesar's decree, Immanuel and Jesus growing up in Nazareth; 12 Sunday
+  School, among them Miriam, the spies' grapes, Cana, the widow's mite and the lilies of the field). Christmas
+  still warns (43 unused pages for ~90 slots): keep refilling it, up to 20 a run. The next run's slots stay Oct 14-18
+  (magi-star, immanuel, annunciation, Psalm 119:105 CS, angels-bethlehem).
 - **Genesis 1-4 series** (2026-09-24, owner request after the stats showed Genesis 1-4 Pins earn 62% of clicks):
   18 reviewed pages on the Sunday School board every day or two from Oct 2 to Oct 30, in story order: Creation days
   1-7 (opener "Days of Creation Coloring Pages"), "very good", Adam's breath of life, tending the garden, Eve,
