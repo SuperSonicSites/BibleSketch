@@ -9,7 +9,7 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
 2. **Zaraz sign-up fix,** if the browser agent hasn't finished it (below).
 3. **"Run now" once on `pinterest-daily`** and approve its prompts (below).
 4. **Before mid-October: the outage win-back decision** (Lifecycle email, below). The April sign-ups age out of CASL's 6-month window during October.
-5. **Resend:** the key into Firebase secrets, and domain verification (the account is done; Lifecycle email, below).
+5. **Resend:** confirm `e.biblesketch.app` shows "Verified" (the account and key are done; Lifecycle email, below).
 6. **The email decisions,** then tell Claude "go" for phase 0.5 (below).
 7. **Zoho:** turn on self-cancellation in the customer portal, and check the sales tax (below). The prints plans are created.
 8. **Brent's Cloudflare verification click** (below).
@@ -42,10 +42,7 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
 
 ### Lifecycle email (ROADMAP 1.6, plan in docs/email-marketing-plan.md)
 - [ ] **Resend account.**
-  - [x] Account created (2026-09-24).
-    - The API key is in `C:\Users\renau\Coding\BibleSketch-recovered-prod\.env` (as `RESEND_API`). That's outside the project and not in git, but nothing reads it there.
-    - Move it into Firebase's secret store: in `C:\Users\renau\Coding\BibleSketch-astro`, run `firebase functions:secrets:set RESEND_API_KEY --project biblesketch-5104c` and paste the key when asked.
-    - Then delete that `.env`: a plain-text key in an old folder is one more place to leak.
+  - [x] Account created, `RESEND_API_KEY` set as a Firebase secret, and the stray `.env` deleted (2026-09-24, verified).
   - [ ] **Sending domain `e.biblesketch.app`** (owner's choice, 2026-09-24). The DNS was checked the same day: DKIM, the `send.e` return path, the receiving MX, and the root DMARC `p=none`, which covers the subdomain. Confirm Resend shows the domain as "Verified", and keep "receiving" on, because replies come back through it (plan §6.8).
   - **Urgent decision (plan §12.1):** a one-time, honest win-back email to the 85 people who signed up since Mar 26 and never got to make a page (the generator was down Jun-Sep), relying on CASL implied consent. The April sign-ups age out during October. Decided 2026-09-24: the gift is a month of unlimited prints. Still open: the implied-consent basis (a lawyer check is worth it), plus approval of the Worker deploy and the grant script.
   - **Opt-in bonus** (decided 2026-09-24: extra free prints for joining the emails): confirm the number (+5 proposed) and the checkbox wording.
