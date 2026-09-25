@@ -5,9 +5,9 @@ Bible Sketch (https://biblesketch.app) turns Bible verses into printable colorin
 ## Layout
 
 - `web/`: the front end, Astro 7 + React islands on the Cloudflare Worker `biblesketch-web` (its own package.json and wrangler config). It serves every page of biblesketch.app (route `biblesketch.app/*`); paths not in `LIVE_PREFIXES` (`/__/auth`, `/sitemap.xml`, `/assets`, `/references`) pass through to Firebase Hosting.
-- `functions/`: the backend. Generation = `createSketch` / `editSketch` (server-side charging with refunds; `functions/generation/`: prompts, pipelines, image ops, QA metrics), plus the billing webhook, sitemap, purge trigger and user triggers. The old render functions and `generateContent` remain until phase 5 (ROADMAP 1).
+- `functions/`: the backend, in numbered sections of `index.js`. Generation = `createSketch` / `editSketch` (server-side charging with refunds; `functions/generation/`: prompts, pipelines, image ops, QA metrics), plus the billing webhook, sitemap, purge trigger, user triggers, lifecycle email (§17) and the on-site checkout (§18). The old SEO render functions and the client-charged `generateContent` stay until phase 5 (ROADMAP 1), but no page uses them.
 - `coloring-page-quality` is ported into `functions/generation/`, not merged (its commit edits the old SPA source). The prompt lab (`C:\Users\renau\Coding\BibleSketch\lab`, gitignored) still imports that branch's copy of the prompts.
-- In `web/`: `npm run build`, `npx astro preview` (workerd, http://localhost:4321; stop it before rebuilding, Windows locks `dist/`), `npx wrangler deploy` (Worker `biblesketch-web`), `node scripts/check-sketch.mjs` (parity with 3 live pages), `node scripts/lighthouse.mjs <origin> [runs] [--cold] [--paths=/a,/b]` (Git Bash: prefix `MSYS_NO_PATHCONV=1`), `node scripts/check-pages.mjs [origin]` (head parity with live), and against the emulators `node scripts/e2e-auth.mjs` / `e2e-downloads.mjs` / `e2e-generate.mjs` (uncomment `FIRESTORE_EMULATOR` in `web/.dev.vars`, rebuild, preview on http://localhost:4321; honoured only for localhost requests; comment it out again before a production build). Phases 1-4 are live on biblesketch.app since 2026-09-23 (the Worker has `biblesketch.app/*`; unported paths pass through to Firebase) (routes in `web/wrangler.jsonc`; rollback = drop a prefix from `LIVE_PREFIXES` and deploy; ROADMAP 1). `npm install` needs `npm approve-scripts` for new packages with install scripts. The purge secret is the Worker secret `PURGE_SECRET`; the Firebase side is `WORKER_PURGE_SECRET` (same value, set at phase 2).
+- In `web/`: `npm run build`, `npx astro preview` (workerd, http://localhost:4321; stop it before rebuilding, Windows locks `dist/`), `npx wrangler deploy` (Worker `biblesketch-web`), `node scripts/check-sketch.mjs` (parity with 3 live pages), `node scripts/lighthouse.mjs <origin> [runs] [--cold] [--paths=/a,/b]` (Git Bash: prefix `MSYS_NO_PATHCONV=1`), `node scripts/check-pages.mjs [origin]` (head parity with live), and against the emulators `node scripts/e2e-auth.mjs` / `e2e-downloads.mjs` / `e2e-generate.mjs` (uncomment `FIRESTORE_EMULATOR` in `web/.dev.vars`, rebuild, preview on http://localhost:4321; honoured only for localhost requests; comment it out again before a production build). Phases 1-4 are live on biblesketch.app since 2026-09-23 (the Worker has `biblesketch.app/*`; unported paths pass through to Firebase) (routes in `web/wrangler.jsonc`; rollback = drop a prefix from `LIVE_PREFIXES` and deploy; ROADMAP 1). `npm install` needs `npm approve-scripts` for new packages with install scripts. The purge secret is the Worker secret `PURGE_SECRET`; the Firebase side is `WORKER_PURGE_SECRET` (same value). The hello@ reply reader (`email()` in `web/src/worker.ts`) reuses it to call `emailReply`.
 
 ## Pinterest
 
@@ -22,29 +22,33 @@ Bible Sketch (https://biblesketch.app) turns Bible verses into printable colorin
 - Lifecycle and marketing email to sign-ups: [docs/email-marketing-plan.md](docs/email-marketing-plan.md). It covers the Dean Jackson philosophy, voice rules, campaigns, the Firestore → Resend system and CASL. Read its §1-2 and use the §9 checklist before writing any email; ROADMAP 1.6 tracks the build. Sending to real users is owner-approved until the owner grants a standing approval.
 - The engine (phase 1, 2026-09-25): `functions/email.js` holds every email's words and `due()`, the rules for who gets what, when; `emailTick` (functions/index.js section 17) sends through Resend every 30 minutes. It sends nothing until `config/email` has `live: true` (an owner-approved data write); until then it logs what it would send. Changing an email's words changes live email: get the owner's approval of a test send first (`node scripts/email-check.mjs --render=<owner email>`, then the Resend MCP).
 
+## Billing and checkout
+
+- Zoho Billing, Canada data center (`subscriptions.zohocloud.ca`, org 110000236578, base currency CAD; gateway Stripe). The memory note `zoho-billing` has the webhook payloads and the safe-resend rules. `handleZohoWebhook` grants by plan code (`PREMIUM_PLANS`, `PRINTS_PLANS`) and reads the uid from the customer field `cf_cf_firebase_uid`.
+- **Prices are USD everywhere** (owner, 2026-09-25): they come from Zoho's USD price lists ("US Bible Sketch Premium" holds Premium and the Prints plans; one list per pack), not the CAD plan prices. The Prints plans ($1.99 a month, $19.99 a year) are sold only through email offers.
+- **On-site checkout** (built 2026-09-25, not live yet): `/checkout/<plan>` has no header or footer, has a strict CSP (`web/src/middleware.ts`), and embeds the hosted page that `createCheckout` opens through the Zoho API. Going live needs the owner's `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET` and `ZOHO_REFRESH_TOKEN` secrets; the steps are in plan §12.20 item 4 and CHECKLIST 0a. Until then the pricing page still uses Zoho's plain links (CAD), so don't hide the uid field in Zoho before the switch.
+
 ## Facts you can't infer from the code
 
-- **The production front-end source is lost.** Live = the minified bundle `hosting-public/assets/index-DHKtGwi1.js` (React 19.2, react-router 6, react-helmet-async). Root `App.tsx`, `components/`, `services/` are an **older** version: read them to understand behaviour, grep the bundle for what production actually does. Features that exist only in the bundle: blog, About, Verse Art pipeline, profile-completion modal, tag URL filters, Zaraz tracking. Front-end changes wait for the Astro rebuild (ROADMAP 1).
-- `functions/index.js` holds everything server-side: 13 SEO render functions (string templates into `functions/index.html`), `sitemap`, `generateContent` (Gemini proxy, callable), `handleZohoWebhook` (billing), `onUserCreated`/`onUserDeleted`. The render functions wipe or replace their own HTML when the SPA boots; Google indexes what React renders.
-- Credits are deducted by the **client**; the server only checks `credits >= 1`. Don't add server-side charging while the live bundle still charges, or users pay twice (ROADMAP 1.1).
-- Newer prompt/model work lives on branch `coloring-page-quality` and the gitignored `lab/` folder in the `C:\Users\renau\Coding\BibleSketch` worktree (not merged, ROADMAP 1.0).
-- The Hosting CDN caches rendered HTML up to 1 day and is only flushed by a new Hosting release. Add `?cb=<random>` when checking a change.
+- **Since 2026-09-23 the Worker serves every page.** The old SPA (the bundle `hosting-public/assets/index-DHKtGwi1.js`, and the older root `App.tsx`, `components/`, `services/`) is reference only: grep it to see what production used to do. It and its functions go in phase 5, planned for around 2026-09-30 and waiting on the owner's OK.
+- Caching: the Worker caches public pages up to a day (`onSketchWritten` purges them through `/api/purge`). Paths passed through to Firebase keep the Hosting CDN, which only a Hosting release flushes. Add `?cb=<random>` when checking a change.
 
 ## Hard rules (each one has broken production or nearly did)
 
-- Never run `npm run build`: it overwrites `functions/index.html` with the old front end.
+- Never run `npm run build` at the repo root: it overwrites `functions/index.html` with the old front end (in `web/` it's the normal build).
 - Never `firebase deploy` without an explicit, **quoted** `--only "functions:a,functions:b"` list (unquoted lists break in PowerShell; unscoped deploys can delete live functions). Hosting only through the channel → clone procedure in docs/deploying.md; never add `hosting-public/index.html`; never delete an `/assets/*` file.
-- `services/firebase.ts` uses the emulators only when the hostname is exactly `localhost`. Opening the local app via `127.0.0.1` or a LAN IP talks to **production**.
+- Both front ends (`web/src/lib/firebase-client.ts`, the old `services/firebase.ts`) use the emulators only when the hostname is exactly `localhost`. Opening a local app via `127.0.0.1` or a LAN IP talks to **production**.
+- Several sessions deploy the Worker from this working tree (`pinterest-daily` included), so anything uncommitted in `web/` ships with their deploy. Keep `web/` deployable at all times, and add new pages unlinked until they're ready.
 - `functions/package-lock.json` must keep its optional platform packages (fsevents, @unrs/resolver-binding-*, @emnapi/*). Don't regenerate it casually; Cloud Build's `npm ci` fails without them.
 - Production deploys, data writes and Zoho resends are owner-approved actions: ask first unless the owner asked for that specific action in this conversation. Zoho resends can grant credits twice (check `processedWebhooks` first).
-- Write docs and code with the editor tools, not through shell strings: backticks inside a bash double-quoted string execute as commands.
+- Write docs and code with the editor tools, not through shell strings: backticks inside a bash double-quoted string execute as commands, and regex backslashes get lost in heredoc and template strings.
 - Files use CRLF (`functions/index.js`, `functions/index.html`, scripts). Keep endings consistent; `hosting-public/**` is `-text` and must stay byte-exact.
 
 ## Verify before you say done
 
 ```bash
 scripts/emulators.cmd                    # full emulator suite; app at http://localhost:5000
-node scripts/security-check.mjs          # 53 checks; must all pass (restart the emulators between runs)
+node scripts/security-check.mjs          # 54 checks; must all pass (restart the emulators between runs)
 node scripts/check-hosting-public.mjs    # before any Hosting change (add --live before a functions deploy)
 node --check functions/index.js
 node scripts/email-check.mjs             # after touching functions/email.js (rules, words) or web/src/lib/email-reply.ts
