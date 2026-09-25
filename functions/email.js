@@ -82,13 +82,11 @@ const EMAILS = {
         [s.line, link('/gallery', 'w0-sig', { tag: s.tag })],
         ['Teaching a group? The Beacon is 200 pages at 15¢ each, and pages never expire.', link('/pricing', 'w0-sig')],
       ],
-      threadId: 'w0',
     };
   },
   w1: () => ({
     subject: 're: Your Bible Sketch account (5 free pages)',
     body: ['Quick question: are these pages for a class, or for your kids at home?'],
-    replyTo: 'w0',
   }),
   joined: (p, now) => ({
     subject: 'your 5 extra prints',
@@ -136,12 +134,10 @@ const EMAILS = {
       `You’ve used all your free prints. Just for you, until ${longDate(p.offerEnds, p.timezone)}: unlimited prints for ${PRINTS}. Cancel anytime. [Keep printing](${p.offerUrl})`,
       `Want to make new pages too? Premium is ${PREMIUM}.`,
     ],
-    threadId: `c7-${p.offerStart}`,
   }),
   c7b: (p) => ({
     subject: 're: out of prints?',
     body: [`A quick reminder: unlimited prints for ${PRINTS} are yours until ${longDate(p.offerEnds, p.timezone)}. [Keep printing](${p.offerUrl})`],
-    replyTo: `c7-${p.offerStart}`,
   }),
   c7c: (p) => ({
     subject: 'last day',
@@ -171,7 +167,6 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 const LINK = /\[([^\]]+)\]\(([^)]+)\)/g;
 const asText = (s) => s.replace(LINK, '$1: $2');
 const asHtml = (s) => esc(s).replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, t, u) => `<a href="${u}" style="color:#6d28d9">${t}</a>`);
-const threadHeader = (key, uid) => `<${key}.${uid}@e.biblesketch.app>`;
 
 // One ready-to-send Resend email for person `p` (needs uid, email, first, unsubUrl, and optInAt unless outage).
 function render(id, p, now = Date.now()) {
@@ -192,9 +187,9 @@ function render(id, p, now = Date.now()) {
     'List-Unsubscribe': `<${p.unsubUrl}>, <mailto:${REPLY_TO}?subject=Unsubscribe>`,
     'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
   };
-  // "re:" emails thread under the email they answer (§12.10).
-  if (e.threadId) headers['Message-ID'] = threadHeader(e.threadId, p.uid);
-  if (e.replyTo) headers['In-Reply-To'] = headers.References = threadHeader(e.replyTo, p.uid);
+  // "re:" emails thread under the email they answer (§12.10), by that email's real Message-ID: Resend sends
+  // through Amazon SES, which replaces any Message-ID we set, so emailTick looks it up (`p.inReplyTo`).
+  if (p.inReplyTo) headers['In-Reply-To'] = headers.References = p.inReplyTo;
   return {
     from: FROM, to: p.email, reply_to: REPLY_TO, subject: e.subject, text, html, headers,
     tags: [{ name: 'campaign', value: id }],
@@ -202,6 +197,8 @@ function render(id, p, now = Date.now()) {
 }
 
 const CONVERSION = ['c1', 'c2', 'c6', 'c7'];
+// The "re:" emails, and the email each one answers.
+const REPLIES = { w1: 'w0', c7b: 'c7' };
 const QUIET_OK = new Set(['w0', 'joined']); // answers to something they just did: sent at any hour
 
 // Which email person `s` is due now, or null. `s.fired` holds when each email went out (c7* are per round).
@@ -263,4 +260,4 @@ function quietHoursOver(now, tz) {
 // An offer made now runs to the end of the day, Eastern, OFFER_DAYS days later ("until Friday, October 9").
 const offerEnd = (now) => Date.parse(`${new Date(now + OFFER_DAYS * DAY).toLocaleDateString('en-CA', { timeZone: 'America/New_York' })}T23:59:00-05:00`);
 
-module.exports = { EMAILS, render, due, firstName, offerEnd, OUTAGE, OFFER_DAYS, FIRST_PACK_BONUS, PRINTS_PLAN_URL, SITE, DAY, HOUR };
+module.exports = { EMAILS, REPLIES, render, due, firstName, offerEnd, OUTAGE, OFFER_DAYS, FIRST_PACK_BONUS, PRINTS_PLAN_URL, SITE, DAY, HOUR };

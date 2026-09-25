@@ -3883,7 +3883,8 @@ exports.onPrivateProfileWritten = onDocumentWritten("users/{uid}/private/{docId}
 // (`fired`). emailTick asks functions/email.js which email each person is due and sends it through Resend.
 // Nothing is sent until the owner sets config/email {live: true}; until then each tick only logs what it would send.
 const EM = require('./email');
-const resendApiKey = defineSecret('RESEND_API_KEY');
+const resendApiKey = defineSecret('RESEND_API_KEY'); // send only
+const resendAdminKey = defineSecret('RESEND_ADMIN_KEY'); // full access: reads a sent email's Message-ID
 const EMAIL_LINKS = 'https://biblesketch.app/api/email'; // the Worker forwards these to emailAction
 const PURCHASES = new Set(['credit_purchase', 'subscription', 'prints_subscription']);
 const MAX_SENDS_PER_TICK = 40; // Resend's free plan allows 100 a day
@@ -3895,6 +3896,12 @@ const sameSecret = (a, b) => {
   return crypto.timingSafeEqual(h(a), h(b));
 };
 const pause = (t) => new Promise((r) => setTimeout(r, t));
+// The Message-ID an email really went out with (Amazon SES sets it), for the "re:" that answers it.
+const sentMessageId = async (emailId) => {
+  const r = await fetch(`https://api.resend.com/emails/${encodeURIComponent(emailId)}`, { headers: { authorization: `Bearer ${resendAdminKey.value()}` } });
+  const id = r.ok ? (await r.json()).message_id : null;
+  return id ? (id.startsWith('<') ? id : `<${id}>`) : null;
+};
 const offerUrl = (uid, token) => `${EMAIL_LINKS}/offer?u=${encodeURIComponent(uid)}&t=${token}`;
 
 // private/profile -> emailProfiles, so a tick needs one read per person. A new opt-in after an unsubscribe clears
@@ -4040,6 +4047,8 @@ async function runEmailTick(now = Date.now(), { dryRun = false } = {}) {
       outageSubject: EM.firstName(a.displayName) ?? 'quick question',
     };
     if (id === 'w0') p.landingBook = await landingBook(db, e.landingPath);
+    const parent = e.sentIds?.[EM.REPLIES[id]];
+    if (parent) p.inReplyTo = await sentMessageId(parent).catch(() => null);
     if (id === 'a3') p.picks = picks ??= await masterPicks(db);
     if (id === 'c2') {
       p.offerEnds = EM.offerEnd(now);
@@ -4065,7 +4074,7 @@ async function runEmailTick(now = Date.now(), { dryRun = false } = {}) {
     const out = await res.json().catch(() => ({}));
     if (res.status === 429 || res.status >= 500) { console.warn(`[emailTick] Resend ${res.status}, stopping this tick`); break; }
     // A rejected email isn't retried (it would fail every tick); the error stays on the profile.
-    if (res.ok) Object.assign(update, { lastEmail: { id, emailId: out.id ?? null, at }, emailsSent: FieldValue.increment(1) });
+    if (res.ok) Object.assign(update, { lastEmail: { id, emailId: out.id ?? null, at }, sentIds: { [id]: out.id ?? null }, emailsSent: FieldValue.increment(1) });
     else { update.lastError = { id, status: res.status, message: String(out.message || '').slice(0, 200), at }; console.error(`[emailTick] ${id} for ${uid}: ${res.status}`); }
     await docs.get(uid).ref.set(update, { merge: true });
     if (decisions.length >= MAX_SENDS_PER_TICK) break;
@@ -4074,7 +4083,7 @@ async function runEmailTick(now = Date.now(), { dryRun = false } = {}) {
   return decisions;
 }
 
-exports.emailTick = onSchedule({ schedule: "every 30 minutes", timeoutSeconds: 300, secrets: [resendApiKey] }, async () => {
+exports.emailTick = onSchedule({ schedule: "every 30 minutes", timeoutSeconds: 300, secrets: [resendApiKey, resendAdminKey] }, async () => {
   const d = await runEmailTick();
   if (d.length) console.log(`[emailTick] ${d.length} due: ${d.map((x) => x.id).join(' ')}`);
 });

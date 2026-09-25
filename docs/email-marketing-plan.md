@@ -1249,5 +1249,9 @@ less churn.
 
 - **2026-09-25, phase 1 test sends:** all 15 emails went to the owner (renaud@supersonicsites.com) through the
   Resend MCP, with real subjects, sample data and placeholder links (`u=test`).
-  - Resend accepted the custom `Message-ID` / `In-Reply-To` headers used for the "re:" threads.
   - Waiting on the owner's approval.
+- **2026-09-25, "re:" threading fixed:** Resend sends through Amazon SES, which replaced our custom `Message-ID`
+  (the delivered W0 carried an `@email.amazonses.com` id). So the first W1 test pointed at an id that doesn't exist.
+  - Now `emailTick` keeps each sent email's Resend id (`sentIds`), reads its real Message-ID with `RESEND_ADMIN_KEY`,
+    and sets `In-Reply-To`/`References` on W1 and C7's day-5 note.
+  - A 16th test (W1 answering the real W0 id) went to the owner to confirm the thread.
