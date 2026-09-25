@@ -31,6 +31,7 @@ const waitFor = async (check, label, ms = 15000) => {
 const toFields = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k,
   typeof v === 'boolean' ? { booleanValue: v } : typeof v === 'number' ? { integerValue: String(v) }
   : Array.isArray(v) ? { arrayValue: { values: v.map((x) => ({ stringValue: x })) } }
+  : v instanceof Date ? { timestampValue: v.toISOString() }
   : typeof v === 'object' ? { mapValue: { fields: toFields(v) } } : { stringValue: v }]));
 const put = (path, data) => fetch(`${FS}/${path}`, { method: 'PATCH', headers: { ...OWNER, 'content-type': 'application/json' }, body: JSON.stringify({ fields: toFields(data) }) });
 const get = async (path) => {
@@ -108,6 +109,15 @@ await step('owners and premium accounts never spend a download', async () => {
   assert.equal((await post('download', pub, carol.token)).status, 200);
   assert.equal(await downloadsLeft(carol.uid), 2);
   assert.equal((await post('print', priv, alice.token)).status, 200, 'owner prints own private sketch');
+});
+
+await step('a dated unlimited-prints pass spends nothing until it expires', async () => {
+  const day = 24 * 60 * 60 * 1000;
+  const dave = await account('dave', { downloadsRemaining: 0, printsUnlimitedUntil: new Date(Date.now() + day) });
+  assert.equal((await post('print', pub, dave.token)).status, 200);
+  assert.equal(await downloadsLeft(dave.uid), 0);
+  const erin = await account('erin', { downloadsRemaining: 0, printsUnlimitedUntil: new Date(Date.now() - day) });
+  assert.equal((await post('print', pub, erin.token)).status, 402, 'an expired pass is the normal print wall');
 });
 
 await step("someone else's private sketch is a 404; a bookmark resolves to its original", async () => {

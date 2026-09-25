@@ -4,6 +4,7 @@
 import { getDoc, setIntIfUnchanged, type Doc } from './firestore.ts';
 import { TokenError, verifyIdToken } from './id-token.ts';
 import { type Sketch, isDocId, reference, storageUrl } from './sketch.ts';
+import { type Profile, unlimitedPrints } from './store.ts';
 
 export interface Granted {
   sketch: Sketch;
@@ -46,12 +47,12 @@ export async function grantDownload(request: Request, id: string): Promise<Grant
   const image = await fetch(sketch.storagePath ? storageUrl(sketch.storagePath) : sketch.imageUrl!);
   if (!image.ok) return page(502, 'Image unavailable', 'We could not load this image. Please try again in a minute.');
 
-  // Owners never spend a download on their own sketch; premium is unlimited (owner decisions 2026-09-23).
+  // Owners never spend a download on their own sketch; premium and dated passes are unlimited (2026-09-23/24).
   if (sketch.userId !== uid) {
     for (let attempt = 0; ; attempt++) {
       const user = await getDoc('users', uid, t);
       if (!user) return page(403, 'Account not found', 'Please sign in again and retry.');
-      if (user.isPremium) break;
+      if (unlimitedPrints(user as Profile)) break;
       const left = Number(user.downloadsRemaining ?? 0);
       if (left < 1) {
         return page(402, 'No downloads left', 'You have used all your free downloads and prints. <a href="/pricing" style="color:#7c3aed">See Premium options</a>.');

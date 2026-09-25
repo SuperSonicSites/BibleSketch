@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { useStore } from '@nanostores/react';
 import { Bookmark, Check, Download, LoaderCircle, Printer } from 'lucide-react';
 import Button from './shell/Button.tsx';
-import { $profile, $user, openModal, requireAuth } from '../lib/store.ts';
+import { $profile, $user, openModal, requireAuth, unlimitedPrints } from '../lib/store.ts';
 import type { Sketch } from '../lib/sketch.ts';
 
 const icon = (d: string[]) => (
@@ -67,7 +67,7 @@ export default function SketchActions({ sketch }: { sketch: Sketch }) {
     );
   }
 
-  const free = isOwner || Boolean(profile.isPremium);
+  const free = isOwner || unlimitedPrints(profile);
   const remaining = profile.downloadsRemaining ?? 0;
   const left = free ? null : <span className="ml-1 text-xs opacity-80">({remaining} left)</span>;
   const blocked = () => {

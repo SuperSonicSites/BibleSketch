@@ -125,6 +125,7 @@ await step('raising own credits, downloads or premium is denied', async () => {
   await denied(updateDoc(ref_, { downloadsRemaining: 50 }), 'downloads up');
   await denied(updateDoc(ref_, { isPremium: true }), 'premium');
   await denied(updateDoc(ref_, { planStatus: 'active' }), 'planStatus');
+  await denied(updateDoc(ref_, { printsUnlimitedUntil: new Date('2099-01-01') }), 'unlimited prints pass');
   await denied(updateDoc(ref_, { email: 'x@y.z' }), 'email');
 });
 
@@ -274,6 +275,22 @@ await step('a subscription on any other plan neither grants nor removes premium'
   assert.equal(await credits(alice), c0, 'an unknown plan must not grant credits');
   assert.equal((await hook({ uid: alice.uid }, other('cancelled'), token)).status, 400);
   assert.equal((await userDoc(alice)).get('isPremium'), true, 'cancelling another plan must not remove premium');
+});
+
+await step('the Prints plan grants dated unlimited prints once per term, never premium or credits', async () => {
+  const prints = (id, status, termEnd) => zohoSub(`${id}-${run}`, bob.uid,
+    { status, current_term_ends_at: termEnd, plan: { plan_code: 'bible-sketch-prints-monthly' } });
+  const until = async () => (await userDoc(bob)).get('printsUnlimitedUntil')?.toMillis();
+  const c0 = await credits(bob);
+  assert.equal((await hook({ uid: bob.uid }, prints('prints', 'live', '2099-01-01'), token)).status, 200);
+  assert.equal(await until(), Date.parse('2099-01-04T00:00:00Z'), 'term end plus 3 days');
+  assert.equal(await (await hook({ uid: bob.uid }, prints('prints', 'live', '2099-01-01'), token)).text(), 'Already processed');
+  assert.equal((await hook({ uid: bob.uid }, prints('prints-short', 'live', '2030-01-01'), token)).status, 200);
+  assert.equal(await until(), Date.parse('2099-01-04T00:00:00Z'), 'a shorter term never shortens the pass');
+  assert.equal((await hook({ uid: bob.uid }, prints('prints', 'cancelled', '2099-01-01'), token)).status, 200);
+  assert.equal(await until(), Date.parse('2099-01-04T00:00:00Z'), 'cancelling lets it lapse at the date');
+  assert.equal(await credits(bob), c0, 'no credits');
+  assert.notEqual((await userDoc(bob)).get('isPremium'), true, 'not premium');
 });
 
 await step('webhook accepts a valid Zoho HMAC signature', async () => {

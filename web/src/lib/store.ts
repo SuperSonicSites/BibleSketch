@@ -17,9 +17,18 @@ export interface Profile {
   credits?: number;
   downloadsRemaining?: number;
   isPremium?: boolean;
+  // Set by the server only (the Prints plan, gifts): a Firestore Timestamp here, an ISO string over REST.
+  printsUnlimitedUntil?: string | { toMillis(): number };
   blessedSketchIds?: string[];
   profileComplete?: boolean;
 }
+
+export const printsUntil = (p?: Profile | null) => {
+  const until = p?.printsUnlimitedUntil;
+  return typeof until === 'string' ? Date.parse(until) : until?.toMillis() ?? 0;
+};
+// Premium, or a dated unlimited-prints pass: prints and downloads don't spend `downloadsRemaining`.
+export const unlimitedPrints = (p?: Profile | null) => Boolean(p?.isPremium) || printsUntil(p) > Date.now();
 
 export type AuthView = 'login' | 'signup' | 'forgot_password' | 'reset_sent' | 'verification_sent';
 

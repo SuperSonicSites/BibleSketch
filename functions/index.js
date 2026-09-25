@@ -3120,6 +3120,8 @@ const zohoWebhookSecret = defineSecret("ZOHO_WEBHOOK_SECRET");
 const ZOHO_ENFORCE_AUTH = process.env.ZOHO_ENFORCE_AUTH === 'true';
 // Zoho plan codes that mean Premium (the /pricing checkout URL ends with the plan code).
 const PREMIUM_PLANS = new Set(['bible-sketch-premium']);
+// The email-only Unlimited Prints plans (docs/email-marketing-plan.md §12.20): unlimited prints, no credits.
+const PRINTS_PLANS = new Set(['bible-sketch-prints-monthly', 'bible-sketch-prints-yearly']);
 
 const safeEqual = (a, b) => {
   const ab = Buffer.from(String(a));
@@ -3292,8 +3294,8 @@ exports.handleZohoWebhook = onRequest({
     // Zoho routes deliveries here by workflow rule, so a new plan wired to this URL without ?pack= would
     // otherwise be granted (or have its cancellation remove) Premium. Only these plan codes touch premium.
     const planCode = String(subscription.plan?.plan_code || '').toLowerCase();
-    if (!PREMIUM_PLANS.has(planCode)) {
-      console.error(`❌ Subscription ${subscriptionId} is on plan "${planCode}", not a premium plan; nothing granted`);
+    if (!PREMIUM_PLANS.has(planCode) && !PRINTS_PLANS.has(planCode)) {
+      console.error(`❌ Subscription ${subscriptionId} is on plan "${planCode}", not a known plan; nothing granted`);
       return res.status(400).send('Unknown plan');
     }
 
@@ -3309,6 +3311,48 @@ exports.handleZohoWebhook = onRequest({
 
     // 4. Get User Reference
     const userRef = db.collection('users').doc(firebaseUid);
+
+    // Prints plan: each paid term (new or renewal) extends printsUnlimitedUntil to the term's end plus 3 days'
+    // grace for the renewal to arrive; it never shortens a longer pass (a gift). Other statuses change nothing:
+    // a cancelled or unpaid plan simply lapses at that date.
+    if (PRINTS_PLANS.has(planCode)) {
+      if (subscriptionStatus !== 'live' && subscriptionStatus !== 'active') {
+        console.log(`ℹ️ Prints plan ${subscriptionId} status=${subscriptionStatus}: nothing to change`);
+        return res.status(200).send('No change');
+      }
+      const termEnd = Date.parse(`${String(subscription.current_term_ends_at).slice(0, 10)}T00:00:00Z`);
+      if (!termEnd) {
+        console.error(`❌ Prints plan ${subscriptionId} has no current_term_ends_at; nothing granted`);
+        return res.status(400).send('Missing term end');
+      }
+      const until = Timestamp.fromMillis(termEnd + 3 * 24 * 60 * 60 * 1000);
+      const deliveryId = zohoDeliveryId(req.body, null);
+      const processedRef = deliveryId ? db.collection('processedWebhooks').doc(deliveryId) : null;
+      const granted = await db.runTransaction(async (tx) => {
+        if (processedRef && (await tx.get(processedRef)).exists) return false;
+        const current = (await tx.get(userRef)).get('printsUnlimitedUntil');
+        if (!current || current.toMillis() < until.toMillis()) {
+          tx.set(userRef, { printsUnlimitedUntil: until, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+        }
+        tx.set(userRef.collection('transactions').doc(), {
+          userId: firebaseUid,
+          type: 'prints_subscription',
+          plan: planCode,
+          description: 'Unlimited prints',
+          termEndsAt: subscription.current_term_ends_at,
+          ...(subscription.amount !== undefined && { price: subscription.amount }),
+          ...(deliveryId && { deliveryId }),
+          timestamp: FieldValue.serverTimestamp()
+        });
+        if (processedRef) {
+          tx.set(processedRef, { processedAt: FieldValue.serverTimestamp(), status: subscriptionStatus, userId: firebaseUid, subscriptionId });
+        }
+        return true;
+      });
+      if (!granted) return res.status(200).send('Already processed');
+      console.log(`✅ Unlimited prints until ${until.toDate().toISOString()} for ${firebaseUid} (${planCode})`);
+      return res.status(200).send('Prints plan processed');
+    }
 
     // 5. Handle based on subscription status
     if (subscriptionStatus === 'live' || subscriptionStatus === 'active') {

@@ -5,7 +5,7 @@ import { useStore } from '@nanostores/react';
 import { Coins, Crown, Download, Image, LoaderCircle, Mail, Receipt, Save, Trash2, TriangleAlert, User } from 'lucide-react';
 import Button from './Button.tsx';
 import Dialog from './Dialog.tsx';
-import { $profile, $user, cancelModal } from '../../lib/store.ts';
+import { $profile, $user, cancelModal, printsUntil, unlimitedPrints } from '../../lib/store.ts';
 import { deleteAccount, updateAccount } from '../../lib/session.ts';
 
 function Stat({ icon, tone, label, value }: { icon: ReactNode; tone: string; label: string; value: ReactNode }) {
@@ -84,7 +84,9 @@ export default function AccountModal() {
                 icon={<Crown className={`w-5 h-5 ${premium ? 'text-yellow-500' : 'text-gray-400'}`} />} />
               <Stat tone="bg-yellow-50 border-yellow-100" label="Image Credits" value={profile.credits ?? 0}
                 icon={<Coins className="w-5 h-5 text-yellow-500" />} />
-              <Stat tone="bg-blue-50 border-blue-100" label="Downloads/Prints" value={premium ? 'Unlimited' : profile.downloadsRemaining ?? 0}
+              <Stat tone="bg-blue-50 border-blue-100" label="Downloads/Prints" value={premium ? 'Unlimited'
+                : unlimitedPrints(profile) ? `Unlimited until ${new Date(printsUntil(profile)).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
+                : profile.downloadsRemaining ?? 0}
                 icon={<Download className="w-5 h-5 text-blue-500" />} />
             </div>
             <label className="block space-y-1">
