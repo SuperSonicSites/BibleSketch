@@ -2,7 +2,7 @@
 // A sketch in a listing (bundle gallery/tag card). The image and text are one link to the coloring page; the
 // author, Bless and share controls sit below it (the bundle nested buttons inside the link).
 import BlessButton from './BlessButton.tsx';
-import { type Sketch, ORIGIN, canonicalPath, reference, seo, thumbUrl } from '../lib/sketch.ts';
+import { type Sketch, ORIGIN, canonicalPath, previewUrl, reference, seo, thumbUrl } from '../lib/sketch.ts';
 import { cardSubtitle } from '../lib/listing.ts';
 
 // Card images are always lazy: on phones the stacked filters push the first row below the fold, and eager
@@ -13,7 +13,7 @@ const href = canonicalPath(sketch);
 const ref = sketch.promptData ? reference(sketch.promptData) : 'Bible Scene';
 const url = encodeURIComponent(ORIGIN + href);
 const pin = sketch.promptData
-  ? `https://pinterest.com/pin/create/button/?url=${url}&media=${encodeURIComponent(sketch.imageUrl ?? '')}&description=${encodeURIComponent(seo(sketch).pinDescription)}`
+  ? `https://pinterest.com/pin/create/button/?url=${url}&media=${encodeURIComponent(previewUrl(sketch) ?? '')}&description=${encodeURIComponent(seo(sketch).pinDescription)}`
   : null;
 ---
 <article class="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow border border-gray-100 overflow-hidden flex flex-col">

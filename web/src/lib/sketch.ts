@@ -2,7 +2,7 @@
 // Names in comments are the bundle's minified identifiers, so the port can be checked against the source.
 // No Worker-only imports: scripts/check-sketch.mjs runs this file under plain Node.
 
-import { FIREBASE } from './config.ts';
+import { FIREBASE, MASTER_UID } from './config.ts';
 import { query } from './firestore.ts';
 
 export const ORIGIN = 'https://biblesketch.app';
@@ -69,6 +69,24 @@ export const storageUrl = (path: string) =>
 export function thumbUrl(s: Sketch): string | undefined {
   const p = thumbPathOf(s);
   return p ? `/img/${p}` : s.imageUrl;
+}
+
+// Storage path of the original: storagePath, else the object name inside imageUrl (".../o/<path>?alt=media").
+const originalPathOf = (s: Sketch) => {
+  if (s.storagePath) return s.storagePath;
+  const m = s.imageUrl?.match(/\/o\/([^?]+)/);
+  return m ? decodeURIComponent(m[1]) : undefined;
+};
+
+// The one public image of a page (og:image, JSON-LD, share buttons, image sitemap): never the full-size
+// original. The owner's pages get an 800px preview; community pages the 400x533 thumbnail.
+export function previewUrl(s: Sketch): string | undefined {
+  const original = originalPathOf(s);
+  if (original && s.userId === MASTER_UID && original.startsWith(`user_uploads/${MASTER_UID}/sketches/`)) {
+    return `${ORIGIN}/img/w800/${original}`;
+  }
+  const thumb = thumbPathOf(s) || original?.replace(/(\.[^./]+)$/, '_400x533$1');
+  return thumb ? `${ORIGIN}/img/${thumb}` : undefined;
 }
 
 // `Mc`: singular book name in the H1.

@@ -1,3 +1,6 @@
+// The owner's account: only its public pages and images are offered to search engines (docs/seo-plan.md).
+export const MASTER_UID = 'TiAEiMqWxpWqxCLtoI5OgHAvtf33';
+
 // Public Firebase web config, identical to the live bundle's (`w8`). Not secrets.
 export const FIREBASE = {
   apiKey: 'AIzaSyAxrHQdjvie8JQnX18WRAqnwH3vwt5N5LI',

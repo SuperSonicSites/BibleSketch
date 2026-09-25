@@ -410,6 +410,18 @@ const sketchBucket = (s) => {
   return AGE_GROUPS.includes(age) && ART_STYLES.includes(p.art_style) ? `${keyPart(age)}-${keyPart(p.art_style)}` : 'sketches-other';
 };
 
+// The page's one public image, never the full-size original (docs/seo-plan.md stage 1; same rule as previewUrl in
+// web/src/lib/sketch.ts): the owner's pages get the 800px preview, others the 400x533 thumbnail.
+const sitemapImageOf = (s) => {
+  const m = typeof s.imageUrl === 'string' ? s.imageUrl.match(/\/o\/([^?]+)/) : null;
+  const original = s.storagePath || (m ? decodeURIComponent(m[1]) : null);
+  if (original && s.userId === MASTER_UID && original.startsWith(`user_uploads/${MASTER_UID}/sketches/`)) {
+    return `${SITE}/img/w800/${original}`;
+  }
+  const thumb = s.thumbnailPath || (original ? original.replace(/(\.[^./]+)$/, '_400x533$1') : null);
+  return thumb ? `${SITE}/img/${thumb}` : null;
+};
+
 const readBlogPosts = () => {
   try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'blog-posts.json'), 'utf-8')); }
   catch (e) { console.error('blog-posts.json:', e); return []; }
@@ -419,7 +431,7 @@ const readBlogPosts = () => {
 // Only indexable URLs: no /terms, /privacy or /verified (noindex), no empty tags, no thin profiles.
 const buildSitemapGroups = async () => {
   const snap = await admin.firestore().collection('sketches').where('isPublic', '==', true)
-    .select('userId', 'type', 'promptData', 'tags', 'createdAt', 'imageUrl', 'isBookmark').get();
+    .select('userId', 'type', 'promptData', 'tags', 'createdAt', 'imageUrl', 'storagePath', 'thumbnailPath', 'isBookmark').get();
   const sketches = snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((s) => !s.isBookmark)
     .map((s) => ({ ...s, lastmod: isoOf(s.createdAt) }))
     .sort((a, b) => (b.lastmod || '').localeCompare(a.lastmod || ''));
@@ -446,7 +458,7 @@ const buildSitemapGroups = async () => {
   byUser.forEach((list, uid) => {
     if (list.length >= MIN_PROFILE_SKETCHES) add('profiles', `/profile/${encodeURIComponent(uid)}`, list[0].lastmod);
   });
-  sketches.forEach((s) => add(sketchBucket(s), `/coloring-page/${generateSketchSlug(s)}/${encodeURIComponent(s.id)}`, s.lastmod, s.imageUrl));
+  sketches.forEach((s) => add(sketchBucket(s), `/coloring-page/${generateSketchSlug(s)}/${encodeURIComponent(s.id)}`, s.lastmod, sitemapImageOf(s)));
   return groups;
 };
 

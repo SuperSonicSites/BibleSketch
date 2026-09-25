@@ -8,7 +8,7 @@ import CardIcons from '../../components/CardIcons.astro';
 import FilterForm from '../../components/FilterForm.astro';
 import Pagination from '../../components/Pagination.astro';
 import { getDoc, query } from '../../lib/firestore.ts';
-import { ORIGIN, TAG_LABELS, canonicalPath, isDocId, jsonLd, reference, type Sketch } from '../../lib/sketch.ts';
+import { ORIGIN, TAG_LABELS, canonicalPath, isDocId, jsonLd, previewUrl, reference, type Sketch } from '../../lib/sketch.ts';
 import { applyFilters, availableFilters, filterQuery, paginate, parseFilters } from '../../lib/listing.ts';
 
 const uid = Astro.params.uid ?? '';
@@ -74,7 +74,7 @@ const schema = jsonLd({
         item: {
           '@type': 'VisualArtwork',
           name: s.promptData ? `${reference(s.promptData)} Coloring Page` : 'Bible Sketch',
-          image: s.imageUrl,
+          image: previewUrl(s),
           url: `${ORIGIN}${canonicalPath(s)}`,
           datePublished: s.createdAt,
         },

@@ -9,7 +9,7 @@ import OwnerControls from '../../components/OwnerControls.tsx';
 import OwnerPrivate from '../../components/OwnerPrivate.tsx';
 import { getDoc } from '../../lib/firestore.ts';
 import {
-  ORIGIN, TAG_LABELS, type Sketch, ageDisplay, canonicalPath, heading, isDocId, jsonLd, loadRelated, seo, thumbUrl,
+  ORIGIN, TAG_LABELS, type Sketch, ageDisplay, canonicalPath, heading, isDocId, jsonLd, loadRelated, previewUrl, seo, thumbUrl,
 } from '../../lib/sketch.ts';
 
 const id = (Astro.params.path ?? '').split('/').filter(Boolean).at(-1) ?? '';
@@ -68,7 +68,7 @@ const profileUrl = sketch ? `${ORIGIN}/profile/${sketch.userId}` : '';
 const schemas = sketch && meta ? [
   jsonLd({
     '@context': 'https://schema.org', '@type': 'CreativeWork', name: meta.title, headline: meta.title,
-    description: meta.description, image: sketch.imageUrl, url, datePublished: sketch.createdAt,
+    description: meta.description, image: previewUrl(sketch), url, datePublished: sketch.createdAt,
     keywords: sketch.tags?.length ? sketch.tags.join(', ') : 'Bible, Coloring Page, Christian Art',
     genre: p.art_style || 'Religious Art',
     author: { '@type': 'Person', name: author, url: profileUrl },
@@ -93,7 +93,7 @@ const island: Sketch | null = sketch && {
 const card = 'flex-1 py-3 rounded-xl border flex items-center justify-center transition-colors gap-2 font-bold text-sm';
 ---
 {sketch && meta ? (
-  <Base title={meta.title} description={meta.description} canonical={url} image={sketch.imageUrl} schemas={schemas}>
+  <Base title={meta.title} description={meta.description} canonical={url} image={previewUrl(sketch)} schemas={schemas}>
     <div class="max-w-7xl mx-auto px-4 py-12">
       <div class="mb-8">
         <a class="inline-flex items-center gap-2 text-gray-500 hover:text-[#7C3AED] font-bold transition-colors" href="/gallery">
@@ -154,7 +154,7 @@ const card = 'flex-1 py-3 rounded-xl border flex items-center justify-center tra
                   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5" aria-hidden="true"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"></path></svg>
                   <span class="hidden sm:inline">Facebook</span>
                 </a>
-                <a href={`https://pinterest.com/pin/create/button/?url=${shareUrl}&media=${encodeURIComponent(sketch.imageUrl ?? '')}&description=${encodeURIComponent(meta.description)}`} target="_blank" rel="noopener" aria-label="Share on Pinterest"
+                <a href={`https://pinterest.com/pin/create/button/?url=${shareUrl}&media=${encodeURIComponent(previewUrl(sketch) ?? '')}&description=${encodeURIComponent(meta.description)}`} target="_blank" rel="noopener" aria-label="Share on Pinterest"
                   class={`${card} border-red-100 bg-red-50 text-red-600 hover:bg-red-100 hover:border-red-200`}>
                   <svg viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5" aria-hidden="true"><path d="M12.017 0C5.396 0 .029 5.367.029 11.987c0 5.079 3.158 9.417 7.618 11.162-.105-.949-.199-2.403.041-3.439.219-.937 1.406-5.957 1.406-5.957s-.359-.72-.359-1.781c0-1.663.967-2.911 2.168-2.911 1.024 0 1.518.769 1.518 1.688 0 1.029-.653 2.567-.992 3.992-.285 1.193.6 2.165 1.775 2.165 2.128 0 3.768-2.245 3.768-5.487 0-2.861-2.063-4.869-5.008-4.869-3.41 0-5.409 2.562-5.409 5.199 0 1.033.394 2.143.889 2.741.099.12.112.225.085.345-.09.375-.293 1.199-.334 1.363-.053.225-.172.271-.399.165-1.495-.69-2.433-2.878-2.433-4.646 0-3.776 2.748-7.252 7.951-7.252 4.173 0 7.41 2.967 7.41 6.923 0 4.133-2.607 7.462-6.233 7.462-1.214 0-2.354-.629-2.758-1.379l-.749 2.848c-.269 1.045-1.004 2.352-1.498 3.146 1.123.345 2.306.535 3.55.535 6.607 0 11.985-5.365 11.985-11.987C23.97 5.367 18.62 0 12.017 0z"></path></svg>
                   <span class="hidden sm:inline">Pinterest</span>

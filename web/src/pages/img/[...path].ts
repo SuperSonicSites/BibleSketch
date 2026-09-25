@@ -2,24 +2,34 @@
 //   /img/user_uploads/<uid>/sketches/<name>_400x533.<ext>  sketch thumbnail from Storage, as WebP
 //     (saves the extra connection to firebasestorage.googleapis.com and ~60% of the bytes on the LCP image)
 //   /img/w<width>/blog-images/<name>.webp                  a blog cover resized to one of WIDTHS
-// Anything else is a 404, so this is not an open proxy.
+//   /img/w800/user_uploads/<MASTER_UID>/sketches/<name>.<ext>  the 800px preview of an owner page (search, og, share)
+// Anything else is a 404, so this is not an open proxy (previews only for the owner's pages: never a larger
+// copy of a community page, which may be private).
 import type { APIRoute } from 'astro';
 import { env } from 'cloudflare:workers';
 import { storageUrl } from '../../lib/sketch.ts';
+import { MASTER_UID } from '../../lib/config.ts';
 
 const THUMB = /^user_uploads\/[^/]+\/sketches\/[^/]+_400x533\.(png|jpe?g|webp)$/;
 const COVER = /^w(\d+)\/(blog-images\/[\w.-]+\.webp)$/;
 const COVER_WIDTHS = [480, 800];
+const PREVIEW = new RegExp(`^w800\\/(user_uploads\\/${MASTER_UID}\\/sketches\\/[^/]+\\.(png|jpe?g|webp))$`);
 
 const IMMUTABLE = 'public, max-age=31536000, immutable';
 
 export const GET: APIRoute = async ({ params, request, cache }) => {
   const path = params.path ?? '';
   const cover = path.match(COVER);
+  const preview = path.match(PREVIEW);
   let source: Response;
   let width: number | undefined;
+  let immutable = false;
   if (THUMB.test(path)) {
     source = await fetch(storageUrl(path));
+  } else if (preview) {
+    source = await fetch(storageUrl(preview[1]));
+    width = 800;
+    immutable = true; // a new page gets a new path, like thumbnails
   } else if (cover && COVER_WIDTHS.includes(Number(cover[1]))) {
     width = Number(cover[1]);
     const env_ = env as { ASSETS: Fetcher };
@@ -39,6 +49,6 @@ export const GET: APIRoute = async ({ params, request, cache }) => {
   // browsers re-check them daily; purge the 'img' tag after replacing one.
   cache.set({ maxAge: 31536000, tags: ['img'] });
   return new Response(out.body, {
-    headers: { 'Content-Type': 'image/webp', 'Cache-Control': width ? 'public, max-age=86400' : IMMUTABLE },
+    headers: { 'Content-Type': 'image/webp', 'Cache-Control': width && !immutable ? 'public, max-age=86400' : IMMUTABLE },
   });
 };
