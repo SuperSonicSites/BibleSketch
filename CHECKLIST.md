@@ -12,7 +12,7 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
    - Run the browser prompt Claude gave on Sep 25 (Organization ID, add USD, a gateway that charges USD, the uid custom field hidden and not editable in the portal, a list of plans and add-ons, iframe settings, a Self Client in api-console.zoho.ca). Paste its report to Claude.
    - Set the API secrets yourself, each with `firebase functions:secrets:set <NAME> --project biblesketch-5104c`: `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET`, then `ZOHO_REFRESH_TOKEN`. For the last one, Claude gives a command that exchanges the grant code so the token never passes through chat.
    - Then Claude deploys `createCheckout`, checks one real checkout per plan (without paying), and switches the pricing buttons to the new page.
-0b. **Point hello@ at the Worker** so replies are read automatically, after you've approved the emails: Cloudflare > biblesketch.app > Email > Email Routing > Routing rules > `hello@biblesketch.app` > Edit > Action: **Send to a Worker** > `biblesketch-web` > Save.
+0b. **Point hello@ at the Worker now, before the Sep 29 send,** so replies are read automatically. It also turns the outage email's "Unsubscribe" replies into real unsubscribes: Cloudflare > biblesketch.app > Email > Email Routing > Routing rules > `hello@biblesketch.app` > Edit > Action: **Send to a Worker** > `biblesketch-web` > Save.
    - The Worker forwards every message to renaud@supersonicsites.com first, exactly as today.
    - Then it acts on "unsubscribe" replies and answers to "a class, or your kids at home?".
    - Test it: send "hello" to hello@. It should arrive in Zoho as before.
