@@ -74,6 +74,18 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
   1. **Receive:** Cloudflare > biblesketch.app > Email > Email Routing > Routing rules: forward `hello@` (and `renaud@`, if you want it) to `renaud@supersonicsites.com`.
   2. **Send:** Zoho Mail Admin Console > Domains: add `biblesketch.app`. It looks already verified: the `zoho-verification` TXT record exists. Skip the MX step.
      - Then Users > you > Email alias: add `hello@biblesketch.app`, and choose it as "From" when composing.
+     - **2026-09-25:** biblesketch.app is already in the Zoho org (status "Yet to configure SPF"), and the mailbox
+       already has `info@` and `renaud@biblesketch.app` as aliases. Adding `hello@` failed: Zoho says the address
+       "is already taken by a user in a different organization". Find that other Zoho org and free it, or reply
+       as `renaud@biblesketch.app`.
+     - **Fixed 2026-09-25:** the MX had been switched to Zoho, so hello@ bounced with "550 Invalid recipients" and
+       Email Routing was off. Now:
+       - receiving is on Cloudflare (route1-3) with Email Routing enabled;
+       - hello@, support@, renaud@ and info@ forward to renaud@supersonicsites.com;
+       - SPF is `v=spf1 include:zohocloud.ca include:_spf.mx.cloudflare.net ~all`;
+       - the Zoho DKIM selector `zmail` is verified.
+
+       Never use Zoho's "Configure automatically": it moves the MX back to Zoho.
      - A second domain needs a paid Zoho Mail plan. The Forever Free plan hosts one domain only.
   3. **Deliverability:**
      - Zoho Admin > Domains > biblesketch.app > DKIM: create a key, add its TXT record in Cloudflare DNS, then click Verify.
