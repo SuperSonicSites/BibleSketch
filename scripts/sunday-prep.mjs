@@ -4,6 +4,7 @@
 //   node scripts/sunday-prep.mjs --date=2026-10-08 --sketch=<public sketch id> --story="Jonah and the big fish" \
 //        --subject="Sunday: Jonah and the big fish" --text="1-2 sentences about the story"
 //        writes (or rewrites) the issue as a draft; the next emailTick emails the owner a [DRAFT] copy to approve
+//        add --reviewed when the owner reviews a batch in one list instead: no [DRAFT] email, then --approve
 //   node scripts/sunday-prep.mjs --date=2026-10-08 --approve    after the owner approves the draft
 // A sketch is never used twice, and a story not twice within 52 weeks (§12.7). Production data: owner-approved.
 import { DOCS, firestore, listDocs, plain } from './firestore-rest.mjs';
@@ -64,6 +65,7 @@ await firestore('PATCH', path, {
       sketchId: value(sketchId), story: value(story), subject: value(subject), text: value(text),
       ref: { arrayValue: { values: ref.map(value) } }, sendAt: { timestampValue: sendAt },
       approved: { booleanValue: false }, // any change needs a fresh approval; previewedAt is cleared (masked, not sent)
+      ...(flag('reviewed') && { previewedAt: { timestampValue: new Date().toISOString() } }),
     },
   },
 });
