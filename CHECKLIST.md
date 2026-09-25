@@ -4,15 +4,13 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
 
 ## Open
 
-### Start here (priority order, 2026-09-24)
-1. **Tonight, after 8 pm EDT:** connect `sunday-school.xml` (Pinterest auto-publish, below).
-2. **Zaraz sign-up fix,** if the browser agent hasn't finished it (below).
-3. **"Run now" once on `pinterest-daily`** and approve its prompts (below).
-4. **Before mid-October: the outage win-back decision** (Lifecycle email, below). The April sign-ups age out of CASL's 6-month window during October.
-5. **Resend:** confirm `e.biblesketch.app` shows "Verified" (the account and key are done; Lifecycle email, below).
-6. **The email decisions,** then tell Claude "go" for phase 0.5 (below).
-7. **Zoho:** turn on self-cancellation in the customer portal, and check the sales tax (below). The prints plans are created.
-8. **Brent's Cloudflare verification click** (below).
+### Start here (priority order, updated 2026-09-24 night)
+1. **Approve the phase 0.5 deploys and the privacy text** (Lifecycle email, below). Every day without it, about one sign-up arrives that we may never email.
+2. **Send Claude a mailing address** for the emails and the privacy page (CASL, below). It's needed before the first marketing email.
+3. **Before mid-October: the outage win-back decision** (Lifecycle email, below). The April sign-ups age out of CASL's 6-month window during October.
+4. **Zoho Mail alias** so you can answer as `hello@biblesketch.app` (below).
+5. **Brent's Cloudflare verification click** (below).
+6. **Keep an eye on `pinterest-daily`:** its first run succeeded; if a run stops on a permission prompt, approve it once.
 
 ### Decisions
 - [x] **Unpaid premium/credits accounts.** 8 accounts have premium or credits without any payment (beta-week sign-ups, Nov 24-28, 2025; one orphan doc `EIV569…` with no Auth user). Keep or revoke? - ANSWER: KEEP
@@ -20,7 +18,7 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
 - [x] **"Remove Color" pricing.** Free (rate-limited) or 1 credit (ROADMAP 1.1). - ANSWER: 1 CREDIT (2026-09-23)
 
 ### Pinterest auto-publish (ROADMAP 1.5)
-- [ ] Connect the feeds (Pinterest > Settings > Bulk create Pins > Auto-publish > Connect RSS feed > pick the board > Save). Pinterest refuses an empty feed, so connect each one on a day it has an item. Done: `christmas.xml` (2026-09-23, Luke 2:15-16 published); `scripture.xml` → Scripture Coloring Sheets | Bible Verse Coloring (2026-09-24 00:01 UTC, by Claude). Next: `https://biblesketch.app/pins/sunday-school.xml` → Sunday School Activities & Bible Coloring Lessons after 2026-09-25 00:00 UTC (8 pm EDT on the 24th). `easter.xml` from Feb 1; `adult.xml` stays unconnected (paused).
+- [x] Connect the feeds (Pinterest > Settings > Bulk create Pins > Auto-publish > Connect RSS feed > pick the board > Save). Pinterest refuses an empty feed, so connect each one on a day it has an item. Done: `christmas.xml` (2026-09-23, Luke 2:15-16 published); `scripture.xml` → Scripture Coloring Sheets | Bible Verse Coloring (2026-09-24 00:01 UTC, by Claude). `sunday-school.xml` → Sunday School Activities & Bible Coloring Lessons (2026-09-24 evening, by the owner). `easter.xml` from Feb 1; `adult.xml` stays unconnected (paused).
 - [x] **Verse art translation.** Decided 2026-09-23: keep WEB but print "the LORD" instead of "Yahweh" (`withLord()` in `functions/generation/pipeline.js`). See docs/pinterest-scripture-plan.md §2.
 - [ ] **Pinterest API app** "Bible Sketch Pin Publisher" (id 1615048, Trial access since 2026-09-23; redirect URI `https://biblesketch.app/api/pinterest/callback` registered). Done 2026-09-23/24: app secret set, connected in Sandbox, test Pins published, **Standard upgrade requested with the demo video** (`C:\Users\renau\Videos\bible-sketch-pinterest-api-demo-final.mp4`). Waiting on Pinterest (watch the developer email). After Standard: tell Claude; it switches `PINTEREST_ENV` to `production`, you reconnect once at https://biblesketch.app/api/pinterest, then the daily API publisher replaces the RSS feeds.
 - [ ] **Decision: AI label on API Pins.** Pinterest's create-Pin call can mark a Pin "AI modified" (`ai_disclosures`). Our pages are AI-generated; Pinterest may label them itself either way. Label them, or not?
@@ -28,7 +26,7 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
 - [ ] **Gemini spend alert.** On 2026-09-23 the AI Studio monthly spend cap stopped all generations (customers too) until you raised it. Add a Cloud Billing budget alert on the Gemini project at ~80% of the cap (ROADMAP S1) so it never surprises you.
 - [x] **Deploy the drawing guidance** (2026-09-24, run by Claude at the owner's request; verified with a live Genesis 8:11 generation).
 - [ ] **Daily Pinterest task (`pinterest-daily`, 7:00 every day):** keep the Claude desktop app open (a missed run happens at the next launch) and the in-app browser signed in to biblesketch.app (master account) and Pinterest. Click "Run now" once on the task (sidebar > Scheduled) and approve its tool prompts, so later runs don't stop on a permission prompt. Raise the Gemini spend cap in AI Studio if a run reports the cap.
-- [ ] **Zaraz: fix Pinterest sign-up tracking** (Cloudflare dashboard > Zaraz > Tools > Pinterest Conversions API > the "Signup" action). Skip it if the browser agent already did this.
+- [x] **Zaraz: fix Pinterest sign-up tracking** (done by the owner, 2026-09-24) (Cloudflare dashboard > Zaraz > Tools > Pinterest Conversions API > the "Signup" action). Skip it if the browser agent already did this.
   - **Why:** Pinterest rejects the sign-ups with a 400, because Zaraz sends the email and external ID as text where Pinterest needs a list.
   - **The fix:**
     - remove the **Email** and **External ID** fields;
@@ -43,18 +41,18 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
 ### Lifecycle email (ROADMAP 1.6, plan in docs/email-marketing-plan.md)
 - [ ] **Resend account.**
   - [x] Account created, `RESEND_API_KEY` set as a Firebase secret, and the stray `.env` deleted (2026-09-24, verified).
-  - [ ] **Sending domain `e.biblesketch.app`** (owner's choice, 2026-09-24). The DNS was checked the same day: DKIM, the `send.e` return path, the receiving MX, and the root DMARC `p=none`, which covers the subdomain. Confirm Resend shows the domain as "Verified", and keep "receiving" on, because replies come back through it (plan §6.8).
+  - [x] **Sending domain `e.biblesketch.app`: verified in Resend** (owner, 2026-09-24). The DNS was checked the same day: DKIM, the `send.e` return path, the receiving MX, and the root DMARC `p=none`, which covers the subdomain. Confirm Resend shows the domain as "Verified", and keep "receiving" on, because replies come back through it (plan §6.8).
   - **Urgent decision (plan §12.1):** a one-time, honest win-back email to the 85 people who signed up since Mar 26 and never got to make a page (the generator was down Jun-Sep), relying on CASL implied consent. The April sign-ups age out during October. Decided 2026-09-24: the gift is a month of unlimited prints. Still open: the implied-consent basis (a lawyer check is worth it), plus approval of the Worker deploy and the grant script.
-  - **Opt-in bonus** (decided 2026-09-24: extra free prints for joining the emails): confirm the number (+5 proposed) and the checkbox wording.
+  - [x] **Opt-in bonus: +5 prints and the checkbox wording approved** (2026-09-24). The wording is `CONSENT_TEXT` in `web/src/lib/session.ts`.
   - [x] **Billing webhook fix deployed** (2026-09-24, owner-approved; revision handlezohowebhook-00137; unsigned calls still 401). Only the Premium plan code grants Premium.
   - [x] **Unlimited Prints plans created in Zoho** (2026-09-24): `bible-sketch-prints-monthly` CAD 2.79 and `bible-sketch-prints-yearly` CAD 20.99, under the Premium product, off the pricing page. The code is built and tested (commit c76724e). Details: plan §12.20.
   - [x] **Deployed 2026-09-24, owner-approved:** webhook revision handlezohowebhook-00138 (unsigned calls still 401) and Worker version 637f9390 (pages 200, print endpoint 401 on a bad token, the live `store` chunk has the dated-pass check).
-  - [ ] **Turn on self-cancellation in the Zoho customer portal** (Settings > Customer Portal: allow cancelling at the end of the current term). Right now subscribers can't cancel on their own, but Premium and the prints plans both say "Cancel anytime". That's a consumer-protection risk (online sign-ups must be cancellable online in several places, California among them) and a source of chargebacks. The webhook already handles end-of-term cancellations.
-  - [ ] **Sales tax check:** the checkout showed GST 5% + BC PST 7% on top of the price. Confirm Zoho charges these by the customer's address, not on every sale: open a hosted page, enter a US address, and don't pay. Exports of digital services to non-residents are usually zero-rated for GST, but ask your accountant.
+  - [x] **Self-cancellation and tax check: done by the owner's browser agent (2026-09-24).** Claude hasn't seen the report: paste it if US buyers were shown Canadian tax. Original item: **Turn on self-cancellation in the Zoho customer portal** (Settings > Customer Portal: allow cancelling at the end of the current term). Right now subscribers can't cancel on their own, but Premium and the prints plans both say "Cancel anytime". That's a consumer-protection risk (online sign-ups must be cancellable online in several places, California among them) and a source of chargebacks. The webhook already handles end-of-term cancellations.
+  - [x] **Sales tax check:** the checkout showed GST 5% + BC PST 7% on top of the price. Confirm Zoho charges these by the customer's address, not on every sale: open a hosted page, enter a US address, and don't pay. Exports of digital services to non-residents are usually zero-rated for GST, but ask your accountant.
   - Set the secrets yourself as Firebase secrets (plan §6.5; `firebase functions:secrets:set <NAME>`):
     - `RESEND_API_KEY` (above);
     - `RESEND_WEBHOOK_SECRET`, when Claude creates the webhook in phase 1.
-    - No Worker secret is needed: replies come back through Resend, not a Cloudflare Email Worker.
+    - `EMAIL_HOOK_SECRET` (any random value) as a Firebase secret and a Worker secret, when Claude builds the `hello@` reply reader in phase 1 (plan §6.8).
 - [ ] **Personal mail as @biblesketch.app, at no extra cost** (plan §6.7): receive through Cloudflare Email Routing, send from Zoho Mail. Keep the MX on Cloudflare: moving it breaks the monthly report and the forwarding.
   1. **Receive:** Cloudflare > biblesketch.app > Email > Email Routing > Routing rules: forward `hello@` (and `renaud@`, if you want it) to `renaud@supersonicsites.com`.
   2. **Send:** Zoho Mail Admin Console > Domains: add `biblesketch.app`. It looks already verified: the `zoho-verification` TXT record exists. Skip the MX step.
@@ -65,15 +63,25 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
      - Add the SPF `include:` that Zoho shows for Zoho Mail to the existing record (`v=spf1 include:_spf.mx.cloudflare.net include:zcsend.ca ~all`). Keep a single SPF record.
      - DMARC (`p=none`) is already there.
   4. **Test:** send from `hello@biblesketch.app` to a Gmail address, then Gmail > Show original: SPF, DKIM and DMARC should all say PASS.
-- [ ] **Decisions (plan §11):**
-  - the sender name ("Renaud at Bible Sketch" `<renaud@e.biblesketch.app>`?) and which inbox replies are forwarded to;
-  - the mailing address for the CASL footer;
-  - the consent checkbox wording and the persona question;
-  - the bonus amounts (first purchase, win-back, seasonal, referral);
+- [x] **Decided 2026-09-24:**
+  - replies go to `hello@biblesketch.app`;
+  - the sender is "Renaud from Bible Sketch" `<renaud@e.biblesketch.app>`. The owner wrote "Renaud @ Bible Sketch"; Claude suggests "from", because an "@" in a display name can look like a fake address to spam filters. Say if you prefer the "@";
+  - +5 opt-in prints;
+  - the weekly page is **not** free to print, so the checkbox says "a Bible story page", not "free";
+  - "go" for phase 0.5.
+- [ ] **Approve the phase 0.5 deploys** (built and tested, commit 4706d7e; plan §10). In this order, because the rules must be live before the site writes the new document:
+  1. `firebase deploy --only "firestore:rules"`;
+  2. `firebase deploy --only "functions:onPrivateProfileWritten,functions:onUserDeleted"`;
+  3. the Worker (sign-up box, banner, first-visit record, privacy page).
+- [ ] **Approve the privacy policy additions** (`web/src/pages/privacy.astro`, dated Sept 25):
+  - email preferences and how you found us, in 1.1;
+  - the weekly email, in 2;
+  - Resend, in 5;
+  - how opt-in and unsubscribe work, in 7.4.
+- [ ] **A mailing address** (a PO box is fine). CASL requires it in every marketing email and in the consent request, where a link to the privacy page counts. Claude adds it to the privacy page and the email footer.
+- [ ] **Still open:**
   - implied consent for the 4 past buyers;
-  - is the weekly Thursday page free to print, so it doesn't use up one of the free prints (§12.4)? If not, the checkbox drops "free";
-  - the privacy policy update, which Claude drafts for your approval before launch (§6.10);
-  - **"go" for phase 0.5 (§10):** the consent checkbox and persona question, the opt-in bonus, and "unlimited prints until". None of it needs Resend yet. It then needs your approval of one Worker deploy and one functions deploy.
+  - the other bonus amounts (first purchase, win-back, seasonal, referral) when those emails are built.
 - [ ] **Check how many accounts never verified their email (§12.6).** It's an Auth export, so you run it, because it contains personal data. Claude can give you the command. If the number is high, the verification email is the first thing to fix.
 - [ ] **Later:** a standing approval for the automated emails, once you've read the first versions (§11).
 

@@ -109,10 +109,10 @@ Plus: **know your numbers.** What gets measured improves.
 
 ## 2. Voice and format rules for Bible Sketch
 
-- **From a person:** "Renaud at Bible Sketch" `<renaud@e.biblesketch.app>` (owner to confirm the name).
+- **From a person:** "Renaud from Bible Sketch" `<renaud@e.biblesketch.app>`, with `Reply-To: hello@biblesketch.app` (owner decisions 2026-09-24; the owner wrote "Renaud @ Bible Sketch", but an "@" in a display name can look like a fake address to spam filters).
   - The sending domain is `e.biblesketch.app` (owner decision 2026-09-24; §6.7).
-  - Replies go back to that same address and are received by Resend (§6.8), and they reach a human.
-  - `hello@biblesketch.app` stays the public contact address on the site.
+  - Replies reach the owner through `hello@` (§6.8), and a human answers them.
+  - `hello@biblesketch.app` is also the public contact address on the site.
   - Never send from a `noreply` address.
 - **Honest personal tone:** write like the owner, in first person. Never invent a personal circumstance ("I was just
   looking at your page this morning") that isn't true. Our readers are Christians, teachers and parents, and trust is
@@ -491,7 +491,7 @@ send next, and never ask what their behaviour already tells us.
 | Where | What we ask or capture | Field |
 |---|---|---|
 | First visit, before sign-up | the landing page, its sketch and story, the UTM tags, the referrer domain, the Pinterest click id (a first-touch record kept in the browser) | `signup` |
-| Sign-up form | an **unticked** box: *"Email me a free Bible story page each week, plus occasional offers, and get 5 extra free prints now. Unsubscribe anytime."* (owner decision 2026-09-24: an opt-in bonus of extra prints; the exact number and wording are to be approved). The bonus is granted once per account by the server (§12.2) | the consent fields |
+| Sign-up form | an **unticked** box: *"Email me a Bible story page each week, plus occasional offers, and get 5 extra free prints now. Unsubscribe anytime."* (approved 2026-09-24; the source of truth is `CONSENT_TEXT` in `web/src/lib/session.ts`). The bonus is granted once per account by the server (§12.2) | the consent fields |
 | Sign-up form (optional) | *"I'm making pages for: my class / my kids / myself"*. An answer skips W1 | `persona` |
 | Sign-up, silently | the browser's time zone and language | `timezone`, `locale` |
 | W1 reply | a class, or your kids at home? | `persona` |
@@ -561,7 +561,7 @@ send next, and never ask what their behaviour already tells us.
 - **New HTTPS `resendWebhook`:** checks Resend's signature (`RESEND_WEBHOOK_SECRET`), then:
   - records delivered, opened, clicked, bounced, complained and unsubscribed in `emailProfiles`. A bounce or a
     complaint stops all marketing to that person;
-  - handles **`email.received`**, the replies (§6.8). It stores each reply in `emailReplies`, applies the parsed
+  - forwards any **`email.received`** (a reply that ignored Reply-To) to `hello@` (§6.8). Parsing happens on the `hello@` path, which stores each reply in `emailReplies`, applies the parsed
     answer, and fires `replied`.
 - **Nightly scheduled `emailSync`:**
   - recomputes `stage`, `activity`, the taste fields and `next_story` from the sources;
@@ -619,19 +619,21 @@ send next, and never ask what their behaviour already tells us.
   Automations, Topics). This product changes quickly.
 
 ### 6.8 Replies: the email concierge
-- **The path:** a reply goes back to the sender, `renaud@e.biblesketch.app`. No Reply-To header is needed, and
-  replying to the same address feels personal.
-  - Resend receives it (the MX on `e.biblesketch.app`) and posts `email.received` to `resendWebhook`.
-  - That payload has only the metadata (from, to, subject, message id). The function fetches the body with Resend's
-    Received Emails API (`emails.receiving.get(email_id)`).
-- **Phase 1:** the function:
-  - strips the quoted history and matches the sender to a uid;
-  - parses the simple answers: the W1 keyword rules in §5.1, the age groups for F1, yes/no for the 9-word email;
-  - stores the reply and the parsed answer (§6.5);
-  - forwards **every** reply to the owner's inbox through Resend (to `renaud@supersonicsites.com`, or wherever the
-    owner chooses), with the reply-to set to the person, so the owner can answer straight from Gmail. The owner is
-    the concierge and answers the "love letters".
-- **Replaced:** this path replaces the planned Cloudflare Email Worker and its shared `EMAIL_HOOK_SECRET`.
+- **The path (owner decision 2026-09-24):** every email carries `Reply-To: hello@biblesketch.app`.
+  - Cloudflare Email Routing receives the reply and it lands in the owner's Zoho inbox. The owner answers as
+    `hello@biblesketch.app` through the Zoho Mail alias (CHECKLIST).
+  - Resend's receiving on `e.biblesketch.app` stays on only as a fallback, for mail clients that ignore Reply-To.
+    `resendWebhook` forwards any `email.received` to `hello@`.
+- **Phase 1: reading the easy answers automatically.** Route `hello@` to a Cloudflare **Email Worker** (the
+  `email()` handler on `biblesketch-web`) instead of a plain forward rule.
+  1. It **forwards every message first** to the owner's inbox (`message.forward`, a verified destination), so
+     `hello@` works exactly as it does today, contact mail included.
+  2. Then, when the sender matches a contact and the text is a simple answer (the W1 keyword rules in §5.1, the age
+     groups for F1, yes/no for the 9-word email), it posts the answer to an `emailReply` function with a shared
+     secret (`EMAIL_HOOK_SECRET`, the purge secret's pattern in reverse). That function stores it in `emailReplies`,
+     applies it, and fires `replied`.
+  3. A failure in step 2 never loses the mail: the forward already happened.
+- **The owner is the concierge** and answers the "love letters".
 - **Phase 3:** automatic answers to the easy, high-value replies:
   - "What are you teaching this Sunday?" gets back a link to that story, filled in for their age;
   - "yes" to a 9-word email gets this week's page and a gift.
@@ -724,7 +726,7 @@ Every number here comes from `emailProfiles` (§6.2). Cohorts by sign-up month (
 ## 9. Checklist for every email (run it before you ask the owner to approve)
 1. Who is it for (stage and persona), and what's **the one action**?
 2. What happens next after each possible answer or click? (The chess move is written down before sending.)
-3. From "Renaud at Bible Sketch" `<renaud@e.biblesketch.app>`, so replies come back to us (§6.8).
+3. From "Renaud from Bible Sketch" `<renaud@e.biblesketch.app>`, with Reply-To `hello@biblesketch.app` (§6.8).
 4. The subject: looks like a personal note, short, true, and matches the body.
 5. The body: under 100 words (flagship under 150), first person, and no invented personal circumstance.
 6. It leaves a reason to click or reply (don't solve the mystery).
@@ -742,7 +744,19 @@ Every number here comes from `emailProfiles` (§6.2). Cohorts by sign-up month (
 ## 10. Build order
 **Phase 0 (owner, now):** the steps in §11.
 
-**Phase 0.5 (this week, no Resend needed; §12.1-12.2):**
+**Phase 0.5: built and tested 2026-09-24 (commit 4706d7e); deploys await owner approval (CHECKLIST).** Security-check 48/48, e2e-auth 9/9, e2e-downloads 11/11.
+- **Built:**
+  - the unticked opt-in box and the "I'm making pages for" question on sign-up (email and Google);
+  - the one-time banner for accounts never asked;
+  - `users/{uid}/private/profile` with its rules;
+  - the first-visit record (`bs_first` in localStorage, sent at sign-up);
+  - `onPrivateProfileWritten` (+5 prints, once ever);
+  - private-profile cleanup in `onUserDeleted`;
+  - the privacy policy additions;
+  - `scripts/grant-outage-prints.mjs` (a dry run finds the 85; not run).
+- **Not in 0.5:** the persona question isn't in the banner (W1 asks by email); `ageGroups`, `setting`, `groupSize` and `curriculum` come with the reply reader.
+
+The original list:
 - ship the consent checkbox and the persona question alone, storing to `private/profile`. Every week without it,
   about 5 sign-ups arrive that we may never email;
 - ship the question for Google sign-ups too (§12.3);
@@ -762,7 +776,7 @@ Every number here comes from `emailProfiles` (§6.2). Cohorts by sign-up month (
   `emailSync`.
 - **Pre-filled generator links and the tracking tags (§6.6).**
 - **The emails:** the W0/W1 welcome and sort, activation A1-A3, and the conversion emails C1-C2.
-- **Replies:** `email.received` in `resendWebhook` (parse, store, forward to the owner; §6.8).
+- **Replies:** the Email Worker on `hello@` (forward first, then post simple answers to `emailReply`), and the `email.received` fallback (§6.8).
 - **Reporting:** email numbers in the monthly report (from `emailProfiles`).
 - **Deletion:** `onUserDeleted` cleanup, and the privacy policy update.
 
@@ -788,8 +802,7 @@ Every number here comes from `emailProfiles` (§6.2). Cohorts by sign-up month (
    - Then set two Firebase secrets yourself (§6.5), with `firebase functions:secrets:set <NAME>`:
      - `RESEND_API_KEY`;
      - `RESEND_WEBHOOK_SECRET`, which you get when the webhook endpoint is created in phase 1.
-2. **Sender:** is "Renaud at Bible Sketch" `<renaud@e.biblesketch.app>` OK? Which inbox should replies be forwarded
-   to (`renaud@supersonicsites.com`?)?
+2. **Sender (decided 2026-09-24):** "Renaud from Bible Sketch" `<renaud@e.biblesketch.app>`, with replies to `hello@biblesketch.app`, which forwards to the owner's Zoho inbox.
 3. **A mailing address** for the footer (CASL).
 4. **Approve** the consent checkbox wording and the persona question (§6.3), and the privacy policy update (§6.10).
 5. **Bonus amounts:**
@@ -899,7 +912,8 @@ prints plan (§12.20). The grant script and the deploys remain.
 - **Recommendation:** this week's flagship pages don't count against prints. `grantDownload` skips the decrement
   for the week's sketch ids; it's a small change.
   - It costs nothing (no generation), it builds the weekly habit, and the wall still applies to everything else.
-- **The alternative:** drop "free" from the consent wording. Owner decision (§11).
+- **The alternative:** drop "free" from the consent wording.
+- **Decided 2026-09-24: the weekly page is not free to print.** It costs a print like any gallery page, and the consent wording says "a Bible story page" (`CONSENT_TEXT` in `web/src/lib/session.ts`). The print wall stays the sales moment (C6/C7).
 
 ### 12.5 People print first, and most are on phones
 - **§3.1 shows printing is the main behaviour.**
