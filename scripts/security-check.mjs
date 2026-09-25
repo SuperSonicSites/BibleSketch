@@ -272,6 +272,10 @@ await step('createCheckout: signed-in, verified accounts only; the Prints plans 
   assert.deepEqual(torch.page.addons, [{ addon_code: '80credits', quantity: 80 }]);
   assert.equal(torch.page.pricebook_id, '9037000000294193');
   assert.equal((await dora.fn('createCheckout', { plan: 'premium' })).page.pricebook_id, '9037000000287019');
+  await adminPatch(`users/${dora.uid}`, { isPremium: { booleanValue: true } });
+  await callFails(dora.fn('createCheckout', { plan: 'prints-monthly', offer: 'offer-tok' }), 'failed-precondition', 'Premium already has unlimited prints');
+  await callFails(dora.fn('createCheckout', { plan: 'premium' }), 'failed-precondition', 'Premium twice');
+  await adminPatch(`users/${dora.uid}`, { isPremium: { booleanValue: false } });
 });
 
 await step('first-pack bonus: a pack bought inside the C2 window adds 10 pages, once', async () => {

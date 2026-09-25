@@ -1,5 +1,6 @@
 // /pricing behaviour (bundle `fq` + checkout `D`, docs/bundle-map/pricing-billing.md §4, §6).
-// The checkout URL must stay byte-compatible: the Zoho webhook reads the uid from `cf_cf_firebase_uid`.
+// Buttons open the on-site checkout (/checkout/<plan>, 2026-09-25), which asks Zoho for a USD hosted page; it comes back
+// here (/checkout/done) for the thank-you banner and the purchase events.
 import { $authReady, $profile, $user, requireAuth } from '../lib/store.ts';
 import { CHECKOUT } from '../lib/checkout.ts';
 
@@ -8,12 +9,6 @@ declare const zaraz: {
   ecommerce: (name: string, payload: Record<string, unknown>) => void;
 } | undefined;
 
-const ZOHO: Record<string, string> = {
-  premium: 'https://billing.zohosecure.ca/subscribe/c4eda214b750306200eded5d860ee14ac337b81ca6421fdb875baa1a2a7b3c2f/bible-sketch-premium',
-  spark: 'https://billing.zohosecure.ca/subscribe/c4eda214b750306200eded5d860ee14af89aa6dc60075c271e442233279cd445/Spark?addon_code%5B0%5D=20credits&addon_quantity%5B0%5D=20',
-  torch: 'https://billing.zohosecure.ca/subscribe/c4eda214b750306200eded5d860ee14af01b06f31285bf8e05af38a9b0c1e6f3/Torch?addon_code%5B0%5D=80credits&addon_quantity%5B0%5D=80',
-  beacon: 'https://billing.zohosecure.ca/subscribe/c4eda214b750306200eded5d860ee14a60094b8252300a63400de1ca08bc5eda/200credits?addon_code%5B0%5D=200credit&addon_quantity%5B0%5D=200',
-};
 const PRICE: Record<string, number> = { premium: 4.99, spark: 4.99, torch: 14.99, beacon: 29.99 };
 const CREDITS: Record<string, number> = { spark: 20, torch: 80, beacon: 200 };
 const productName = (id: string) => (id === 'premium' ? 'Premium Subscription' : `${id.charAt(0).toUpperCase()}${id.slice(1)} Credit Pack`);
@@ -22,10 +17,6 @@ function checkout(plan: string) {
   // Reads the user when it runs (after sign-in too), not when the button was clicked.
   const user = $user.get();
   if (!user) return;
-  const base = ZOHO[plan];
-  const qs = plan === 'premium' ? 'subscription=success' : `purchase=${plan}`;
-  const url = `${base}${base.includes('?') ? '&' : '?'}cf_cf_firebase_uid=${encodeURIComponent(user.uid)}`
-    + `&redirect_url=${encodeURIComponent(`${location.origin}/pricing?${qs}`)}`;
   if (typeof zaraz !== 'undefined') {
     const price = PRICE[plan];
     zaraz.ecommerce('Product Added', { value: price, currency: 'USD', products: [{ product_id: plan, name: productName(plan), price }] });
@@ -34,7 +25,7 @@ function checkout(plan: string) {
       event_id: `addtocart_${user.uid}_${Date.now()}`,
     });
   }
-  location.href = url;
+  location.href = `/checkout/${plan}`;
 }
 
 document.querySelectorAll<HTMLButtonElement>('[data-plan]').forEach((b) =>

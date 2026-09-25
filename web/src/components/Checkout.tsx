@@ -3,11 +3,12 @@
 // never leaves biblesketch.app. Email offers pass their token (?t=) and the account it was sent to (?u=).
 import { useEffect, useRef, useState } from 'react';
 import { useStore } from '@nanostores/react';
-import { $authReady, $profile, $user, requireAuth } from '../lib/store.ts';
+import { $authReady, $profile, $user, requireAuth, unlimitedPrints } from '../lib/store.ts';
 
 const MESSAGES: Record<string, string> = {
   OFFER_ENDED: 'This offer has ended, or it was sent to a different account. If you have more than one account, sign in with the one the email went to.',
   ALREADY_PREMIUM: 'You’re already a Premium member, so there’s nothing to buy here.',
+  ALREADY_UNLIMITED: 'Your Premium membership already includes unlimited prints, so there’s nothing to buy here.',
   EMAIL_NOT_VERIFIED: 'Please verify your email address first: open the link we emailed you, then come back to this page.',
 };
 const FALLBACK = 'Checkout isn’t available right now. Please try again in a minute, or write to hello@biblesketch.app.';
@@ -45,8 +46,12 @@ export default function Checkout({ plan, offer, offerUid, country }: { plan: str
     requireAuth(start, 'login');
   }, [ready, user, profile]);
 
+  // Upgrading from the Prints plan: Zoho won't cancel it by itself.
+  const printsNote = plan === 'premium' && profile && !profile.isPremium && unlimitedPrints(profile)
+    ? <p className="text-sm text-gray-600 bg-purple-50 rounded-xl px-4 py-3 mb-2">Premium includes unlimited prints. If you're on the Unlimited Prints plan, cancel it under Account &gt; Manage Subscription after upgrading so you're not charged for both.</p>
+    : null;
   if (url) {
-    return <iframe src={url} title="Secure payment form" className="w-full h-[980px] md:h-[900px] border-0 rounded-2xl bg-white" allow="payment" />;
+    return <>{printsNote}<iframe src={url} title="Secure payment form" className="w-full h-[980px] md:h-[900px] border-0 rounded-2xl bg-white" allow="payment" /></>;
   }
   return (
     <div className="min-h-[420px] flex flex-col items-center justify-center text-center gap-4 p-6" role="status" aria-live="polite">

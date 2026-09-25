@@ -26,7 +26,7 @@ Bible Sketch (https://biblesketch.app) turns Bible verses into printable colorin
 
 - Zoho Billing, Canada data center (`subscriptions.zohocloud.ca`, org 110000236578, base currency CAD; gateway Stripe). The memory note `zoho-billing` has the webhook payloads and the safe-resend rules. `handleZohoWebhook` grants by plan code (`PREMIUM_PLANS`, `PRINTS_PLANS`) and reads the uid from the customer field `cf_cf_firebase_uid`.
 - **Prices are USD everywhere** (owner, 2026-09-25): they come from Zoho's USD price lists ("US Bible Sketch Premium" holds Premium and the Prints plans; one list per pack), not the CAD plan prices. The Prints plans ($1.99 a month, $19.99 a year) are sold only through email offers.
-- **On-site checkout** (built 2026-09-25, not live yet): `/checkout/<plan>` has no header or footer, has a strict CSP (`web/src/middleware.ts`), and embeds the hosted page that `createCheckout` opens through the Zoho API. Going live needs the owner's `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET` and `ZOHO_REFRESH_TOKEN` secrets; the steps are in plan §12.20 item 4 and CHECKLIST 0a. Until then the pricing page still uses Zoho's plain links (CAD), so don't hide the uid field in Zoho before the switch.
+- **On-site checkout, live since 2026-09-25:** the pricing buttons open `/checkout/<plan>`. It has no header or footer, has a strict CSP (`web/src/middleware.ts`), and embeds the hosted page that `createCheckout` opens through the Zoho API (a dedicated "Bible Sketch checkout" client; if it breaks, run `node scripts/zoho-token.mjs` and redeploy `createCheckout`). The uid field is hidden from customers in Zoho, so Zoho's plain checkout links no longer work for us. Details: plan §12.20 item 4.
 
 ## Facts you can't infer from the code
 

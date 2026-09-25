@@ -4255,6 +4255,8 @@ exports.createCheckout = onCall({ secrets: [zohoClientId, zohoClientSecret, zoho
   const userRef = db.doc(`users/${uid}`);
   const user = (await userRef.get()).data() || {};
   if (plan === 'premium' && user.isPremium) throw new HttpsError('failed-precondition', 'ALREADY_PREMIUM');
+  // Premium already includes unlimited prints; an offer link sent before they upgraded stays live for 7 days.
+  if (p.offerOnly && user.isPremium) throw new HttpsError('failed-precondition', 'ALREADY_UNLIMITED');
 
   const page = {
     plan: { plan_code: p.plan },
