@@ -1283,6 +1283,11 @@ less churn.
      - "Allow duplicates for customer display name" was turned **on**, so a buyer's USD customer can share a name with
        their old CAD one;
      - there's no iframe or allowed-domain setting on the hosted page templates.
+     - **The payment step asks less** (2026-09-25, the default "Bible Sketch" multi-page template > Payment Information):
+       City and Street are hidden. Country, State (Canadian taxes depend on the province) and ZIP (the card network
+       checks it) stay mandatory, and names were already off.
+     - The payment step also has a mandatory "By clicking Subscribe you agree to the Terms..." checkbox. It's legal
+       consent, and removing it or rewording it (it says "Subscribe" on one-time packs) is the owner's call.
    - **Still needed:** the Zoho API client (a Self Client at https://api-console.zohocloud.ca). The owner sets
      `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET` and `ZOHO_REFRESH_TOKEN` as Firebase secrets, with the scopes
      `ZohoSubscriptions.customers.CREATE,ZohoSubscriptions.hostedpages.CREATE`. The Canadian servers are
