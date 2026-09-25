@@ -51,9 +51,7 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
   - **Opt-in bonus** (decided 2026-09-24: extra free prints for joining the emails): confirm the number (+5 proposed) and the checkbox wording.
   - [x] **Billing webhook fix deployed** (2026-09-24, owner-approved; revision handlezohowebhook-00137; unsigned calls still 401). Only the Premium plan code grants Premium.
   - [x] **Unlimited Prints plans created in Zoho** (2026-09-24): `bible-sketch-prints-monthly` CAD 2.79 and `bible-sketch-prints-yearly` CAD 20.99, under the Premium product, off the pricing page. The code is built and tested (commit c76724e). Details: plan §12.20.
-  - [ ] **Approve two deploys** for the prints plans and the outage gift. Nobody can buy until the 7-day email link exists, so there's no rush, but both must be live before any link goes out:
-    - `firebase deploy --only "functions:handleZohoWebhook"`;
-    - the Worker (`npx wrangler deploy` in `web/`).
+  - [x] **Deployed 2026-09-24, owner-approved:** webhook revision handlezohowebhook-00138 (unsigned calls still 401) and Worker version 637f9390 (pages 200, print endpoint 401 on a bad token, the live `store` chunk has the dated-pass check).
   - [ ] **Turn on self-cancellation in the Zoho customer portal** (Settings > Customer Portal: allow cancelling at the end of the current term). Right now subscribers can't cancel on their own, but Premium and the prints plans both say "Cancel anytime". That's a consumer-protection risk (online sign-ups must be cancellable online in several places, California among them) and a source of chargebacks. The webhook already handles end-of-term cancellations.
   - [ ] **Sales tax check:** the checkout showed GST 5% + BC PST 7% on top of the price. Confirm Zoho charges these by the customer's address, not on every sale: open a hosted page, enter a US address, and don't pay. Exports of digital services to non-residents are usually zero-rated for GST, but ask your accountant.
   - Set the secrets yourself as Firebase secrets (plan §6.5; `firebase functions:secrets:set <NAME>`):

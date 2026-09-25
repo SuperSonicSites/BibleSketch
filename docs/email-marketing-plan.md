@@ -1041,7 +1041,7 @@ less churn.
    - Now only plan codes in `PREMIUM_PLANS` (`bible-sketch-premium`) can grant or remove Premium. Any other plan gets
      a 400 "Unknown plan", which shows as a failed delivery in Zoho's webhook log, and changes nothing.
    - `scripts/security-check.mjs` step: "a subscription on any other plan neither grants nor removes premium".
-2. **The prints plan. Built 2026-09-24 (commit c76724e); not deployed.**
+2. **The prints plan. Built and deployed 2026-09-24 (commit c76724e; webhook revision handlezohowebhook-00138, Worker version 637f9390).**
    - **In Zoho** (created by the owner's browser agent, 2026-09-24), under the product "Bible Sketch" (ID
      9037000000281233, the same product as Premium, so the existing workflow rules deliver its events):
 
