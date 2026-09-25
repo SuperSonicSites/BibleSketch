@@ -7,7 +7,7 @@ import { createRequire } from 'node:module';
 import { writeFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 
-const { EMAILS, render, due, firstName, offerEnd, freeUrl, OUTAGE, DAY, HOUR } = createRequire(import.meta.url)('../functions/email.js');
+const { EMAILS, render, due, firstName, offerEnd, adventEnd, ADVENT, freeUrl, OUTAGE, DAY, HOUR } = createRequire(import.meta.url)('../functions/email.js');
 
 // A Tuesday, 11 a.m. Eastern.
 const NOW = Date.parse('2026-10-13T15:00:00Z');
@@ -82,6 +82,25 @@ assert.equal(at({ ...old, issue }, issue.sendAt + 3 * DAY), null, 'too late');
 assert.notEqual(at({ ...old, issue, createdAt: thu - 3 * DAY }, thu), 'sp', 'first 7 days');
 assert.equal(at({ ...old, issue, optIn: false }, thu), null);
 assert.equal(at({ ...old, issue, timezone: 'America/Vancouver' }, thu), null, '6 a.m. in Vancouver');
+// Advent: the offer from the first Sunday, pack buyers included, never to Premium or anyone already unlimited;
+// the reminder from Dec 15, the last-day note on Dec 27, and no other offer in between.
+const adv = { ...old, createdAt: ADVENT.start - 90 * DAY, fired: { w0: ADVENT.start - 90 * DAY } };
+const inAdv = ADVENT.start + HOUR;
+const advOffer = { offers: { advent: { expiresAt: adventEnd() } } };
+assert.equal(at(adv, ADVENT.start - DAY), null, 'not before Advent');
+assert.equal(at(adv, inAdv), 'adv');
+assert.equal(at({ ...adv, bought: true }, inAdv), 'adv', 'pack buyers too');
+assert.equal(at({ ...adv, isPremium: true }, inAdv), null);
+assert.equal(at({ ...adv, unlimitedUntil: ADVENT.start + 30 * DAY }, inAdv), null, 'already on a Prints plan');
+assert.equal(at({ ...adv, fired: { ...adv.fired, c6: ADVENT.start - 2 * DAY } }, inAdv), null, 'one offer a week');
+assert.equal(at({ ...adv, createdAt: inAdv - DAY }, inAdv), null, 'after the welcome');
+assert.equal(at({ ...adv, ...advOffer, printsLeft: 0, fired: { ...adv.fired, adv: inAdv } }, inAdv + 8 * DAY), null, 'no C7 during Advent');
+assert.equal(at({ ...adv, ...advOffer, fired: { ...adv.fired, adv: inAdv } }, ADVENT.reminder + HOUR), 'adv2');
+assert.equal(at({ ...adv, ...advOffer, fired: { ...adv.fired, adv: inAdv, adv2: ADVENT.reminder } }, ADVENT.lastDay + HOUR), 'adv3');
+assert.equal(at({ ...adv, ...advOffer, fired: { ...adv.fired, adv: inAdv, adv2: ADVENT.reminder, adv3: ADVENT.lastDay } }, ADVENT.lastDay + 5 * HOUR), null);
+assert.equal(at(adv, ADVENT.lastDay - DAY), null, 'too late to start');
+assert.equal(new Date(adventEnd('America/Los_Angeles')).toISOString(), '2026-12-28T07:59:00.000Z');
+
 // Its free link is one the Worker accepts, for that sketch only, until it expires.
 const { validFreeLink } = await import('../web/src/lib/free-link.ts');
 const exp = Math.floor(NOW / 1000) + 3600;

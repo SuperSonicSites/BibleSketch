@@ -4088,7 +4088,8 @@ async function runEmailTick(now = Date.now(), { dryRun = false } = {}) {
       unlimitedUntil: ms(u.printsUnlimitedUntil), isPremium: u.isPremium === true, bought: e.bought === true,
       pagesMade: e.pagesMade || 0, firstPageAt: ms(e.firstPageAt), unsubscribedAt: ms(e.unsubscribedAt),
       fired: Object.fromEntries(Object.entries(e.fired || {}).map(([k, v]) => [k, ms(v)])),
-      offers: c7 ? { c7: { expiresAt: ms(c7.expiresAt) } } : {}, outage: outage.has(uid), issue,
+      offers: { ...(c7 && { c7: { expiresAt: ms(c7.expiresAt) } }), ...(e.offers?.advent && { advent: { expiresAt: ms(e.offers.advent.expiresAt) } }) },
+      outage: outage.has(uid), issue,
     };
     const id = EM.due(s, now);
     if (!id) continue;
@@ -4118,6 +4119,12 @@ async function runEmailTick(now = Date.now(), { dryRun = false } = {}) {
       Object.assign(p, { offerStart: now, offerEnds: EM.offerEnd(now, e.timezone), offerUrl: offerUrl(uid, token) });
       update.offers = { c7: { token, sentAt: at, expiresAt: Timestamp.fromMillis(p.offerEnds) } };
     }
+    if (id === 'adv') {
+      const token = newToken();
+      Object.assign(p, { offerEnds: EM.adventEnd(e.timezone), offerUrl: offerUrl(uid, token) });
+      update.offers = { advent: { token, sentAt: at, expiresAt: Timestamp.fromMillis(p.offerEnds) } };
+    }
+    if (id === 'adv2' || id === 'adv3') Object.assign(p, { offerEnds: ms(e.offers.advent.expiresAt), offerUrl: offerUrl(uid, e.offers.advent.token) });
     if (id === 'c7b' || id === 'c7c') Object.assign(p, { offerStart: ms(c7.sentAt), offerEnds: ms(c7.expiresAt), offerUrl: offerUrl(uid, c7.token) });
     if (id === 'o27' || id === 'o30') {
       const token = e.offers?.outage?.token || newToken();

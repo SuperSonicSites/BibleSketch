@@ -20,6 +20,13 @@ const OUTAGE = {
   lastDay: Date.parse('2026-10-28T15:00:00Z'), until: Date.parse('2026-10-29T15:00:00Z'),
   offerUntil: Date.parse('2026-11-06T04:59:00Z'), // end of Nov 5, Eastern
 };
+// The Advent offer (owner, 2026-09-25): unlimited prints ($1.99 a month / $19.99 a year) for every subscriber who
+// isn't already unlimited, from the first Sunday of Advent to the end of Dec 27 where they are. 8 a.m. Eastern marks.
+// ponytail: 2026 dates by hand; next season, compute them (pins-plan.mjs has the computus).
+const ADVENT = {
+  start: Date.parse('2026-11-29T13:00:00Z'), reminder: Date.parse('2026-12-15T13:00:00Z'),
+  lastDay: Date.parse('2026-12-27T13:00:00Z'), lastDate: '2026-12-27',
+};
 const IMPLIED_CONSENT_MS = 183 * DAY; // CASL: 6 months after the sign-up, for people who never opted in
 const OFFER_DAYS = 7;
 const FIRST_PACK_BONUS = 10;
@@ -183,6 +190,22 @@ const EMAILS = {
       ],
     };
   },
+  adv: (p) => ({
+    subject: 'unlimited prints for Advent',
+    body: [
+      `It’s Advent! Until ${longDate(p.offerEnds, p.timezone)}, you can have unlimited prints for ${PRINTS}: every Advent page, every Sunday page, as often as you like. Cancel anytime. [Get unlimited prints](${p.offerUrl})`,
+      `Printing every week? It’s ${PRINTS_YEAR}: [the yearly plan](${yearly(p.offerUrl)})`,
+      PREMIUM_LINE,
+    ],
+  }),
+  adv2: (p) => ({
+    subject: 're: unlimited prints for Advent',
+    body: [`A quick reminder: unlimited prints for ${PRINTS}, or ${PRINTS_YEAR}, are yours until ${longDate(p.offerEnds, p.timezone)}, Christmas pages included. [Monthly](${p.offerUrl}) · [Yearly](${yearly(p.offerUrl)})`],
+  }),
+  adv3: (p) => ({
+    subject: 'last day',
+    body: [`Today is the last day of the Advent offer: unlimited prints for ${PRINTS}, or ${PRINTS_YEAR}. After tonight the links stop working. [Monthly](${p.offerUrl}) · [Yearly](${yearly(p.offerUrl)})`],
+  }),
   o23: (p) => ({
     subject: `re: ${p.outageSubject || 'quick question'}`,
     body: [`What have you printed so far? Printing is still unlimited for you until ${shortDate(OUTAGE.until)}, and I’d love to hear what you’re using the pages for.`],
@@ -239,7 +262,7 @@ function render(id, p, now = Date.now()) {
 
 const CONVERSION = ['c1', 'c2', 'c6', 'c7'];
 // The "re:" emails, and the email each one answers.
-const REPLIES = { w1: 'w0', c7b: 'c7' };
+const REPLIES = { w1: 'w0', c7b: 'c7', adv2: 'adv' };
 const QUIET_OK = new Set(['w0', 'joined']); // answers to something they just did: sent at any hour
 
 // Which email person `s` is due now, or null. `s.fired` holds when each email went out (c7* are per round).
@@ -279,6 +302,16 @@ function due(s, now = Date.now()) {
     if (pass && !f.o30 && now >= OUTAGE.lastDay && now < OUTAGE.until) return pick('o30');
   }
 
+  // Advent (pack buyers included; not Premium or anyone already unlimited). The offer goes out after the welcome
+  // and sort, and not within a week of another offer; the reminder and the last-day note follow it.
+  const advent = now >= ADVENT.start && now < s.offers?.advent?.expiresAt;
+  if (s.optIn && !s.isPremium && !unlimited && now >= ADVENT.start && now < ADVENT.lastDay + DAY) {
+    if (!f.adv && now < ADVENT.lastDay - 3 * DAY && ago(s.createdAt) >= 2 * DAY && CONVERSION.every((k) => ago(f[k]) >= 7 * DAY)) return pick('adv');
+    if (advent && !f.adv2 && now >= ADVENT.reminder && ago(f.adv) >= 3 * DAY) return pick('adv2');
+    if (advent && !f.adv3 && now >= ADVENT.lastDay) return pick('adv3');
+    if (f.adv) return null; // no other offer while this one runs
+  }
+
   if (!s.optIn || s.bought || s.isPremium) return null;
   const offer = s.offers?.c7;
   if (offer && f.c7 && now < offer.expiresAt) {
@@ -306,10 +339,15 @@ function quietHoursOver(now, tz) {
 
 // An offer made now runs to 11:59 p.m. in the reader's time zone (Eastern when unknown), OFFER_DAYS days later,
 // so "until Friday, October 9" is true where they are.
+const zoneOf = (tz) => { try { new Intl.DateTimeFormat('en-US', { timeZone: tz }); return tz || 'America/New_York'; } catch { return 'America/New_York'; } };
 function offerEnd(now, tz) {
-  const zone = (() => { try { new Intl.DateTimeFormat('en-US', { timeZone: tz }); return tz || 'America/New_York'; } catch { return 'America/New_York'; } })();
-  const day = new Date(now + OFFER_DAYS * DAY);
-  const ymd = day.toLocaleDateString('en-CA', { timeZone: zone });
+  const zone = zoneOf(tz);
+  return endOf(new Date(now + OFFER_DAYS * DAY).toLocaleDateString('en-CA', { timeZone: zone }), zone);
+}
+const adventEnd = (tz) => endOf(ADVENT.lastDate, zoneOf(tz));
+// 11:59 p.m. on date `ymd` (YYYY-MM-DD) in `zone`.
+function endOf(ymd, zone) {
+  const day = new Date(`${ymd}T12:00:00Z`);
   const [, sign = '+', h = '0', m = '0'] = /GMT([+-])?(\d+)?(?::(\d+))?/.exec(day.toLocaleString('en-US', { timeZone: zone, timeZoneName: 'shortOffset' })) || [];
   return Date.parse(`${ymd}T23:59:00${sign}${h.padStart(2, '0')}:${m.padStart(2, '0')}`);
 }
@@ -365,4 +403,4 @@ function renderReceipt(t, p) {
   };
 }
 
-module.exports = { EMAILS, REPLIES, render, renderReceipt, due, firstName, offerEnd, freeUrl, FREE_LINK_DAYS, OUTAGE, OFFER_DAYS, FIRST_PACK_BONUS, PRINTS_PLANS, STUCK_MS, SITE, DAY, HOUR };
+module.exports = { EMAILS, REPLIES, render, renderReceipt, due, firstName, offerEnd, adventEnd, ADVENT, freeUrl, FREE_LINK_DAYS, OUTAGE, OFFER_DAYS, FIRST_PACK_BONUS, PRINTS_PLANS, STUCK_MS, SITE, DAY, HOUR };
