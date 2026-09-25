@@ -170,7 +170,8 @@ const EMAILS = {
       subject: i.subject,
       body: [
         i.text,
-        `Here’s the page, free to print from this email (no sign-in, and it doesn’t use a print): [${i.story}, ready to print](${i.freeUrl}) · [on A4 paper](${i.freeUrl}&paper=a4)`,
+        // One link: A4 outside the Americas (by time zone), Letter otherwise.
+        `Here’s the page, free to print from this email (no sign-in, and it doesn’t use a print): [${i.story}, ready to print](${i.freeUrl}${p.timezone && !p.timezone.startsWith('America/') ? '&paper=a4' : ''})`,
         `Need it simpler, or for older kids? [Make your own version](${maker(p, c, i.ref)})`,
       ],
       sig: [
