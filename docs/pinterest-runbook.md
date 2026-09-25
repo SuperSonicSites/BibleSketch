@@ -51,6 +51,16 @@ As of **2026-09-25** (second `pinterest-daily` run, stopped: browser signed out;
   brent@supersonicsites.com, on the 24th (first one sent by hand 2026-09-24). Brent's address was added as an
   Email Routing destination 2026-09-24 and gets his copy once he clicks Cloudflare's verification link.
 - **Open decisions** (CHECKLIST): AI disclosure label on API Pins; "Free Printable" wording on the kids' banners.
+- **RSS publishing checked 2026-09-25** (owner asked why "the same Pins keep going out"): Pinterest creates each feed item
+  once, within ~2 h of the UTC day change (Joshua 1:9 Sept 24 00:04 UTC, Mark 4:39 Sept 25 01:37 UTC), no duplicates,
+  even though an item stays in the feed 2 days. What the owner saw is the 1-a-day ramp seen in EDT (each Pin lands the
+  evening before its calendar date) plus the Christmas Pin **Luke 2:15-16 (Pin 1078049229577774084) being deleted**
+  after Sept 24 (created by the feed Sept 23, alt text set Sept 24, now "Pin not found"; none of our sessions
+  deleted it, so either the owner or Pinterest did; the page and Pin image still work). It will not be re-published by
+  RSS (its release date has passed); if wanted back, publish it through the API or re-release it with a new date.
+  **christmas.xml showed as broken on 2026-09-25**: the feed was empty between the Sept 23 and Sept 28 releases (2-day
+  window). Fix in `dueEntries`: a board with nothing due repeats its last released Pin (Pinterest already has it and
+  creates nothing), so a connected feed is never empty again.
 - **Next jobs:** connect `sunday-school.xml` (Sept 25 after 8 pm EDT); weekly alt text; generate Sunday School
   pages for Nov 6 onward and more Christmas scenes; read the paper/purple test mid-February; first day-30
   results read mid-November (strategy §4).

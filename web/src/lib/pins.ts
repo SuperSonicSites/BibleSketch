@@ -61,11 +61,15 @@ export async function masterSketch(id: string): Promise<Sketch | null> {
 
 const day = (d: Date) => d.toISOString().slice(0, 10);
 
-// Approved entries of `board` released today or in the previous WINDOW_DAYS - 1 days, oldest first.
+// Approved entries of `board` released today or in the previous WINDOW_DAYS - 1 days, oldest first. Never empty
+// once the board has released anything: Pinterest flags an empty feed as an error (seen 2026-09-25, christmas.xml
+// between two releases), so a quiet day repeats the last released Pin, which Pinterest already has and skips.
 export function dueEntries(board: string, now = new Date()): PinEntry[] {
   const from = day(new Date(now.getTime() - (WINDOW_DAYS - 1) * 86400000));
   const to = day(now);
-  return entries
-    .filter((e) => e.board === board && e.approved && e.release >= from && e.release <= to)
+  const released = entries
+    .filter((e) => e.board === board && e.approved && e.release <= to)
     .sort((a, b) => a.release.localeCompare(b.release));
+  const due = released.filter((e) => e.release >= from);
+  return due.length ? due : released.slice(-1);
 }
