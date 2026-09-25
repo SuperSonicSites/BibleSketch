@@ -6,7 +6,7 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
 
 ### Start here (priority order, updated 2026-09-24 night)
 1. **Test the opt-in live:** sign in on biblesketch.app. The banner appears once; click "Yes, sign me up", then Account should show 5 more Downloads/Prints. This also puts your account on the list.
-2. **Before mid-October: the outage win-back decision** (Lifecycle email, below). The April sign-ups age out of CASL's 6-month window during October.
+2. **Check the test email** (sent Sep 25 to renaud@supersonicsites.com). The real one goes to 83 people on **Tue Sep 29 at 11:00 AM ET**. To change or stop it, cancel in Resend > Emails (the key Claude uses can only send), or tell Claude before Monday night.
 3. **Zoho Mail alias** so you can answer as `hello@biblesketch.app` (below).
 4. **Brent's Cloudflare verification click** (below).
 5. **Keep an eye on `pinterest-daily`:** its first run succeeded; if a run stops on a permission prompt, approve it once.
@@ -41,7 +41,7 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
 - [ ] **Resend account.**
   - [x] Account created, `RESEND_API_KEY` set as a Firebase secret, and the stray `.env` deleted (2026-09-24, verified).
   - [x] **Sending domain `e.biblesketch.app`: verified in Resend** (owner, 2026-09-24). The DNS was checked the same day: DKIM, the `send.e` return path, the receiving MX, and the root DMARC `p=none`, which covers the subdomain. Confirm Resend shows the domain as "Verified", and keep "receiving" on, because replies come back through it (plan §6.8).
-  - **Urgent decision (plan §12.1):** a one-time, honest win-back email to the 85 people who signed up since Mar 26 and never got to make a page (the generator was down Jun-Sep), relying on CASL implied consent. The April sign-ups age out during October. Decided 2026-09-24: the gift is a month of unlimited prints. Still open: the implied-consent basis (a lawyer check is worth it), plus approval of the Worker deploy and the grant script.
+  - [x] **Outage win-back: approved and scheduled** (2026-09-25; plan §12.1). The owner approved it after a lawyer check. 83 emails for Tue Sep 29, 11:00 AM ET; the 85 accounts have unlimited prints until Oct 29; the 2 unverified addresses are skipped.
   - [x] **Opt-in bonus: +5 prints and the checkbox wording approved** (2026-09-24). The wording is `CONSENT_TEXT` in `web/src/lib/session.ts`.
   - [x] **Billing webhook fix deployed** (2026-09-24, owner-approved; revision handlezohowebhook-00137; unsigned calls still 401). Only the Premium plan code grants Premium.
   - [x] **Unlimited Prints plans created in Zoho** (2026-09-24): `bible-sketch-prints-monthly` CAD 2.79 and `bible-sketch-prints-yearly` CAD 20.99, under the Premium product, off the pricing page. The code is built and tested (commit c76724e). Details: plan §12.20.
@@ -87,6 +87,9 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
 - [ ] **Still open:**
   - implied consent for the 4 past buyers;
   - the other bonus amounts (first purchase, win-back, seasonal, referral) when those emails are built.
+- [ ] **A second Resend API key with full access,** for phase 1: contacts, topics and the webhook. The current `RESEND_API_KEY` can only send, which is good; keep it for sending.
+  - Create "Bible Sketch app (full access)" in Resend > API Keys.
+  - Save it yourself as the Firebase secret `RESEND_ADMIN_KEY`.
 - [ ] **Check how many accounts never verified their email (§12.6).** It's an Auth export, so you run it, because it contains personal data. Claude can give you the command. If the number is high, the verification email is the first thing to fix.
 - [ ] **Later:** a standing approval for the automated emails, once you've read the first versions (§11).
 

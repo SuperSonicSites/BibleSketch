@@ -815,7 +815,7 @@ Every number here comes from `emailProfiles` (§6.2). Cohorts by sign-up month (
   - `onPrivateProfileWritten` (+5 prints, once ever);
   - private-profile cleanup in `onUserDeleted`;
   - the privacy policy additions;
-  - `scripts/grant-outage-prints.mjs` (a dry run finds the 85; not run).
+  - the outage gift, now part of `scripts/outage-winback.mjs` (§12.1).
 - **Not in 0.5:** the persona question isn't in the banner (W1 asks by email); `ageGroups`, `setting`, `groupSize` and `curriculum` come with the reply reader.
 
 The original list:
@@ -896,6 +896,17 @@ The original list:
 Sorted by value. Each item says where it changes the plan.
 
 ### 12.1 The outage cohort: the biggest single email we can send
+**Status (2026-09-25): scheduled.** The owner approved the send (CASL implied consent, lawyer-checked).
+- **The email:** 83 emails for **Tue Sep 29, 11:00 AM ET**. That's 15:00 UTC, 8-11 AM across US time zones: the peak open window, since we don't know these people's time zones.
+- **The gift:** all 85 accounts got unlimited prints until **Oct 29**.
+- **Skipped:** the 2 accounts with unverified emails.
+- **The test:** sent to the owner on Sep 25.
+- **The tool:** `scripts/outage-winback.mjs`.
+  - It holds the cohort (created 2026-03-26 to 09-21, never made a page or bought), the gift, and the email itself: plain text plus simple HTML, From "Renaud from Bible Sketch", Reply-To `hello@`, a mailto unsubscribe, and the CASL footer.
+  - One marker per account (`processedWebhooks/outage2026_<uid>`, holding the Resend id) and a batch idempotency key mean a re-run sends nothing (checked).
+  - Recipients are **not** Resend contacts. Their implied consent lapses at 6 months, so they only join the list through the banner.
+- **The Resend key can only send:** cancelling or checking delivery happens in the Resend dashboard (Emails).
+
 - **Who:** 85 people signed up between Mar 26 and today, never made a page and never bought.
   - The generator was down from June to Sep 21.
   - All of them still have their 5 free credits, and 73% printed a gallery page, so they wanted this.
