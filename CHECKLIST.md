@@ -8,12 +8,16 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
 0. **Approve the 15 phase 1 emails** (test sends of Sep 25 to renaud@supersonicsites.com; plan §10). Read the latest version of each: the second round (13 emails, "10 free prints") and the third round (the 6 with prices, in USD). The joined note and O23 are from the first round. Reply "approved", or say what to change. Once they're approved, Claude sets `config/email` `live: true` and the sequences start (W0 for new sign-ups, the outage follow-ups from Oct 22, and so on).
    - In the second and third rounds, "Keep printing" / "Monthly" / "Yearly" open the real Zoho checkout, through a test offer on the master account that expires Sep 28. The first round's links were placeholders.
    - The +10 first-pack bonus in C2 ("get any pack by <date> and I'll add 10 extra pages") is live code. Approving C2 approves the bonus.
-0a. **Zoho API client for the on-site USD checkout** (plan §12.20 item 4). Claude finished the Zoho Billing side in your browser on Sep 25 (see the plan). Use a **separate client just for Bible Sketch**, not the Self Client your other apps use. Each client can hold at most 20 live refresh tokens per user, and Zoho revokes the oldest one when a new one pushes past 20, even if it's in use. So adding ours to the shared Self Client could cut off one of your other apps.
-   1. https://api-console.zohocloud.ca > Add Client > **Server-based Applications**. Name it "Bible Sketch checkout", Homepage URL `https://biblesketch.app`, Authorized Redirect URI `http://localhost/` (nothing loads there, so the code isn't recorded anywhere). Create it.
-   2. Set its two values yourself: `firebase functions:secrets:set ZOHO_CLIENT_ID --project biblesketch-5104c`, then the same for `ZOHO_CLIENT_SECRET`.
-   3. Open this link after putting your client ID in it: `https://accounts.zohocloud.ca/oauth/v2/auth?scope=ZohoSubscriptions.customers.CREATE,ZohoSubscriptions.hostedpages.CREATE&client_id=YOUR_CLIENT_ID&response_type=code&access_type=offline&prompt=consent&redirect_uri=http://localhost/`. Accept. The browser lands on a "can't connect" page at `http://localhost/?code=...`; copy the `code` value and right away run Claude's exchange command. The code only lasts a couple of minutes. The command stores `ZOHO_REFRESH_TOKEN` directly.
-   4. Tell Claude. It deploys `createCheckout`, checks one real checkout per plan (without paying), switches the pricing buttons, then hides the uid field on Zoho's hosted pages and portal.
-   - Never regenerate the secret of, or delete, the shared Self Client: every app using it would stop.
+0a. **On-site checkout: connected and tested, not yet on the pricing page** (plan §12.20 item 4).
+   - Done on 2026-09-25:
+     - Zoho API client "Bible Sketch checkout" (server-based) connected with `node scripts/zoho-token.mjs` (it tests the token, then saves all three secrets);
+     - `createCheckout` deployed;
+     - every plan opens inside the page at its USD price: Spark $4.99, Torch $14.99, Beacon $29.99, Prints $1.99 and $19.99 through the email offer link. Premium correctly refuses an account that's already Premium;
+     - the Zoho customer is created in USD and carries the uid field.
+   - [ ] **One real purchase** to prove payment → webhook → credits: buy Spark at https://biblesketch.app/checkout/spark (about $5.59 with tax) and check the 20 credits arrive. Refund it in Zoho afterwards if you like.
+   - [ ] Then Claude switches the pricing buttons to `/checkout/<plan>` and hides the uid field on Zoho's hosted pages and portal.
+   - Note: until a buyer enters their address, Zoho charges 12% tax (GST + BC PST) from your own BC address. The old checkout did the same. Option: pre-fill the buyer's country from their location, so US buyers don't see Canadian tax lines.
+   - If the connection ever breaks, rerun `node scripts/zoho-token.mjs`, then have Claude redeploy `createCheckout`. Never regenerate or delete the shared Self Client your other apps use.
 0b. **Point hello@ at the Worker now, before the Sep 29 send,** so replies are read automatically. It also turns the outage email's "Unsubscribe" replies into real unsubscribes: Cloudflare > biblesketch.app > Email > Email Routing > Routing rules > `hello@biblesketch.app` > Edit > Action: **Send to a Worker** > `biblesketch-web` > Save.
    - The Worker forwards every message to renaud@supersonicsites.com first, exactly as today.
    - Then it acts on "unsubscribe" replies and answers to "a class, or your kids at home?".
