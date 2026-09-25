@@ -179,7 +179,8 @@ Built 2026-09-23 in `web/`: `src/data/pins.json` (the calendar), `src/lib/pins.t
   - (2026-09-25) **Advent offer = the unlimited-prints plan as a sale** (owner: "an offer to sell, should lead to
     checkout"): $1.99 a month or $19.99 a year, open to every email subscriber who isn't Premium or already
     unlimited (pack buyers included), Nov 29 to the end of Dec 27 local time. Emails `adv` (from Nov 29), `adv2`
-    (from Dec 15) and `adv3` (Dec 27), with no other offer in between. Built 2026-09-25; wording awaiting approval.
+    (from Dec 15) and `adv3` (Dec 27), with no other offer in between. One offer only, no credits; "any page" and
+    the yearly 16% saving spelled out. Wording approved and `emailTick` deployed 2026-09-25.
   - (2026-09-24) the weekly Thursday page is free to print from the email only (a signed PDF link, plan §6.6), and the consent box says so. Replies go to hello@biblesketch.app; the sender is "Renaud from Bible Sketch"; the mailing address is Supersonic Sites Inc., Ucluelet, BC.
 - **Billing (deployed 2026-09-24; the plan-code fix in revision 00137, then the Unlimited Prints plans in revision 00138 with Worker 637f9390):** `handleZohoWebhook` granted Premium to any subscription it received. Now only the `bible-sketch-premium` plan code grants or removes Premium. Other plans get a 400 and nothing changes. Security check 45/45.
 - **Phases:**
