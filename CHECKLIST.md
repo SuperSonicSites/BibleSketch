@@ -11,7 +11,7 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
 4. **Before mid-October: the outage win-back decision** (Lifecycle email, below). The April sign-ups age out of CASL's 6-month window during October.
 5. **Resend:** the key into Firebase secrets, and domain verification (the account is done; Lifecycle email, below).
 6. **The email decisions,** then tell Claude "go" for phase 0.5 (below).
-7. **Zoho:** create the $1.99 prints plans with the browser-agent prompt Claude gave you (below).
+7. **Zoho:** turn on self-cancellation in the customer portal, and check the sales tax (below). The prints plans are created.
 8. **Brent's Cloudflare verification click** (below).
 
 ### Decisions
@@ -50,10 +50,12 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
   - **Urgent decision (plan §12.1):** a one-time, honest win-back email to the 85 people who signed up since Mar 26 and never got to make a page (the generator was down Jun-Sep), relying on CASL implied consent. The April sign-ups age out during October. Decided 2026-09-24: the gift is a month of unlimited prints. Still open: the implied-consent basis (a lawyer check is worth it), plus approval of the Worker deploy and the grant script.
   - **Opt-in bonus** (decided 2026-09-24: extra free prints for joining the emails): confirm the number (+5 proposed) and the checkbox wording.
   - [x] **Billing webhook fix deployed** (2026-09-24, owner-approved; revision handlezohowebhook-00137; unsigned calls still 401). Only the Premium plan code grants Premium.
-  - [ ] **$1.99 prints-only test (plan §12.20):**
-    - decide yes or no, and monthly, annual ($14.99), or both;
-    - if yes, create the plan in Zoho Billing (no automation rule is needed yet) and give Claude its plan code;
-    - keep it off the pricing page: the offer only goes out by email.
+  - [x] **Unlimited Prints plans created in Zoho** (2026-09-24): `bible-sketch-prints-monthly` CAD 2.79 and `bible-sketch-prints-yearly` CAD 20.99, under the Premium product, off the pricing page. The code is built and tested (commit c76724e). Details: plan §12.20.
+  - [ ] **Approve two deploys** for the prints plans and the outage gift. Nobody can buy until the 7-day email link exists, so there's no rush, but both must be live before any link goes out:
+    - `firebase deploy --only "functions:handleZohoWebhook"`;
+    - the Worker (`npx wrangler deploy` in `web/`).
+  - [ ] **Turn on self-cancellation in the Zoho customer portal** (Settings > Customer Portal: allow cancelling at the end of the current term). Right now subscribers can't cancel on their own, but Premium and the prints plans both say "Cancel anytime". That's a consumer-protection risk (online sign-ups must be cancellable online in several places, California among them) and a source of chargebacks. The webhook already handles end-of-term cancellations.
+  - [ ] **Sales tax check:** the checkout showed GST 5% + BC PST 7% on top of the price. Confirm Zoho charges these by the customer's address, not on every sale: open a hosted page, enter a US address, and don't pay. Exports of digital services to non-residents are usually zero-rated for GST, but ask your accountant.
   - Set the secrets yourself as Firebase secrets (plan §6.5; `firebase functions:secrets:set <NAME>`):
     - `RESEND_API_KEY` (above);
     - `RESEND_WEBHOOK_SECRET`, when Claude creates the webhook in phase 1.

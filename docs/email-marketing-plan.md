@@ -310,7 +310,7 @@ by the owner before it goes out. `{first}` is the first name (the email opens wi
 | C4 | 5+ pages or 3+ prints in 30 days, free or a pack buyer | `you're making a lot of pages` | Premium: unlimited prints and 10 new pages a month for $4.99 | subscribes |
 | C5 | teacher with 3+ pages | `for your whole class` | The Beacon (200 pages at 15¢), and the church plan once it exists | buys Beacon |
 | **C6** | **1 print left** (the print wall is next; §3.1) | `one print left` | "You have one free print left. Premium is unlimited prints, plus 10 new pages a month, for $4.99. Cancel anytime. [Get Premium]" For a teacher, the Torch as well (80 prints come with it) | subscribes or buys |
-| **C7** | **0 prints left, never bought**: a 7-day, email-only offer (§12.20) | day 0 `out of prints?`, day 5 `re: out of prints?`, day 7 `last day` | "You've used your free prints. Just for you, for 7 days: unlimited prints for $1.99 a month. **[Keep printing]** (Want new pages too? Premium is $4.99.)" The link expires on day 7 | subscribes or buys; the offer repeats at most every 90 days |
+| **C7** | **0 prints left, never bought**: a 7-day, email-only offer (§12.20) | day 0 `out of prints?`, day 5 `re: out of prints?`, day 7 `last day` | "You've used your free prints. Just for you, for 7 days: unlimited prints for about US$2 a month (CAD 2.79, plus tax). **[Keep printing]** (Want new pages too? Premium is about US$5.)" The link expires on day 7 | subscribes or buys; the offer repeats at most every 90 days |
 
 - **One conversion email a week at most.** People in the middle of activation don't get conversion emails.
 - The flagship's super-signature does the gentle, constant selling. The C-emails only fire on a real signal.
@@ -855,7 +855,8 @@ Sorted by value. Each item says where it changes the plan.
     express consent, nobody gets a marketing email once their 6 months are up.**
 - **If it works,** test "your first month of unlimited prints" as the opt-in bonus for every new sign-up (§8 tests).
 
-**Build (small, no Resend needed; phase 0.5):**
+**Build (small, no Resend needed; phase 0.5).** The three `unlimitedPrints` checks were built 2026-09-24 with the
+prints plan (§12.20). The grant script and the deploys remain.
 - a helper `unlimitedPrints(profile)` = `isPremium` or `printsUnlimitedUntil` is still in the future, used in:
   - `web/src/lib/downloads.ts` (`grantDownload` skips the decrement);
   - `web/src/components/SketchActions.tsx` (no "(n left)", no print wall);
@@ -1040,11 +1041,31 @@ less churn.
    - Now only plan codes in `PREMIUM_PLANS` (`bible-sketch-premium`) can grant or remove Premium. Any other plan gets
      a 400 "Unknown plan", which shows as a failed delivery in Zoho's webhook log, and changes nothing.
    - `scripts/security-check.mjs` step: "a subscription on any other plan neither grants nor removes premium".
-2. **The prints plan:**
-   - add its code in a `PRINTS_PLANS` set;
-   - on each `live` delivery, set `printsUnlimitedUntil` to `current_term_ends_at` + 3 days. That's the same field as
-     the outage gift (§12.1), so no new flag is needed;
-   - on cancellation, do nothing: the date lapses by itself.
+2. **The prints plan. Built 2026-09-24 (commit c76724e); not deployed.**
+   - **In Zoho** (created by the owner's browser agent, 2026-09-24), under the product "Bible Sketch" (ID
+     9037000000281233, the same product as Premium, so the existing workflow rules deliver its events):
+
+     | Plan code | Price | Billing | Hosted checkout |
+     |---|---|---|---|
+     | `bible-sketch-prints-monthly` | CAD 2.79 | monthly, until cancelled | `https://billing.zohosecure.ca/subscribe/16bb18d1e24b94dc61c8488c1a133d491f563cd205dd5841ec6a82f3d2da95da/bible-sketch-prints-monthly` |
+     | `bible-sketch-prints-yearly` | CAD 20.99 | yearly, until cancelled | same, ending `/bible-sketch-prints-yearly` |
+
+     - No trial and no setup fee; tax settings copied from Premium.
+     - Not in any pricing widget, and plan switching is off in the customer portal.
+   - **In the code:**
+     - the codes are in `PRINTS_PLANS`;
+     - each `live` delivery sets `printsUnlimitedUntil` to `current_term_ends_at` + 3 days, never shortening a longer
+       pass;
+     - it logs a `prints_subscription` transaction once per term;
+     - it gives no credits and no Premium;
+     - any other status is a 200 no-op, so the pass lapses at its date.
+   - **The app** reads the pass through `unlimitedPrints()` in `web/src/lib/store.ts`: `grantDownload`,
+     `SketchActions` and `AccountModal` ("Unlimited until Oct 31").
+   - **Tests:** security-check 46/46; `e2e-downloads` 11/11.
+   - **The price in emails must be the real one:**
+     - Zoho charges in CAD, and at checkout it showed GST 5% + BC PST 7% on top (CAD 3.13 a month, CAD 23.51 a year).
+     - The copy says "about US$2 a month (CAD 2.79) plus tax", never a bare "$1.99".
+     - The same applies to Premium's CAD 7.00.
 3. **The 7-day link:**
    - Emails link to `/offer/<token>` on the Worker. The token is an HMAC (a new Worker secret) over the uid, the
      offer id and the expiry.
