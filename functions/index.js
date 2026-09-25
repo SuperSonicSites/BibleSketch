@@ -4195,7 +4195,9 @@ const zohoToken = async () => {
   zohoAccess = { token: out.access_token, api: out.api_domain || 'https://www.zohoapis.ca', expires: Date.now() + (out.expires_in || 3600) * 1000 };
   return zohoAccess;
 };
-const zohoPost = async (path, body) => {
+// Zoho keeps at most 10 live access tokens per refresh token, so instances can push each other's out: on a 401,
+// get a fresh token and try once more.
+const zohoPost = async (path, body, retry = true) => {
   const { token, api } = await zohoToken();
   const res = await fetch(`${api}/billing/v1${path}`, {
     method: 'POST',
@@ -4205,6 +4207,10 @@ const zohoPost = async (path, body) => {
     },
     body: JSON.stringify(body),
   });
+  if (res.status === 401 && retry) {
+    zohoAccess = null;
+    return zohoPost(path, body, false);
+  }
   const out = await res.json().catch(() => ({}));
   if (!res.ok || out.code !== 0) throw new Error(`Zoho ${path} ${res.status} ${out.code} ${out.message || ''}`);
   return out;
