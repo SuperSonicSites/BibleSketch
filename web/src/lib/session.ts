@@ -6,7 +6,7 @@ import { getAuthClient, getDbClient, getStorageClient } from './firebase-client.
 import { $authReady, $emailChoice, $modal, $profile, $user, openModal, type Profile } from './store.ts';
 
 // Shown next to the checkbox and the banner, and stored with each opt-in as CASL proof (plan §6.3, §7).
-export const CONSENT_TEXT = 'Email me a Bible story page each week, plus occasional offers, and get 5 extra free prints now. Unsubscribe anytime.';
+export const CONSENT_TEXT = 'Send me a free Bible story page to print each week, plus occasional offers, and get 5 extra prints now. Unsubscribe anytime.';
 export type Persona = 'teacher' | 'family' | 'adult';
 export interface EmailChoice { optIn: boolean; persona?: Persona }
 

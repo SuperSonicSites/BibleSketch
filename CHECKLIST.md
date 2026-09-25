@@ -6,11 +6,10 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
 
 ### Start here (priority order, updated 2026-09-24 night)
 1. **Approve the phase 0.5 deploys and the privacy text** (Lifecycle email, below). Every day without it, about one sign-up arrives that we may never email.
-2. **Free weekly page for subscribers:** decide yes or no, and the final checkbox wording, before the phase 0.5 deploy (Claude's question of 2026-09-24).
-3. **Before mid-October: the outage win-back decision** (Lifecycle email, below). The April sign-ups age out of CASL's 6-month window during October.
-4. **Zoho Mail alias** so you can answer as `hello@biblesketch.app` (below).
-5. **Brent's Cloudflare verification click** (below).
-6. **Keep an eye on `pinterest-daily`:** its first run succeeded; if a run stops on a permission prompt, approve it once.
+2. **Before mid-October: the outage win-back decision** (Lifecycle email, below). The April sign-ups age out of CASL's 6-month window during October.
+3. **Zoho Mail alias** so you can answer as `hello@biblesketch.app` (below).
+4. **Brent's Cloudflare verification click** (below).
+5. **Keep an eye on `pinterest-daily`:** its first run succeeded; if a run stops on a permission prompt, approve it once.
 
 ### Decisions
 - [x] **Unpaid premium/credits accounts.** 8 accounts have premium or credits without any payment (beta-week sign-ups, Nov 24-28, 2025; one orphan doc `EIV569…` with no Auth user). Keep or revoke? - ANSWER: KEEP
@@ -67,7 +66,7 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
   - replies go to `hello@biblesketch.app`;
   - the sender is "Renaud from Bible Sketch" `<renaud@e.biblesketch.app>`. The owner wrote "Renaud @ Bible Sketch"; Claude suggests "from", because an "@" in a display name can look like a fake address to spam filters. Say if you prefer the "@";
   - +5 opt-in prints;
-  - the weekly page is **not** free to print, so the checkbox says "a Bible story page", not "free";
+  - the weekly page is **free to print from the email only**, through a signed PDF link built with the weekly email in phase 2. The checkbox says: *"Send me a free Bible story page to print each week, plus occasional offers, and get 5 extra prints now. Unsubscribe anytime."* (final, approved);
   - "go" for phase 0.5.
 - [ ] **Approve the phase 0.5 deploys** (built and tested, commit 4706d7e; plan §10). In this order, because the rules must be live before the site writes the new document:
   1. `firebase deploy --only "firestore:rules"`;

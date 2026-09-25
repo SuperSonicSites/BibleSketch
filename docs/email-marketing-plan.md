@@ -491,7 +491,7 @@ send next, and never ask what their behaviour already tells us.
 | Where | What we ask or capture | Field |
 |---|---|---|
 | First visit, before sign-up | the landing page, its sketch and story, the UTM tags, the referrer domain, the Pinterest click id (a first-touch record kept in the browser) | `signup` |
-| Sign-up form | an **unticked** box: *"Email me a Bible story page each week, plus occasional offers, and get 5 extra free prints now. Unsubscribe anytime."* (approved 2026-09-24; the source of truth is `CONSENT_TEXT` in `web/src/lib/session.ts`). The bonus is granted once per account by the server (§12.2) | the consent fields |
+| Sign-up form | an **unticked** box: *"Send me a free Bible story page to print each week, plus occasional offers, and get 5 extra prints now. Unsubscribe anytime."* (approved 2026-09-24; the source of truth is `CONSENT_TEXT` in `web/src/lib/session.ts`). The server grants the bonus once per account (§12.2) | the consent fields |
 | Sign-up form (optional) | *"I'm making pages for: my class / my kids / myself"*. An answer skips W1 | `persona` |
 | Sign-up, silently | the browser's time zone and language | `timezone`, `locale` |
 | W1 reply | a class, or your kids at home? | `persona` |
@@ -587,6 +587,11 @@ send next, and never ask what their behaviour already tells us.
   (`w0`, `c2`, `sunday-prep-2026-11-12`...). The site and GA4 then see which email brought each visit, sign-up and
   purchase.
 - **Print links** open the page's print view at the reader's `paper` size.
+- **The free weekly PDF** (phase 2): `/free/<sketchId>?t=<expiry>.<signature>` on the Worker.
+  - It renders the same PDF as the Print button (fit to Letter or A4), with no sign-in and no print spent.
+  - It only opens with an HMAC-signed, expiring link (a new Worker secret), made by the weekly job. It's the same signing helper as the 7-day offer link (§12.20).
+  - A forwarded link works for the friend too: that's word of mouth, and the PDF footer says biblesketch.app.
+  - The email also links to the page and "make your own version", because this click doesn't visit the site.
 - **The sync computes every personal link** (`next_story_url`, `last_story_url`, `landing_url`), so the templates
   only insert them.
 
@@ -781,7 +786,7 @@ The original list:
 - **Deletion:** `onUserDeleted` cleanup, and the privacy policy update.
 
 **Phase 2 (live by Nov 10, before the Advent announcement on Nov 12):**
-- the weekly Sunday Prep flagship (the first 4 approved by the owner) and the super-signature;
+- the weekly Sunday Prep flagship (the first 4 approved by the owner), its free signed PDF link (§6.6), the weekly pick log (no repeats, §12.7) and the super-signature;
 - the Advent and Christmas campaign;
 - after-the-sale emails B1, B3 and B4, and the conversion emails C3-C5;
 - the 9-word re-engagement and the seasonal-only tier;
@@ -913,7 +918,10 @@ prints plan (§12.20). The grant script and the deploys remain.
   for the week's sketch ids; it's a small change.
   - It costs nothing (no generation), it builds the weekly habit, and the wall still applies to everything else.
 - **The alternative:** drop "free" from the consent wording.
-- **Decided 2026-09-24: the weekly page is not free to print.** It costs a print like any gallery page, and the consent wording says "a Bible story page" (`CONSENT_TEXT` in `web/src/lib/session.ts`). The print wall stays the sales moment (C6/C7).
+- **Decided 2026-09-24 (final): the weekly page is free to print from the email only.** It replaces an earlier "not free" answer the same day.
+  - The Thursday email's button links to a signed PDF (§6.6), which needs no sign-in and uses no print.
+  - On the site, the same page costs a print like any other. The free print is the reason to join: "a free page every Thursday, by email only".
+  - This needs no subscriber check at print time, no field on the sketch and no rule change.
 
 ### 12.5 People print first, and most are on phones
 - **§3.1 shows printing is the main behaviour.**
@@ -942,6 +950,14 @@ prints plan (§12.20). The grant script and the deploys remain.
 - **Duplicates:** Firebase triggers can run twice on a retry, which would mean two welcome emails.
   - Keep `fired.<event>` timestamps on `emailProfiles` and skip repeats.
 - **Missed sends:** the nightly sync re-fires a missed `signed_up` (opted in and verified, but no W0 sent).
+- **Never the same page twice:** the weekly job keeps a pick log, the same idea as `pins.json`: date, sketch, story.
+  - It never reuses a sketch, and never repeats a story within 52 weeks. Seasonal stories come back each year with a new drawing.
+- **Never the same email twice:**
+  - **One Resend contact per address,** so each broadcast reaches a person once.
+  - **Each weekly send is keyed** (e.g. `sunday-prep-2026-11-12`), and the job checks the log first, so a re-run sends nothing.
+  - **Triggered emails carry a Resend idempotency key** (`w0_<uid>`, `c7_<uid>_<date>`). Resend drops a repeat within 24 hours.
+  - **The `fired.<event>` markers cover longer windows:** the welcome once, the outage email once ever, the 7-day offer at most every 90 days.
+  - **The one deliberate second send** is the re-send to non-clickers: once, as its own segment, with a new subject.
 - **Monitoring** (the lesson of the silent 3.5-month outage):
   - a health line in the monthly report;
   - an alert through the existing Cloudflare email channel when no email has gone out for 7 days, or when bounces

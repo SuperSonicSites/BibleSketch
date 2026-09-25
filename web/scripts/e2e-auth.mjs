@@ -98,7 +98,7 @@ try {
     assert.equal(user.displayName.stringValue, 'E2E Tester');
     const choice = await doc(`users/${uid}/private/profile`);
     assert.equal(choice.emailOptIn.booleanValue, true);
-    assert.match(choice.optInText.stringValue, /^Email me a Bible story page each week/);
+    assert.match(choice.optInText.stringValue, /^Send me a free Bible story page to print each week/);
     assert.equal(choice.optInSource.stringValue, 'signup');
     assert.equal(choice.persona.stringValue, 'teacher');
     assert.ok(choice.optInAt.timestampValue && choice.timezone.stringValue, 'server time and time zone');
