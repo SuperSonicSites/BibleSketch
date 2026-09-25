@@ -176,8 +176,8 @@ Built 2026-09-23 in `web/`: `src/data/pins.json` (the calendar), `src/lib/pins.t
 - **Billing (deployed 2026-09-24; the plan-code fix in revision 00137, then the Unlimited Prints plans in revision 00138 with Worker 637f9390):** `handleZohoWebhook` granted Premium to any subscription it received. Now only the `bible-sketch-premium` plan code grants or removes Premium. Other plans get a 400 and nothing changes. Security check 45/45.
 - **Phases:**
   0.5. **Live 2026-09-24:** the opt-in box and persona question at sign-up, the one-time banner, the private email record, +5 prints on the first opt-in, the first-visit record, and the privacy text.
-  1. **Built and deployed 2026-09-25, not sending** until the owner approves the 15 test emails and
-     `config/email.live` is set:
+  1. **Live since 2026-09-25 20:24 UTC** (owner approved phase 1; `config/email.live` is true; hello@ goes through the
+     Email Worker):
      - the welcome and sort, activation, the credit and print offers (with the 7-day $1.99 offer link and the +10
        first-pack bonus), and the outage follow-ups;
      - `emailTick` sends through Resend;

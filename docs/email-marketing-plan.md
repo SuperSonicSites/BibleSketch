@@ -8,8 +8,8 @@ writing or editing any email**, and check every draft against the checklist in �
 - **Live:**
   - phase 0.5 (the opt-in capture, +5 prints);
   - the outage win-back, queued for Sep 29.
-- **Phase 1 is built and deployed but not sending (§10).** The owner has 15 test emails to approve. Sending starts
-  when `config/email` gets `live: true`.
+- **Phase 1 is live since 2026-09-25 20:24 UTC (§10).** The owner approved it, and `config/email` has `live: true`.
+  hello@ goes through the Email Worker, which forwards to the owner first. Set `live: false` to stop all sending.
 - **The live words of every email are in `functions/email.js`.** §5 holds the drafts they came from.
 
 - Owner decisions so far: emails are for **sign-ups**, whose data lives in **Firebase**, sent through **Resend**.
@@ -844,7 +844,7 @@ The original list:
   outage grant script;
 - prepare the outage win-back (§12.1) to go out as soon as Resend is verified.
 
-**Phase 1: built and deployed 2026-09-25, not sending yet.**
+**Phase 1: built and deployed 2026-09-25, live (sending) since 2026-09-25 20:24 UTC, owner-approved.**
 - **Go live:**
   - the owner approves the 15 test emails (sent 2026-09-25);
   - then `config/email` gets `live: true` (a data write, owner-approved).
