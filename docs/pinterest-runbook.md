@@ -61,6 +61,10 @@ As of **2026-09-25** (second `pinterest-daily` run, stopped: browser signed out;
   **christmas.xml showed as broken on 2026-09-25**: the feed was empty between the Sept 23 and Sept 28 releases (2-day
   window). Fix in `dueEntries`: a board with nothing due repeats its last released Pin (Pinterest already has it and
   creates nothing), so a connected feed is never empty again.
+- **Check on 2026-09-26 (owner cares about this above all):** the repeated items must not be republished. Expect still one
+  Joshua 1:9 RSS Pin on Scripture (1078049229577782121), one Mark 4:39 on Sunday School (1078049229577814549) and no
+  Luke 2:15-16 on Christmas (that Pin was deleted; if Pinterest re-creates it from the repeated item, revert the
+  `dueEntries` fallback to an empty feed and tell the owner). Public check, no login: `/resource/PinResource/get/`.
 - **Next jobs:** connect `sunday-school.xml` (Sept 25 after 8 pm EDT); weekly alt text; generate Sunday School
   pages for Nov 6 onward and more Christmas scenes; read the paper/purple test mid-February; first day-30
   results read mid-November (strategy §4).
