@@ -8,7 +8,10 @@ const REPLY_TO = 'hello@biblesketch.app';
 const ADDRESS = 'Bible Sketch · Supersonic Sites Inc. · 109b - 1917 Peninsula Rd, Ucluelet, BC V0R 3A0, Canada · hello@biblesketch.app';
 const HOUR = 36e5;
 const DAY = 24 * HOUR;
-const PRINTS_PLAN_URL = 'https://billing.zohosecure.ca/subscribe/16bb18d1e24b94dc61c8488c1a133d491f563cd205dd5841ec6a82f3d2da95da/bible-sketch-prints-monthly';
+const PRINTS_PLANS = { // the Zoho hosted checkouts, off the pricing page (§12.20)
+  monthly: 'https://billing.zohosecure.ca/subscribe/16bb18d1e24b94dc61c8488c1a133d491f563cd205dd5841ec6a82f3d2da95da/bible-sketch-prints-monthly',
+  yearly: 'https://billing.zohosecure.ca/subscribe/16bb18d1e24b94dc61c8488c1a133d491f563cd205dd5841ec6a82f3d2da95da/bible-sketch-prints-yearly',
+};
 
 // The outage win-back (§12.1): emailed 2026-09-29 15:00 UTC, unlimited prints until Oct 29 15:00 UTC.
 const OUTAGE = {
@@ -19,6 +22,7 @@ const OUTAGE = {
 const IMPLIED_CONSENT_MS = 183 * DAY; // CASL: 6 months after the sign-up, for people who never opted in
 const OFFER_DAYS = 7;
 const FIRST_PACK_BONUS = 10;
+const STUCK_MS = 3 * 864e5; // an offer about a balance waits until the balance has stayed put this long
 
 // First word of the display name, only if it looks like a first name (same rules as scripts/outage-winback.mjs).
 const NOT_NAMES = new Set(['teacher', 'profe', 'nursery', 'city', 'church', 'real', 'admin', 'info', 'office', 'kids',
@@ -59,9 +63,15 @@ function season(now) {
   return { story: ['Jesus calms the storm', ['Mark', 4, 37, 39]], tag: 'miracles', line: 'Back to Sunday school: the miracle pages are ready to print.' };
 }
 
-// Zoho charges in CAD, plus sales tax (§12.20): the copy never says a bare "$1.99".
-const PREMIUM = 'about US$5 a month (CAD 7.00, plus tax)';
-const PRINTS = 'about US$2 a month (CAD 2.79, plus tax)';
+// Prices are in USD, as on the pricing page; no other currency is shown (owner, 2026-09-25: we're international).
+// The yearly Prints plan is 16% off 12 months and shown as a monthly figure (owner-approved, §12.20).
+const PREMIUM = '$4.99 a month';
+const PRINTS = '$1.99 a month';
+const PRINTS_YEAR = '$19.99 for a whole year (that’s $1.67 a month)';
+// The site's own words (pricing page, Account): a credit makes a new page of your own; a print prints or downloads any
+// page. "Pages" alone means finished coloring pages.
+const PREMIUM_LINE = 'Want to make pages of your own too? Premium is $4.99 a month and includes 10 credits.';
+const yearly = (url) => `${url}&p=yearly`;
 
 // Each email: subject, paragraphs ([label](url) marks a link), and optional super-signature lines.
 // `p` is the person (built by emailTick in index.js); every field used here has a fallback (§12.14).
@@ -69,23 +79,23 @@ const EMAILS = {
   w0: (p, now) => {
     const s = season(now);
     return {
-      subject: 'Your Bible Sketch account (5 free pages)',
+      subject: 'Your Bible Sketch account (10 free prints)',
       body: [
         'Welcome to Bible Sketch! This is the automatic welcome, so here’s everything in one place.',
-        `You have 5 free pages to make and 10 free prints, 5 of them for joining these emails. ${p.landingBook
+        `Your account comes with 10 free prints (5 of them for joining these emails) and 5 free credits: each credit makes a new coloring page of your own, from any Bible passage. ${p.landingBook
           ? `Here are more pages from ${p.landingBook}, like the one you found, ready to print: [${p.landingBook} coloring pages](${link('/gallery', 'w0', { book: p.landingBook })})`
           : `Here are the newest pages, ready to print: [the gallery](${link('/gallery', 'w0')})`}`,
         'I built Bible Sketch for my own Sunday school class and my four kids, and I read every reply.',
       ],
       sig: [
-        [`Make your own page from any Bible passage, for any age, in about 30 seconds.`, link('/', 'w0-sig')],
+        ['Make your own page from any Bible passage, for any age, in about 30 seconds.', link('/', 'w0-sig')],
         [s.line, link('/gallery', 'w0-sig', { tag: s.tag })],
-        ['Teaching a group? The Beacon is 200 pages at 15¢ each, and pages never expire.', link('/pricing', 'w0-sig')],
+        ['Teaching a group? The Beacon is 200 credits and 200 prints for $29.99, and credits never expire.', link('/pricing', 'w0-sig')],
       ],
     };
   },
   w1: () => ({
-    subject: 're: Your Bible Sketch account (5 free pages)',
+    subject: 're: Your Bible Sketch account (10 free prints)',
     body: ['Quick question: are these pages for a class, or for your kids at home?'],
   }),
   joined: (p, now) => ({
@@ -100,48 +110,49 @@ const EMAILS = {
   a1: (p, now) => ({
     subject: p.first ? `${p.first}, want a head start?` : 'want a head start?',
     body: [
-      'Want a head start on your first page? Pick a story and it’s ready in about 30 seconds:',
+      'Want a head start on your first page of your own? Pick a story and it’s ready in about 30 seconds:',
       [...STORIES, season(now).story].map(([name, ref]) => `[${name}](${maker(p, 'a1', ref)})`).join(' · '),
-      'It uses one of your free pages, and you can change the passage or the age before you start.',
+      'It uses one of your free credits, and you can change the passage or the age before you start.',
     ],
   }),
   a2: (p) => ({
     subject: 'how did it turn out?',
-    body: [`How did your ${p.firstPageRef || 'first'} page turn out? If anything looked off, hit reply and tell me. I read every reply, and it helps me make the pages better.`],
+    body: [`How did the ${p.firstPageRef ? `${p.firstPageRef} ` : ''}page you made turn out? If anything looked off, hit reply and tell me. I read every reply, and it helps me make the pages better.`],
   }),
   a3: (p) => ({
     subject: '3 pages ready to print',
     body: [
-      'If you haven’t had time to make your own page yet, here are 3 finished ones, ready to print:',
+      'If you haven’t had time to make a page of your own yet, here are 3 finished ones, ready to print:',
       (p.picks || []).map((x) => `[${x.label}](${link(x.path, 'a3')})`).join(' · '),
     ],
   }),
   c1: () => ({
-    subject: 'one page left',
-    body: [`You have one free page left. If you’d like to keep going, the Torch pack is 80 pages for $14.99, and pages never expire. [See the packs](${link('/pricing', 'c1')})`],
+    subject: 'one credit left',
+    body: [`You have one free credit left, so one more page of your own. If you’d like to keep going, the Torch pack is 80 credits and 80 prints for $14.99, and credits never expire. [See the packs](${link('/pricing', 'c1')})`],
   }),
   c2: (p) => ({
-    subject: 'out of pages?',
-    body: [`You’ve used your free pages. If you’d like to keep going, get any pack by ${longDate(p.offerEnds, p.timezone)} and I’ll add ${FIRST_PACK_BONUS} extra pages to it. [See the packs](${link('/pricing', 'c2')})`],
+    subject: 'out of credits?',
+    body: [`You’ve used your free credits. If you’d like to make more pages of your own, get any pack by ${longDate(p.offerEnds, p.timezone)} and I’ll add ${FIRST_PACK_BONUS} extra credits to it. [See the packs](${link('/pricing', 'c2')})`],
   }),
   c6: () => ({
     subject: 'one print left',
-    body: [`You have one free print left. Premium is unlimited prints plus 10 new pages a month, for ${PREMIUM}. Cancel anytime. [Get Premium](${link('/pricing', 'c6')})`],
+    body: [`You have one free print left. Premium is ${PREMIUM} for unlimited prints plus 10 credits. Cancel anytime. [Get Premium](${link('/pricing', 'c6')})`],
   }),
   c7: (p) => ({
     subject: 'out of prints?',
     body: [
       `You’ve used all your free prints. Just for you, until ${longDate(p.offerEnds, p.timezone)}: unlimited prints for ${PRINTS}. Cancel anytime. [Keep printing](${p.offerUrl})`,
-      `Want to make new pages too? Premium is ${PREMIUM}.`,
+      `Printing every week? It’s ${PRINTS_YEAR}: [the yearly plan](${yearly(p.offerUrl)})`,
+      PREMIUM_LINE,
     ],
   }),
   c7b: (p) => ({
     subject: 're: out of prints?',
-    body: [`A quick reminder: unlimited prints for ${PRINTS} are yours until ${longDate(p.offerEnds, p.timezone)}. [Keep printing](${p.offerUrl})`],
+    body: [`A quick reminder: unlimited prints for ${PRINTS}, or ${PRINTS_YEAR}, are yours until ${longDate(p.offerEnds, p.timezone)}. [Monthly](${p.offerUrl}) · [Yearly](${yearly(p.offerUrl)})`],
   }),
   c7c: (p) => ({
     subject: 'last day',
-    body: [`Today is the last day of your offer: unlimited prints for ${PRINTS}. After tonight the link stops working. [Keep printing](${p.offerUrl})`],
+    body: [`Today is the last day of your offer: unlimited prints for ${PRINTS}, or ${PRINTS_YEAR}. After tonight the links stop working. [Monthly](${p.offerUrl}) · [Yearly](${yearly(p.offerUrl)})`],
   }),
   o23: (p) => ({
     subject: `re: ${p.outageSubject || 'quick question'}`,
@@ -152,13 +163,14 @@ const EMAILS = {
     subject: `unlimited ends ${dateIn(OUTAGE.until, null, { month: 'short', day: 'numeric' })}`,
     body: [
       `A heads-up: your unlimited printing ends on ${longDate(OUTAGE.until)}. If you’d like to keep it, unlimited prints are ${PRINTS}, and you can cancel anytime. [Keep printing](${p.offerUrl})`,
-      `Want to make new pages too? Premium is ${PREMIUM}.`,
+      `Printing every week? It’s ${PRINTS_YEAR}: [the yearly plan](${yearly(p.offerUrl)})`,
+      PREMIUM_LINE,
     ],
     outage: true,
   }),
   o30: (p) => ({
     subject: 'ends tomorrow',
-    body: [`Your unlimited printing ends tomorrow, ${shortDate(OUTAGE.until)}. If you’d like to keep printing without limits, it’s ${PRINTS}. [Keep printing](${p.offerUrl}) The link works until ${shortDate(OUTAGE.offerUntil)}.`],
+    body: [`Your unlimited printing ends tomorrow, ${shortDate(OUTAGE.until)}. To keep printing without limits, it’s ${PRINTS}, or ${PRINTS_YEAR}. [Monthly](${p.offerUrl}) · [Yearly](${yearly(p.offerUrl)}) The links work until ${shortDate(OUTAGE.offerUntil)}.`],
     outage: true,
   }),
 };
@@ -241,11 +253,12 @@ function due(s, now = Date.now()) {
     return null;
   }
   if (CONVERSION.some((k) => ago(f[k]) < 7 * DAY)) return null; // one offer a week
-  if (!f.c1 && s.credits === 1 && s.pagesMade) return pick('c1');
-  if (!f.c2 && s.credits === 0) return pick('c2');
-  if (!unlimited && !f.c6 && s.printsLeft === 1) return pick('c6');
+  const stuck = (since) => ago(since || now) >= STUCK_MS; // since = when emailTick first saw today's balance
+  if (!f.c1 && s.credits === 1 && s.pagesMade && stuck(s.creditsSince)) return pick('c1');
+  if (!f.c2 && s.credits === 0 && stuck(s.creditsSince)) return pick('c2');
+  if (!unlimited && !f.c6 && s.printsLeft === 1 && stuck(s.printsSince)) return pick('c6');
   const afterOutage = [f.o27, f.o30].some((t) => ago(t) < 14 * DAY);
-  if (!unlimited && s.printsLeft === 0 && ago(f.c7) >= 90 * DAY && !afterOutage) return pick('c7');
+  if (!unlimited && s.printsLeft === 0 && stuck(s.printsSince) && ago(f.c7) >= 90 * DAY && !afterOutage) return pick('c7');
   return null;
 }
 
@@ -257,7 +270,14 @@ function quietHoursOver(now, tz) {
   return h >= 8 && h < 20;
 }
 
-// An offer made now runs to the end of the day, Eastern, OFFER_DAYS days later ("until Friday, October 9").
-const offerEnd = (now) => Date.parse(`${new Date(now + OFFER_DAYS * DAY).toLocaleDateString('en-CA', { timeZone: 'America/New_York' })}T23:59:00-05:00`);
+// An offer made now runs to 11:59 p.m. in the reader's time zone (Eastern when unknown), OFFER_DAYS days later,
+// so "until Friday, October 9" is true where they are.
+function offerEnd(now, tz) {
+  const zone = (() => { try { new Intl.DateTimeFormat('en-US', { timeZone: tz }); return tz || 'America/New_York'; } catch { return 'America/New_York'; } })();
+  const day = new Date(now + OFFER_DAYS * DAY);
+  const ymd = day.toLocaleDateString('en-CA', { timeZone: zone });
+  const [, sign = '+', h = '0', m = '0'] = /GMT([+-])?(\d+)?(?::(\d+))?/.exec(day.toLocaleString('en-US', { timeZone: zone, timeZoneName: 'shortOffset' })) || [];
+  return Date.parse(`${ymd}T23:59:00${sign}${h.padStart(2, '0')}:${m.padStart(2, '0')}`);
+}
 
-module.exports = { EMAILS, REPLIES, render, due, firstName, offerEnd, OUTAGE, OFFER_DAYS, FIRST_PACK_BONUS, PRINTS_PLAN_URL, SITE, DAY, HOUR };
+module.exports = { EMAILS, REPLIES, render, due, firstName, offerEnd, OUTAGE, OFFER_DAYS, FIRST_PACK_BONUS, PRINTS_PLANS, STUCK_MS, SITE, DAY, HOUR };

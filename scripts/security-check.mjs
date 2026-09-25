@@ -244,6 +244,8 @@ await step('offer link: redirects to the Prints checkout with the uid until the 
   const r = await fetch(url('offer-tok'), { redirect: 'manual' });
   assert.equal(r.status, 302);
   assert.ok(r.headers.get('location').endsWith(`/bible-sketch-prints-monthly?cf_cf_firebase_uid=${dora.uid}`), r.headers.get('location'));
+  const y = await fetch(`${url('offer-tok')}&p=yearly`, { redirect: 'manual' });
+  assert.ok(y.headers.get('location').endsWith(`/bible-sketch-prints-yearly?cf_cf_firebase_uid=${dora.uid}`), y.headers.get('location'));
   assert.equal((await fetch(url('nope'), { redirect: 'manual' })).status, 410);
   await adminPatch(`emailProfiles/${dora.uid}`, offers('c7', { token: { stringValue: 'offer-tok' }, expiresAt: { timestampValue: new Date(Date.now() - 1000).toISOString() } }));
   assert.equal((await fetch(url('offer-tok'), { redirect: 'manual' })).status, 410);

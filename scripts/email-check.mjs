@@ -38,7 +38,7 @@ assert.equal(at({ createdAt: d7, pagesMade: 2, firstPageAt: d7 + 3 * DAY, fired:
 // Three emails a week at most.
 assert.equal(at({ createdAt: d7 + 2 * HOUR, credits: 0, fired: { w0: NOW - 6 * DAY, w1: NOW - 5 * DAY, a1: NOW - 4 * DAY } }), null);
 // Offers: never to buyers or Premium; one a week; the print offers never while printing is unlimited.
-const old = { createdAt: NOW - 60 * DAY, fired: { w0: NOW - 60 * DAY } };
+const old = { createdAt: NOW - 60 * DAY, fired: { w0: NOW - 60 * DAY }, creditsSince: NOW - 4 * DAY, printsSince: NOW - 4 * DAY };
 assert.equal(at({ ...old, credits: 1, pagesMade: 4 }), 'c1');
 assert.equal(at({ ...old, credits: 1 }), null, 'C1 needs a page made');
 assert.equal(at({ ...old, credits: 0, pagesMade: 5 }), 'c2');
@@ -46,6 +46,10 @@ assert.equal(at({ ...old, credits: 0, pagesMade: 5, bought: true }), null);
 assert.equal(at({ ...old, credits: 0, pagesMade: 5, isPremium: true }), null);
 assert.equal(at({ ...old, printsLeft: 1 }), 'c6');
 assert.equal(at({ ...old, printsLeft: 1, unlimitedUntil: NOW + DAY }), null);
+// An offer about a balance waits until the balance has stayed put for 3 days.
+assert.equal(at({ ...old, printsLeft: 1, printsSince: NOW - 2 * DAY }), null);
+assert.equal(at({ ...old, credits: 0, pagesMade: 5, creditsSince: NOW - DAY }), null);
+assert.equal(at({ ...old, printsLeft: 0, printsSince: undefined }), null);
 assert.equal(at({ ...old, printsLeft: 0, fired: { ...old.fired, c6: NOW - 3 * DAY } }), null, 'one offer a week');
 assert.equal(at({ ...old, printsLeft: 0, fired: { ...old.fired, c6: NOW - 8 * DAY } }), 'c7');
 // The 7-day offer: a reminder on day 5, the last-day note on day 7, then nothing for 90 days.

@@ -881,6 +881,23 @@ The original list:
   - A2 asks "how did it turn out?" a day after the first page, because we don't record prints yet;
   - A3's subject is `3 pages ready to print`, with the 3 newest pages from the master account;
   - the super-signature appears only in W0 (§9 item 7), with offers that are true today.
+- **Owner review of the first tests (2026-09-25):**
+  - **Words:** the emails use the site's own terms.
+    - **Credits** make a page of your own ("Image Credits" in Account, "20 Credits" on the pricing page).
+    - **Prints** print or download any page.
+    - **Pages** means only finished coloring pages.
+    - So W0 is now `Your Bible Sketch account (10 free prints)`, and C1/C2 are `one credit left` / `out of credits?`.
+  - **An offer about a balance waits until the balance has stayed put for 3 days** (`STUCK_MS`).
+    - This covers C1, C2, C6 and C7. `emailTick` records when it first saw each balance (`emailProfiles.balance`).
+    - The owner suggested about 7 days. I recommended 3, so the offer lands before the next Sunday, and the owner
+      can change it.
+    - Together with the one-offer-a-week rule, "one print left" and "out of prints" can never arrive close
+      together.
+  - **The prints offer shows both plans:** monthly is the main link, and yearly is a second link
+    (`/api/email/offer?...&p=yearly`).
+  - **Prices are USD only** (§12.20).
+  - **Offer deadlines end at 11:59 p.m. in the reader's time zone** (Eastern when unknown), so "until Friday" is
+    true where they are.
 - **Left for later:**
   - the `events` collection (prints, checkout clicks), which would feed A2's print check and C3;
   - `resendWebhook` (Resend already suppresses bounces and complaints, and shows opens and clicks);
@@ -1225,10 +1242,15 @@ less churn.
    - **The app** reads the pass through `unlimitedPrints()` in `web/src/lib/store.ts`: `grantDownload`,
      `SketchActions` and `AccountModal` ("Unlimited until Oct 31").
    - **Tests:** security-check 46/46; `e2e-downloads` 11/11.
-   - **The price in emails must be the real one:**
-     - Zoho charges in CAD, and at checkout it showed GST 5% + BC PST 7% on top (CAD 3.13 a month, CAD 23.51 a year).
-     - The copy says "about US$2 a month (CAD 2.79) plus tax", never a bare "$1.99".
-     - The same applies to Premium's CAD 7.00.
+   - **Prices in emails are USD only** (owner decision 2026-09-25: "we are international"; this replaces "about US$2
+     (CAD 2.79) plus tax"):
+     - Premium is $4.99 a month;
+     - Prints is $1.99 a month;
+     - Prints yearly is **$19.99 a year, shown as "that's $1.67 a month"**. That's 16% off 12 × $1.99, close to "2
+       months free" and just under $20. The owner asked for a round, converting number, and this was my
+       recommendation.
+     - **Zoho has to match:** the two Prints plans were created in CAD (2.79 and 20.99). They must charge US$1.99 and
+       US$19.99 before any email with the offer goes live (CHECKLIST).
 3. **The 7-day link:**
    - Emails link to `/offer/<token>` on the Worker. The token is an HMAC (a new Worker secret) over the uid, the
      offer id and the expiry.

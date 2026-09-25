@@ -5,9 +5,10 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
 ## Open
 
 ### Start here (priority order, updated 2026-09-25)
-0. **Approve the 15 phase 1 emails** (test sends of Sep 25 to renaud@supersonicsites.com; plan §10). Reply "approved", or say what to change. Once they're approved, Claude sets `config/email` `live: true` and the sequences start (W0 for new sign-ups, the outage follow-ups from Oct 22, and so on).
-   - The links in the tests are placeholders (`u=test`): "Unsubscribe" says "Link not recognised" and "Keep printing" says "This offer has ended". In the real emails they're personal and work.
+0. **Approve the 15 phase 1 emails** (test sends of Sep 25 to renaud@supersonicsites.com; plan §10). Read the latest version of each: the second round (13 emails, "10 free prints") and the third round (the 6 with prices, in USD). The joined note and O23 are from the first round. Reply "approved", or say what to change. Once they're approved, Claude sets `config/email` `live: true` and the sequences start (W0 for new sign-ups, the outage follow-ups from Oct 22, and so on).
+   - In the second and third rounds, "Keep printing" / "Monthly" / "Yearly" open the real Zoho checkout, through a test offer on the master account that expires Sep 28. The first round's links were placeholders.
    - The +10 first-pack bonus in C2 ("get any pack by <date> and I'll add 10 extra pages") is live code. Approving C2 approves the bonus.
+0a. **Change the two Prints plans in Zoho to USD** before the offer emails go live: `bible-sketch-prints-monthly` → **US$1.99** a month, `bible-sketch-prints-yearly` → **US$19.99** a year (decided 2026-09-25; they were created as CAD 2.79 and CAD 20.99). Keep the plan codes; the webhook routes on them. Then tell Claude what the Prints checkout shows, and Claude checks it too.
 0b. **Point hello@ at the Worker** so replies are read automatically, after you've approved the emails: Cloudflare > biblesketch.app > Email > Email Routing > Routing rules > `hello@biblesketch.app` > Edit > Action: **Send to a Worker** > `biblesketch-web` > Save.
    - The Worker forwards every message to renaud@supersonicsites.com first, exactly as today.
    - Then it acts on "unsubscribe" replies and answers to "a class, or your kids at home?".

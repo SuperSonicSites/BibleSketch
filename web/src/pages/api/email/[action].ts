@@ -13,6 +13,7 @@ export const ALL: APIRoute = async ({ params, request, url, cache }) => {
   const target = new URL(FN);
   target.searchParams.set('a', action);
   for (const k of ['u', 't']) target.searchParams.set(k, url.searchParams.get(k) ?? '');
+  if (url.searchParams.get('p') === 'yearly') target.searchParams.set('p', 'yearly');
   // A mail app's one-click unsubscribe is a POST (RFC 8058); the body doesn't matter, the method does.
   const res = await fetch(target, { method: request.method, redirect: 'manual', ...(request.method === 'POST' && { body: '' }) });
   const headers = new Headers({ 'Cache-Control': 'no-store', 'Content-Type': res.headers.get('content-type') ?? 'text/html; charset=utf-8' });

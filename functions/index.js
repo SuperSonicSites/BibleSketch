@@ -4022,11 +4022,19 @@ async function runEmailTick(now = Date.now(), { dryRun = false } = {}) {
     if (!a || !u) continue;
     const e = docs.get(uid).data() || {};
     const c7 = e.offers?.c7;
+    // When this balance was first seen: offers about it wait until it has stayed put (EM.STUCK_MS).
+    const credits = typeof u.credits === 'number' ? u.credits : null;
+    const printsLeft = typeof u.downloadsRemaining === 'number' ? u.downloadsRemaining : null;
+    const seen = e.balance || {};
+    const balance = {
+      credits, creditsSince: seen.credits === credits ? seen.creditsSince : Timestamp.fromMillis(now),
+      prints: printsLeft, printsSince: seen.prints === printsLeft ? seen.printsSince : Timestamp.fromMillis(now),
+    };
+    if (seen.credits !== credits || seen.prints !== printsLeft) await docs.get(uid).ref.set({ balance }, { merge: true });
     const s = {
       verified: a.emailVerified, email: a.email, createdAt: ms(u.createdAt) || Date.parse(a.metadata.creationTime),
       optIn: e.optIn === true, optInSource: e.optInSource, persona: e.persona, timezone: e.timezone,
-      credits: typeof u.credits === 'number' ? u.credits : null,
-      printsLeft: typeof u.downloadsRemaining === 'number' ? u.downloadsRemaining : null,
+      credits, printsLeft, creditsSince: ms(balance.creditsSince), printsSince: ms(balance.printsSince),
       unlimitedUntil: ms(u.printsUnlimitedUntil), isPremium: u.isPremium === true, bought: e.bought === true,
       pagesMade: e.pagesMade || 0, firstPageAt: ms(e.firstPageAt), unsubscribedAt: ms(e.unsubscribedAt),
       fired: Object.fromEntries(Object.entries(e.fired || {}).map(([k, v]) => [k, ms(v)])),
@@ -4051,12 +4059,12 @@ async function runEmailTick(now = Date.now(), { dryRun = false } = {}) {
     if (parent) p.inReplyTo = await sentMessageId(parent).catch(() => null);
     if (id === 'a3') p.picks = picks ??= await masterPicks(db);
     if (id === 'c2') {
-      p.offerEnds = EM.offerEnd(now);
+      p.offerEnds = EM.offerEnd(now, e.timezone);
       update.offers = { c2: { sentAt: at, expiresAt: Timestamp.fromMillis(p.offerEnds) } };
     }
     if (id === 'c7') {
       const token = newToken();
-      Object.assign(p, { offerStart: now, offerEnds: EM.offerEnd(now), offerUrl: offerUrl(uid, token) });
+      Object.assign(p, { offerStart: now, offerEnds: EM.offerEnd(now, e.timezone), offerUrl: offerUrl(uid, token) });
       update.offers = { c7: { token, sentAt: at, expiresAt: Timestamp.fromMillis(p.offerEnds) } };
     }
     if (id === 'c7b' || id === 'c7c') Object.assign(p, { offerStart: ms(c7.sentAt), offerEnds: ms(c7.expiresAt), offerUrl: offerUrl(uid, c7.token) });
@@ -4080,13 +4088,11 @@ async function runEmailTick(now = Date.now(), { dryRun = false } = {}) {
     if (decisions.length >= MAX_SENDS_PER_TICK) break;
     await pause(600); // Resend allows a few requests a second
   }
+  console.log(`[emailTick] ${uids.length} checked, ${decisions.length} due (${live ? 'live' : 'not live'}): ${decisions.map((d) => d.id).join(' ')}`);
   return decisions;
 }
 
-exports.emailTick = onSchedule({ schedule: "every 30 minutes", timeoutSeconds: 300, secrets: [resendApiKey, resendAdminKey] }, async () => {
-  const d = await runEmailTick();
-  if (d.length) console.log(`[emailTick] ${d.length} due: ${d.map((x) => x.id).join(' ')}`);
-});
+exports.emailTick = onSchedule({ schedule: "every 30 minutes", timeoutSeconds: 300, secrets: [resendApiKey, resendAdminKey] }, () => runEmailTick());
 
 // Emulator only: one tick now (or at ?now=<ms>) that returns its decisions and sends nothing (security-check).
 if (process.env.FUNCTIONS_EMULATOR === 'true') {
@@ -4095,7 +4101,7 @@ if (process.env.FUNCTIONS_EMULATOR === 'true') {
 
 // Links in the emails, through the Worker's /api/email/<action>. Unsubscribe is one click from the mail app
 // (RFC 8058: a POST unsubscribes); a GET shows a button instead, so link scanners can't unsubscribe anyone. The
-// offer link redirects to the Prints plan's checkout until the offer ends.
+// offer link redirects to the Prints plan's checkout (monthly, or yearly with &p=yearly) until the offer ends.
 const emailPage = (res, status, title, body) => res.status(status).set('Cache-Control', 'no-store').type('html').send(
   `<!doctype html><meta charset="utf-8"><meta name="robots" content="noindex"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title>`
   + `<body style="font-family:system-ui,sans-serif;max-width:32rem;margin:4rem auto;padding:0 1rem;color:#1f2937"><h1 style="font-size:1.5rem">${title}</h1>${body}`
@@ -4121,7 +4127,8 @@ exports.emailAction = onRequest({ timeoutSeconds: 30 }, async (req, res) => {
     if (!offer || Date.now() > ms(offer.expiresAt)) {
       return emailPage(res, 410, 'This offer has ended', '<p>See what’s available now on the <a href="https://biblesketch.app/pricing" style="color:#7c3aed">pricing page</a>.</p>');
     }
-    return res.redirect(302, `${EM.PRINTS_PLAN_URL}?cf_cf_firebase_uid=${encodeURIComponent(u)}`);
+    const plan = req.query.p === 'yearly' ? 'yearly' : 'monthly';
+    return res.redirect(302, `${EM.PRINTS_PLANS[plan]}?cf_cf_firebase_uid=${encodeURIComponent(u)}`);
   }
   return emailPage(res, 404, 'Link not recognised', '<p>This link is incomplete.</p>');
 });

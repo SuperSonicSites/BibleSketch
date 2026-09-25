@@ -165,6 +165,10 @@ Built 2026-09-23 in `web/`: `src/data/pins.json` (the calendar), `src/lib/pins.t
   - (2026-09-24) opting in to the emails earns extra free prints (+5 proposed; plan §12.2);
   - (2026-09-24) the 85 sign-ups who couldn't make a page during the Jun-Sep outage get a month of unlimited prints with the apology email (`printsUnlimitedUntil`; plan §12.1).
   - (2026-09-24, proposed) a $1.99/month unlimited-prints plan, offered only by email for 7 days to people who run out of prints (plan §12.20, C7).
+  - (2026-09-25) email prices are in USD only (we are international): Premium $4.99 a month, Prints $1.99 a month or
+    $19.99 a year ("that's $1.67 a month"). The Zoho Prints plans must be switched from CAD. The emails say
+    "credits" (to make a page of your own) and "prints" (to print any page), as the site does. Offers about a
+    balance wait until it has stayed put for 3 days (owner suggested about 7; plan §10).
   - (2026-09-24) the weekly Thursday page is free to print from the email only (a signed PDF link, plan §6.6), and the consent box says so. Replies go to hello@biblesketch.app; the sender is "Renaud from Bible Sketch"; the mailing address is Supersonic Sites Inc., Ucluelet, BC.
 - **Billing (deployed 2026-09-24; the plan-code fix in revision 00137, then the Unlimited Prints plans in revision 00138 with Worker 637f9390):** `handleZohoWebhook` granted Premium to any subscription it received. Now only the `bible-sketch-premium` plan code grants or removes Premium. Other plans get a 400 and nothing changes. Security check 45/45.
 - **Phases:**
