@@ -3,6 +3,9 @@
 //   node scripts/outage-winback.mjs                                   dry run: counts only
 //   node scripts/outage-winback.mjs --test=<email> --name=<Name> --at=<ISO>   one test email now (no gift, no marker)
 //   node scripts/outage-winback.mjs --send --at=<ISO>                 gift + schedule the email for <ISO>, once per account
+//   node scripts/outage-winback.mjs --at=<ISO> --reschedule=<id,...> --drop=<id,...>
+//       after cancelling those scheduled emails in Resend: send the --reschedule ones again (names re-checked), and mark
+//       the --drop ones dropped so --send never picks them up again
 // --send writes production data and sends real email. Not a list: recipients aren't added to Resend contacts.
 import { DOCS, PROJECT, firestore, getToken, listDocs, plain } from './firestore-rest.mjs';
 
@@ -21,10 +24,16 @@ if (at && isNaN(at)) throw new Error('--at must be an ISO date');
 const until = at && new Date(at.getTime() + 30 * 24 * 60 * 60 * 1000);
 const dateLabel = until?.toLocaleDateString('en-US', { month: 'long', day: 'numeric', timeZone: 'America/New_York' });
 
-// First word of the display name, only if it looks like a first name; otherwise no name.
+// First word of the display name, only if it looks like a first name; otherwise no name ("Hi," and a plain
+// subject). The 2026-09-25 review of the first batch found role and org words, all-caps handles and merged names.
+const NOT_NAMES = new Set(['teacher', 'profe', 'nursery', 'city', 'church', 'real', 'admin', 'info', 'office', 'kids',
+  'children', 'ministry', 'school', 'sunday', 'pastor', 'youth', 'team', 'the', 'mom', 'mama', 'test']);
 const firstName = (display) => {
-  const w = String(display || '').trim().split(/\s+/)[0] || '';
-  return /^\p{L}[\p{L}'’-]{1,19}$/u.test(w) ? w[0].toUpperCase() + w.slice(1) : null;
+  let w = String(display || '').trim().split(/\s+/)[0] || '';
+  const merged = w.match(/^(\p{Lu}\p{Ll}{2,})(\p{Lu}\p{Ll}{4,})$/u); // "LyndaSpector" -> "Lynda" (not "LaToya", "HyeJung")
+  if (merged) w = merged[1];
+  if (!/^\p{L}[\p{L}'’-]{1,19}$/u.test(w) || (w.length > 2 && w === w.toUpperCase()) || NOT_NAMES.has(w.toLowerCase())) return null;
+  return w[0].toUpperCase() + w.slice(1);
 };
 const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
@@ -91,6 +100,33 @@ const byUid = new Map((auth.users || []).map((a) => [a.localId, a]));
 const recipients = cohort.map((c) => ({ ...c, a: byUid.get(c.uid) })).filter((c) => c.a?.emailVerified && c.a.email);
 const unnamed = recipients.filter((c) => !firstName(c.a.displayName)).length;
 console.log(`${cohort.length} in the cohort; ${recipients.length} with a verified email (${unnamed} without a usable first name)`);
+const ids = (k) => (arg(k) || '').split(',').filter(Boolean);
+if (arg('reschedule') || arg('drop')) {
+  if (!at || at.getTime() < Date.now() + 5 * 60 * 1000) throw new Error('--at must be at least 5 minutes ahead');
+  const markers = new Map();
+  for await (const m of listDocs('processedWebhooks', ['emailId'])) {
+    if (m.name.includes('/outage2026_')) markers.set(plain(m.fields?.emailId), m.name.split('/outage2026_').pop());
+  }
+  const uidOf = (id) => {
+    if (!markers.has(id)) throw new Error(`no marker for ${id}`);
+    return markers.get(id);
+  };
+  const again = ids('reschedule').map((id) => recipients.find((c) => c.uid === uidOf(id)));
+  if (again.some((c) => !c)) throw new Error('a rescheduled account is not a verified recipient');
+  const batch = again.map((c) => ({ ...message(c.a.email, firstName(c.a.displayName)), scheduled_at: at.toISOString() }));
+  const sent = batch.length
+    ? (await resend('/emails/batch', batch, `outage-2026-fix-${at.toISOString()}-${ids('reschedule').join('.')}`.slice(0, 256))).data : [];
+  const mark = (uid, fields) => firestore('PATCH', `${DOCS}/processedWebhooks/outage2026_${uid}`,
+    { query: { 'updateMask.fieldPaths': Object.keys(fields) }, body: { fields } });
+  for (const [i, c] of again.entries()) {
+    await mark(c.uid, { status: { stringValue: 'outage_email_rescheduled' }, emailId: { stringValue: sent[i]?.id ?? '' } });
+  }
+  const drops = ids('drop').map(uidOf);
+  for (const uid of drops) await mark(uid, { status: { stringValue: 'outage_email_dropped' } });
+  console.log(`rescheduled ${sent.length} for ${at.toISOString()} `
+    + `(subjects: ${again.map((c) => firstName(c.a.displayName) ?? 'quick question').join(', ')}); dropped ${drops.length}`);
+  process.exit(0);
+}
 if (!process.argv.includes('--send')) process.exit(0);
 if (!at || at.getTime() < Date.now() + 5 * 60 * 1000) throw new Error('--send needs --at at least 5 minutes ahead');
 

@@ -609,7 +609,7 @@ send next, and never ask what their behaviour already tells us.
 - **Personal mail on the root domain is separate** (2026-09-24):
   - Cloudflare Email Routing receives it and forwards it to the owner's Zoho Mail (`supersonicsites.com`), where
     Zoho sends as `hello@biblesketch.app` (CHECKLIST).
-  - Resend's free plan allows one domain, and that's `e.biblesketch.app`, so marketing and personal mail keep
+  - Resend's free plan allows 3 domains (pricing checked 2026-09-25; an earlier note here said 1). Personal mail stays on Zoho anyway, so marketing and personal mail keep
     separate reputations.
   - Don't move the root MX: the Worker's `send_email` report binding and the forwarding depend on Email Routing.
 - **Topics** (so people can leave one without leaving everything):
@@ -897,7 +897,12 @@ Sorted by value. Each item says where it changes the plan.
 
 ### 12.1 The outage cohort: the biggest single email we can send
 **Status (2026-09-25): scheduled.** The owner approved the send (CASL implied consent, lawyer-checked).
-- **The email:** 83 emails for **Tue Sep 29, 11:00 AM ET**. That's 15:00 UTC, 8-11 AM across US time zones: the peak open window, since we don't know these people's time zones.
+- **The email: 80 emails for Tue Sep 29, 11:00 AM ET,** after a review of the queue through the Resend MCP on Sep 25.
+  - The review found 6 subjects that weren't first names (Nursery, City, Teacher, Profe, REAL, MIBI). They were cancelled and rescheduled with "quick question" and "Hi,".
+  - LyndaSpector was rescheduled as "Lynda".
+  - Dropped: 1 throwaway-mailbox bot sign-up and the owner's 2 test accounts (markers say `outage_email_dropped`).
+  - The name check now rejects role and org words, all-caps handles and merged names (`firstName` in the script). The script gained `--reschedule` and `--drop`.
+  - Timing: 15:00 UTC is 8-11 AM across US time zones, the peak open window.
 - **The gift:** all 85 accounts got unlimited prints until **Oct 29**.
 - **Skipped:** the 2 accounts with unverified emails.
 - **The test:** sent to the owner on Sep 25.
