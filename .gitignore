@@ -32,3 +32,9 @@ firebase-debug.log
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+
+# Local secrets: never commit. (functions/.env is tracked on purpose: non-secret config only.)
+/.env
+/.env.*
+web/.env
+web/.env.*

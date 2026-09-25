@@ -216,6 +216,7 @@ await step('email: the choice is mirrored server-side with an unsubscribe token,
   await denied(getDoc(doc(dora.db, 'emailProfiles', dora.uid)), 'own emailProfile');
   await denied(getDoc(doc(bob.db, 'emailReplies', 'x')), 'emailReplies');
   await denied(getDoc(doc(bob.db, 'config', 'email')), 'config');
+  await denied(getDoc(doc(bob.db, 'config', 'zohoAccess')), 'the cached Zoho access token');
   const due = await tick();
   assert.ok(due.some((d) => d.uid === dora.uid && d.id === 'w0'), 'w0 due');
   assert.ok(!due.some((d) => d.uid === alice.uid || d.uid === bob.uid), 'nobody who never opted in');

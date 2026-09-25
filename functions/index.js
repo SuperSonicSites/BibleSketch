@@ -4229,11 +4229,20 @@ const zohoPost = async (path, body, retry = true) => {
   return out;
 };
 
+// "US" -> "U.S.A." (Zoho's own spelling), other ISO codes -> English names; nothing for Canada or anything odd.
+const zohoCountry = (code) => {
+  if (typeof code !== 'string' || !/^[A-Z]{2}$/.test(code) || code === 'CA' || code === 'XX' || code === 'T1') return null;
+  if (code === 'US') return 'U.S.A.';
+  let name = null;
+  try { name = new Intl.DisplayNames(['en'], { type: 'region' }).of(code); } catch { /* not a region */ }
+  return name && name !== code && !/unknown/i.test(name) ? name : null;
+};
+
 exports.createCheckout = onCall({ secrets: [zohoClientId, zohoClientSecret, zohoRefreshToken], timeoutSeconds: 30 }, async (request) => {
   const uid = request.auth?.uid;
   if (!uid || request.auth.token.firebase?.sign_in_provider === 'anonymous') throw new HttpsError('unauthenticated', 'Please sign in.');
   if (request.auth.token.email_verified !== true) throw new HttpsError('failed-precondition', 'EMAIL_NOT_VERIFIED');
-  const { plan, offer } = request.data || {};
+  const { plan, offer, country } = request.data || {};
   const p = Object.hasOwn(CHECKOUT_PLANS, plan) ? CHECKOUT_PLANS[plan] : null;
   if (!p) throw new HttpsError('invalid-argument', 'Unknown plan.');
   const db = admin.firestore();
@@ -4261,10 +4270,21 @@ exports.createCheckout = onCall({ secrets: [zohoClientId, zohoClientSecret, zoho
     let customerId = user.zohoCustomerUsdId;
     if (!customerId) {
       const a = await admin.auth().getUser(uid);
-      const created = await zohoPost('/customers', {
+      const newCustomer = (extra) => zohoPost('/customers', {
         display_name: a.displayName || a.email, email: a.email, currency_code: 'USD',
-        custom_fields: [{ label: ZOHO_UID_FIELD, value: uid }],
+        custom_fields: [{ label: ZOHO_UID_FIELD, value: uid }], ...extra,
       });
+      // The buyer's country (Cloudflare's, from the page), so Zoho doesn't apply the org's BC taxes to someone abroad
+      // before they type an address. Canada stays unset: BC is the right default there. Never blocks a checkout.
+      const where = zohoCountry(country);
+      let created;
+      try {
+        created = await newCustomer(where ? { billing_address: { country: where } } : {});
+      } catch (e) {
+        if (!where) throw e;
+        console.warn('[checkout] country not accepted, retrying without it', where, e.message);
+        created = await newCustomer({});
+      }
       customerId = created.customer.customer_id;
       await userRef.set({ zohoCustomerUsdId: customerId }, { merge: true });
     }

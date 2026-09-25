@@ -16,7 +16,8 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
      - the Zoho customer is created in USD and carries the uid field.
    - [ ] **One real purchase** to prove payment → webhook → credits: buy Spark at https://biblesketch.app/checkout/spark (about $5.59 with tax) and check the 20 credits arrive. Refund it in Zoho afterwards if you like.
    - [ ] Then Claude switches the pricing buttons to `/checkout/<plan>` and hides the uid field on Zoho's hosted pages and portal.
-   - Note: until a buyer enters their address, Zoho charges 12% tax (GST + BC PST) from your own BC address. The old checkout did the same. Option: pre-fill the buyer's country from their location, so US buyers don't see Canadian tax lines.
+   - Tax: a new buyer's Zoho customer now starts with their country (from Cloudflare), so buyers outside Canada don't start with BC's 12% GST + PST. Canadians keep the BC default until they enter their address. If Zoho ever rejects a country, the checkout retries without it (2026-09-25).
+   - [ ] Tidy the Zoho secrets: `firebase functions:secrets:prune --project biblesketch-5104c` destroys the secret versions nothing uses any more. That includes the shared Self Client's ID and secret from the first attempt. It asks you to confirm first.
    - If the connection ever breaks, rerun `node scripts/zoho-token.mjs`, then have Claude redeploy `createCheckout`. Never regenerate or delete the shared Self Client your other apps use.
 0b. **Point hello@ at the Worker now, before the Sep 29 send,** so replies are read automatically. It also turns the outage email's "Unsubscribe" replies into real unsubscribes: Cloudflare > biblesketch.app > Email > Email Routing > Routing rules > `hello@biblesketch.app` > Edit > Action: **Send to a Worker** > `biblesketch-web` > Save.
    - The Worker forwards every message to renaud@supersonicsites.com first, exactly as today.

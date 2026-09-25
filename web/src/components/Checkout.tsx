@@ -12,7 +12,7 @@ const MESSAGES: Record<string, string> = {
 };
 const FALLBACK = 'Checkout isn’t available right now. Please try again in a minute, or write to hello@biblesketch.app.';
 
-export default function Checkout({ plan, offer, offerUid }: { plan: string; offer?: string; offerUid?: string }) {
+export default function Checkout({ plan, offer, offerUid, country }: { plan: string; offer?: string; offerUid?: string; country?: string }) {
   const ready = useStore($authReady);
   const user = useStore($user);
   const profile = useStore($profile);
@@ -29,7 +29,7 @@ export default function Checkout({ plan, offer, offerUid }: { plan: string; offe
     setBusy(true);
     try {
       const { callFunction } = await import('../lib/generate.ts');
-      const r = await callFunction<{ url: string }>('createCheckout', { plan, ...(offer && { offer }) });
+      const r = await callFunction<{ url: string }>('createCheckout', { plan, ...(offer && { offer }), ...(country && { country }) });
       setUrl(r.url);
     } catch (e) {
       setError(MESSAGES[(e as Error).message] ?? FALLBACK);
@@ -42,7 +42,7 @@ export default function Checkout({ plan, offer, offerUid }: { plan: string; offe
   useEffect(() => {
     if (!ready || started.current || (user && !profile)) return;
     started.current = true;
-    requireAuth(start, offer ? 'login' : 'signup');
+    requireAuth(start, 'login');
   }, [ready, user, profile]);
 
   if (url) {
@@ -58,7 +58,7 @@ export default function Checkout({ plan, offer, offerUid }: { plan: string; offe
       ) : ready && !user ? (
         <>
           <p className="text-gray-700">Sign in to continue to payment.</p>
-          <button type="button" onClick={() => requireAuth(start, offer ? 'login' : 'signup')}
+          <button type="button" onClick={() => requireAuth(start, 'login')}
             className="px-6 py-3 rounded-full bg-[#7C3AED] text-white font-bold shadow-md hover:bg-[#6D28D9]">Sign in</button>
         </>
       ) : (

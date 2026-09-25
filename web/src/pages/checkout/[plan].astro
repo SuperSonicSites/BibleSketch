@@ -13,6 +13,9 @@ Astro.cache.set(false);
 Astro.response.headers.set('Cache-Control', 'no-store');
 const offer = Astro.url.searchParams.get('t') || undefined;
 const offerUid = Astro.url.searchParams.get('u') || undefined;
+// Cloudflare's guess at the visitor's country, so the payment form doesn't start with Canadian taxes abroad.
+const country = (Astro.request as Request & { cf?: { country?: string } }).cf?.country
+  || Astro.request.headers.get('cf-ipcountry') || undefined;
 const price = `$${p.price.toFixed(2)}`;
 ---
 <Base title={`Checkout: ${p.name} - Bible Sketch`} robots="noindex, nofollow" bare>
@@ -45,7 +48,7 @@ const price = `$${p.price.toFixed(2)}`;
         <p class="hidden md:block mt-6 pt-5 border-t border-gray-100 text-sm text-gray-500">Payment is processed securely by Zoho. We never see or store your card details.</p>
       </section>
       <section class="bg-white rounded-3xl border border-purple-100 shadow-sm p-2 md:p-3">
-        <Checkout client:load plan={plan} offer={offer} offerUid={offerUid} />
+        <Checkout client:load plan={plan} offer={offer} offerUid={offerUid} country={country} />
       </section>
     </div>
     <p class="text-center text-xs text-gray-400 mt-8">
