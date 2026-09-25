@@ -535,7 +535,8 @@ send next, and never ask what their behaviour already tells us.
 
 | Event | Fired by | Payload | Starts / stops |
 |---|---|---|---|
-| `signed_up` | consent given (profile trigger) | `landing_story`, `landing_url` | starts W0/W1 and activation |
+| `signed_up` | an opt-in **at sign-up** (`optInSource: signup`), once the email is verified | `landing_story`, `landing_url` | starts W0/W1 and activation |
+| `joined_list` | an opt-in from the **banner** (an older account) | `prints_left` | a short "you're in, here are your 5 extra prints" note. Never the welcome or activation emails: they aren't new |
 | `persona_set` | the profile trigger, the reply hook | `persona` | starts T1 / F1 / D1 |
 | `page_made` | a `usage` transaction | `story`, `sketch_url`, `credits_left` | stops activation; milestones |
 | `page_printed` | an events trigger | `story`, `own` | stops A2 |
@@ -658,6 +659,62 @@ send next, and never ask what their behaviour already tells us.
   - `first_name`;
   - `next_story_url` ("next in your series");
   - `age_group` in the "make your own version" link.
+
+### 6.11 The automation map: who gets what, and why nothing cross-wires
+**Every sender, and what each is for:**
+
+| Sender | Emails | To whom |
+|---|---|---|
+| Firebase Auth (`firebaseapp.com`) | verify your email, reset your password | the account holder (security only) |
+| Zoho Billing | invoices, receipts, subscription notices | buyers (billing only) |
+| Cloudflare Email Routing (`reports@biblesketch.app`) | the monthly Pinterest report | the owner (and Brent) only, never users |
+| Resend (`renaud@e.biblesketch.app`) | every lifecycle and marketing email in §5 | people who opted in |
+| Owner in Zoho Mail (`hello@biblesketch.app`) | personal replies | whoever wrote |
+
+The senders never overlap: each has its own purpose and audience, and Resend is the only one allowed to market.
+
+**The rules inside Resend** (built in phases 1-2):
+1. **One gate:** a contact exists only after an opt-in and a verified email. Stopping marketing is Resend's call:
+   - an unsubscribe, a bounce or a complaint;
+   - the nightly sync writes properties but never resubscribes anyone. Only a new opt-in in the app does.
+2. **One source of truth:** `stage` and `activity` (§3.4) are computed once, in `emailProfiles`. Every automation
+   filters on them rather than keeping its own idea of who someone is.
+3. **Exclusions, by lane:**
+   - **Welcome and activation (W, A):** only `stage = new` after a sign-up opt-in. Stops at the first page or print.
+   - **Weekly flagship:** every opted-in contact, except the first 7 days after sign-up.
+   - **Credit offers (C1, C2):** only people who never bought. Stop the moment they buy.
+   - **Print-wall offers (C6, C7):**
+     - never while `unlimitedPrints` (Premium, the Prints plan, the outage gift);
+     - C7 at most every 90 days;
+     - not within 14 days after the outage gift's "unlimited ends" emails, which already make that offer.
+   - **After the sale (B):** only buyers. Premium and the Prints plan get B3; pack buyers get B4.
+   - **Re-engagement (the 9-word email):** only `activity = dormant`. Then the seasonal-only tier after 6 months of
+     silence.
+   - **The outage win-back:** once ever, to the 85. They aren't `new`, so it never overlaps the welcome.
+4. **Frequency cap:** at most 3 marketing emails a week per person, with at most 1 conversion email. When two emails
+   compete on the same day, the order is:
+   1. activation;
+   2. after the sale;
+   3. conversion;
+   4. re-engagement;
+   5. the flagship, which slides to next week.
+5. **No duplicates** (§12.7): keyed broadcasts, Resend idempotency keys, and the `fired.<event>` markers.
+6. **Two topics:**
+   - "Sunday Prep", the weekly page;
+   - "Offers & seasonal packs".
+
+   Leaving offers keeps the weekly page. Transactional mail never carries offers.
+7. **No loops between the app and Resend:**
+   - an unsubscribe in Resend is written back to `private/profile` with `optOutSource: resend`;
+   - the profile trigger skips changes that came from Resend, so it never pushes them back.
+8. **One reply path:** `hello@` (§6.8). Resend's receiving is only a forward-to-`hello@` fallback.
+
+**Live today (2026-09-24):**
+- the Firebase, Zoho and Cloudflare emails above;
+- the opt-in capture;
+- the +5 bonus, which is a data change, not an email.
+
+No Resend email is built or sending yet.
 
 ### 6.10 Privacy, security and deletion
 - **Collect nothing sensitive:** no church name, no denomination, no children's names or exact ages (age groups
