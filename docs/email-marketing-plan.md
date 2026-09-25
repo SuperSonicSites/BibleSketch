@@ -908,7 +908,12 @@ The original list:
   - the `events` collection (prints, checkout clicks), which would feed A2's print check and C3;
   - `resendWebhook` (Resend already suppresses bounces and complaints, and shows opens and clicks);
   - the Resend contacts sync;
-  - the email numbers in the monthly report, due before its Oct 24 run.
+  - ~~the email numbers in the monthly report~~ Built 2026-09-25: the `emailStats` function (secret-protected,
+    like `emailReply`) returns the last 30 days and the monthly report adds an "Email, last 30 days" section: list
+    size, opt-in rate, sent and clicked (per email), activation, W1 answers, purchases within 7 days of a click, and
+    unsubscribes, complaints and bounces. Clicks come from each email's latest status in Resend (click tracking on
+    since 2026-09-25; open tracking stays off), so no webhook is needed yet. A free-form reply only reaches the inbox,
+    so only the replies `emailReply` could read are counted.
 
 The original phase 1 list:
 - **The data (§6.2-6.3):**

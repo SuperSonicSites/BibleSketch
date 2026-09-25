@@ -4175,6 +4175,71 @@ exports.emailReply = onRequest({ secrets: [workerPurgeSecret], timeoutSeconds: 3
   res.status(200).send('ok');
 });
 
+// The email numbers (plan §8) for the Worker's monthly report, last 30 days. Clicks and bounces come from each sent
+// email's latest status in Resend (click tracking on since 2026-09-25; opens stay off), who got which email from
+// emailProfiles.sentIds. Free-form replies only reach the inbox, so only the ones emailReply read are counted.
+// ponytail: reads every user and profile; fine for thousands, a counter doc if it ever isn't.
+const sentAt = (m) => Date.parse(m.created_at.replace(' ', 'T').replace(/\+00$/, 'Z')); // '2026-09-25 14:03:11.5+00'
+async function emailStats(now = Date.now()) {
+  const db = admin.firestore();
+  const since = now - 30 * EM.DAY;
+  const sent = [];
+  for (let after = ''; ;) {
+    const r = await fetch(`https://api.resend.com/emails?limit=100${after && `&after=${after}`}`, { headers: { authorization: `Bearer ${resendAdminKey.value()}` } });
+    if (!r.ok) throw new Error(`Resend list ${r.status}`);
+    const { data = [], has_more: more } = await r.json();
+    const recent = data.filter((m) => sentAt(m) >= since);
+    sent.push(...recent);
+    if (!more || recent.length < data.length || !data.length) break;
+    after = data.at(-1).id;
+  }
+  const profiles = await db.collection('emailProfiles').get();
+  const users = new Map((await db.collection('users').get()).docs.map((d) => [d.id, d.data()]));
+  const who = new Map(); // Resend email id -> [uid, email key]
+  profiles.docs.forEach((d) => Object.entries(d.get('sentIds') || {}).forEach(([k, id]) => id && who.set(id, [d.id, k])));
+  const byEmail = {};
+  let clicked = 0, bounced = 0, complained = 0;
+  const clicks = [];
+  for (const m of sent) {
+    const [uid, key] = who.get(m.id) ?? [null, /receipt|pack is ready|Premium|new credits|printing is on/i.test(m.subject) ? 'receipt' : 'other'];
+    const b = (byEmail[key] ??= { sent: 0, clicked: 0 });
+    b.sent++;
+    if (m.last_event === 'clicked') { b.clicked++; clicked++; if (uid) clicks.push([uid, sentAt(m)]); }
+    if (m.last_event === 'bounced') bounced++;
+    if (m.last_event === 'complained') complained++;
+  }
+  // Purchases within 7 days of an email that person clicked.
+  const buyers = new Set();
+  let assisted = 0;
+  for (const [uid, at] of clicks) {
+    const t = await db.collection(`users/${uid}/transactions`).where('timestamp', '>=', Timestamp.fromMillis(at)).get();
+    const n = t.docs.filter((d) => PURCHASES.has(d.get('type')) && ms(d.get('timestamp')) <= at + 7 * EM.DAY).length;
+    if (n) { assisted += n; buyers.add(uid); }
+  }
+  // Sign-ups: opt-in over the last 30 days; activation (a first page within 7 days) over those whose 7 days are over.
+  const prof = new Map(profiles.docs.map((d) => [d.id, d.data()]));
+  const born = (u) => ms(u.createdAt);
+  const joined = [...users].filter(([uid, u]) => uid !== MASTER_UID && born(u) >= since);
+  const settled = [...users].filter(([uid, u]) => uid !== MASTER_UID && born(u) >= since - 7 * EM.DAY && born(u) < now - 7 * EM.DAY);
+  const active = settled.filter(([uid, u]) => { const f = ms(prof.get(uid)?.firstPageAt); return f && f - born(u) <= 7 * EM.DAY; }).length;
+  const paid = joined.filter(([uid]) => prof.get(uid)?.bought).length;
+  const replies = await db.collection('emailReplies').where('at', '>=', Timestamp.fromMillis(since)).get();
+  const sorted = replies.docs.filter((d) => d.get('parsed.kind') === 'persona').length;
+  const unsubs = profiles.docs.filter((d) => ms(d.get('unsubscribedAt')) >= since).length;
+  return {
+    sent: sent.length, clicked, bounced, complained, byEmail, assisted, assistedBuyers: buyers.size,
+    signups: joined.length, optedIn: joined.filter(([uid]) => prof.get(uid)?.optIn).length, paid,
+    activation: { of: settled.length, active }, w1: { sent: byEmail.w1?.sent ?? 0, sorted }, unsubs,
+    list: profiles.docs.filter((d) => d.get('optIn') === true).length,
+  };
+}
+
+exports.emailStats = onRequest({ secrets: [workerPurgeSecret, resendAdminKey], timeoutSeconds: 120 }, async (req, res) => {
+  const secret = workerPurgeSecret.value();
+  if (!secret || !sameSecret(req.get('x-purge-secret') || '', secret)) return res.status(403).send('Forbidden');
+  res.json(await emailStats());
+});
+
 // ---------------------------------------------------------
 // 18. ON-SITE CHECKOUT (web /checkout/<plan>; docs/email-marketing-plan.md §12.20)
 // ---------------------------------------------------------

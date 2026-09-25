@@ -183,7 +183,7 @@ Built 2026-09-23 in `web/`: `src/data/pins.json` (the calendar), `src/lib/pins.t
      - `emailTick` sends through Resend;
      - unsubscribe links, the hello@ reply reader, and prefilled generator links.
 
-     Plan §10. Left for later: print events, the Resend webhook and contacts sync, and the monthly report numbers.
+     Plan §10. Left for later: print events, the Resend webhook and contacts sync. The email numbers in the monthly report were built 2026-09-25 (`emailStats`).
   2. The weekly "Sunday Prep" flagship, Advent/Christmas, after-the-sale emails and 9-word re-engagement. Live by Nov 10.
   3. Referrals, automatic concierge answers, Premium annual, the church path. January 2027.
 - **Waiting on the owner steps** in the plan's §11: the Resend account and domain, sender, mailing address, consent wording, bonus amounts.

@@ -8,7 +8,8 @@ import { EmailMessage } from 'cloudflare:email';
 import { entries } from './pins.ts';
 import { BOARD_NAMES, api, report, saveLearnInput } from './pinterest.ts';
 
-const E = env as unknown as { PINTEREST: KVNamespace; REPORT_EMAIL: { send(m: EmailMessage): Promise<void> } };
+const E = env as unknown as { PINTEREST: KVNamespace; REPORT_EMAIL: { send(m: EmailMessage): Promise<void> }; PURGE_SECRET?: string };
+const EMAIL_STATS = 'https://us-central1-biblesketch-5104c.cloudfunctions.net/emailStats';
 
 const FROM = 'reports@biblesketch.app';
 // Every recipient must be a verified Email Routing destination address and listed in the binding's
@@ -125,6 +126,7 @@ export async function buildReport() {
     ...(noAlt ? [`${noAlt} Pins without alt text`] : []),
   ];
   if (todo.length) sections.push({ title: 'To do', items: todo });
+  sections.push({ title: 'Email, last 30 days', items: await emailItems() });
   const footer = 'Details: <a href="https://biblesketch.app/api/pinterest">biblesketch.app/api/pinterest</a>';
 
   const html = ['<!doctype html><html><body>', `<p>${esc(intro)}</p>`,
@@ -137,6 +139,30 @@ export async function buildReport() {
     ...sections.map((s) => `${s.title}\n${s.items.map((i, n) => `${s.ordered ? `${n + 1}.` : '-'} ${plain(i)}`).join('\n')}`),
     plain(footer)].join('\n\n');
   return { text, html, snapshot };
+}
+
+// The email numbers (docs/email-marketing-plan.md §8, targets in brackets) from the emailStats function. A failure
+// shows as one line instead of stopping the Pinterest report.
+async function emailItems(): Promise<string[]> {
+  try {
+    const r = await fetch(EMAIL_STATS, { headers: { 'x-purge-secret': E.PURGE_SECRET ?? '' } });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const s = await r.json() as any;
+    const rate = (n: number, of: number) => (of ? `${Math.round((100 * n) / of)}%` : 'n/a');
+    const each = Object.entries(s.byEmail as Record<string, { sent: number; clicked: number }>)
+      .sort(([, a], [, b]) => b.sent - a.sent).map(([k, b]) => `${k} ${b.sent}/${b.clicked}`).join(', ');
+    return [
+      `<b>List:</b> ${s.list} people get emails. ${s.signups} new sign-ups, ${s.optedIn} opted in (${rate(s.optedIn, s.signups)}; target 50%+)`,
+      `<b>Sent:</b> ${s.sent} emails, ${s.clicked} clicked (${rate(s.clicked, s.sent)}; flagship target 8%+)${each ? `. Sent/clicked: ${esc(each)}` : ''}`,
+      `<b>Activation:</b> ${s.activation.active} of ${s.activation.of} sign-ups made a first page within 7 days (${rate(s.activation.active, s.activation.of)}; target 50%+)`,
+      `<b>Sorting question:</b> ${s.w1.sorted} answers to ${s.w1.sent} sent (${rate(s.w1.sorted, s.w1.sent)}; target 15%+)`,
+      `<b>Sales:</b> ${s.assisted} purchases by ${s.assistedBuyers} people within 7 days of clicking an email. ${s.paid} of the ${s.signups} new sign-ups bought (${rate(s.paid, s.signups)}; target 5%+)`,
+      `<b>Health:</b> ${s.unsubs} unsubscribes (${rate(s.unsubs, s.sent)}; under 0.5%), ${s.complained} spam complaints (${rate(s.complained, s.sent)}; under 0.1%), ${s.bounced} bounces`,
+    ];
+  } catch (e) {
+    console.error('[pinterest] email stats', e);
+    return [`Email numbers unavailable: ${esc((e as Error).message)}`];
+  }
 }
 
 // Sends the report; on failure sends the error instead, so a broken connection never goes unnoticed.
