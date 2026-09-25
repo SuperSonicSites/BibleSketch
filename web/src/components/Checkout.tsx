@@ -1,9 +1,9 @@
 // The payment form on /checkout/<plan>: once someone is signed in, the createCheckout function opens a Zoho Billing
 // hosted page for this plan (USD, their email and uid already set) and it's shown here in an iframe, so the buyer
 // never leaves biblesketch.app. Email offers pass their token (?t=) and the account it was sent to (?u=).
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useStore } from '@nanostores/react';
-import { $authReady, $user, requireAuth } from '../lib/store.ts';
+import { $authReady, $profile, $user, requireAuth } from '../lib/store.ts';
 
 const MESSAGES: Record<string, string> = {
   OFFER_ENDED: 'This offer has ended, or it was sent to a different account. If you have more than one account, sign in with the one the email went to.',
@@ -15,6 +15,8 @@ const FALLBACK = 'Checkout isn’t available right now. Please try again in a mi
 export default function Checkout({ plan, offer, offerUid }: { plan: string; offer?: string; offerUid?: string }) {
   const ready = useStore($authReady);
   const user = useStore($user);
+  const profile = useStore($profile);
+  const started = useRef(false);
   const [url, setUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -35,8 +37,13 @@ export default function Checkout({ plan, offer, offerUid }: { plan: string; offe
       setBusy(false);
     }
   };
-  // Wait for the session to be restored, then open the form (or the sign-in dialog first).
-  useEffect(() => { if (ready) requireAuth(start, offer ? 'login' : 'signup'); }, [ready]);
+  // Once the session is restored (and a signed-in user's profile has loaded, or requireAuth would open the sign-in
+  // dialog), open the form, or the sign-in dialog first.
+  useEffect(() => {
+    if (!ready || started.current || (user && !profile)) return;
+    started.current = true;
+    requireAuth(start, offer ? 'login' : 'signup');
+  }, [ready, user, profile]);
 
   if (url) {
     return <iframe src={url} title="Secure payment form" className="w-full h-[980px] md:h-[900px] border-0 rounded-2xl bg-white" allow="payment" />;
