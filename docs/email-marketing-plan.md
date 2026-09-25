@@ -749,7 +749,7 @@ Every number here comes from `emailProfiles` (§6.2). Cohorts by sign-up month (
 ## 10. Build order
 **Phase 0 (owner, now):** the steps in §11.
 
-**Phase 0.5: built and tested 2026-09-24 (commit 4706d7e); deploys await owner approval (CHECKLIST).** Security-check 48/48, e2e-auth 9/9, e2e-downloads 11/11.
+**Phase 0.5: live since 2026-09-24** (commits 4706d7e and 242c0f3; rules, `onPrivateProfileWritten`, `onUserDeleted`, Worker c8b5a730).
 - **Built:**
   - the unticked opt-in box and the "I'm making pages for" question on sign-up (email and Google);
   - the one-time banner for accounts never asked;

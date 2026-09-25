@@ -5,7 +5,7 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
 ## Open
 
 ### Start here (priority order, updated 2026-09-24 night)
-1. **Approve the phase 0.5 deploys and the privacy text** (Lifecycle email, below). Every day without it, about one sign-up arrives that we may never email.
+1. **Test the opt-in live:** sign in on biblesketch.app. The banner appears once; click "Yes, sign me up", then Account should show 5 more Downloads/Prints. This also puts your account on the list.
 2. **Before mid-October: the outage win-back decision** (Lifecycle email, below). The April sign-ups age out of CASL's 6-month window during October.
 3. **Zoho Mail alias** so you can answer as `hello@biblesketch.app` (below).
 4. **Brent's Cloudflare verification click** (below).
@@ -68,11 +68,17 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
   - +5 opt-in prints;
   - the weekly page is **free to print from the email only**, through a signed PDF link built with the weekly email in phase 2. The checkbox says: *"Send me a free Bible story page to print each week, plus occasional offers, and get 5 extra prints now. Unsubscribe anytime."* (final, approved);
   - "go" for phase 0.5.
-- [ ] **Approve the phase 0.5 deploys** (built and tested, commit 4706d7e; plan §10). In this order, because the rules must be live before the site writes the new document:
+- [x] **Phase 0.5 deployed 2026-09-24 (owner-approved):**
+  - `firestore:rules`;
+  - `functions:onPrivateProfileWritten` (created) and `functions:onUserDeleted`;
+  - Worker version c8b5a730.
+  - Verified live: pages 200, the privacy text is live, the first-visit script is in the HTML, the consent text is in the live JS, the private record returns 403 without sign-in, the trigger is ACTIVE, and there are no function warnings since the deploy.
+  - Not verified live: a real opt-in and its bonus (a real user's write; the owner tests it, item 1 of Start here).
+  - The deploy order was:
   1. `firebase deploy --only "firestore:rules"`;
   2. `firebase deploy --only "functions:onPrivateProfileWritten,functions:onUserDeleted"`;
   3. the Worker (sign-up box, banner, first-visit record, privacy page).
-- [ ] **Approve the privacy policy additions** (`web/src/pages/privacy.astro`, dated Sept 25):
+- [x] **Privacy policy additions approved and live** (2026-09-24, dated Sept 25):
   - email preferences and how you found us, in 1.1;
   - the weekly email, in 2;
   - Resend, in 5;
