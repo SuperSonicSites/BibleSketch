@@ -3931,7 +3931,7 @@ const unsubscribe = async (uid, source) => {
 // The counters the rules read, and the first-pack bonus C2 promises (granted here, once, inside its window).
 // Existing history was counted once by scripts/email-backfill.mjs.
 const pageRef = (description) => /^(?:Generated|Verse Art): (.+)$/.exec(description || '')?.[1] ?? null;
-exports.onTransactionCreated = onDocumentCreated("users/{uid}/transactions/{id}", async (event) => {
+exports.onTransactionCreated = onDocumentCreated({ document: "users/{uid}/transactions/{id}", secrets: [resendApiKey] }, async (event) => {
   const t = event.data?.data();
   const uid = event.params.uid;
   if (!t || !(t.type === 'usage' || PURCHASES.has(t.type))) return;
@@ -3959,7 +3959,28 @@ exports.onTransactionCreated = onDocumentCreated("users/{uid}/transactions/{id}"
     return grant;
   });
   if (bonus) console.log(`[email] first pack bonus: +${EM.FIRST_PACK_BONUS} credits for ${uid}`);
+  if (PURCHASES.has(t.type)) await sendReceipt(uid, event.params.id, t);
 });
+
+// The purchase receipt, once per transaction (Resend's idempotency key). Never throws: a failed email mustn't retry
+// the trigger and re-count the purchase.
+async function sendReceipt(uid, txId, t) {
+  try {
+    const a = await admin.auth().getUser(uid);
+    if (!a.email) return;
+    const e = (await admin.firestore().doc(`emailProfiles/${uid}`).get()).data() || {};
+    const mail = EM.renderReceipt(t, { uid, email: a.email, first: EM.firstName(a.displayName), timezone: e.timezone });
+    if (!mail) return;
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${resendApiKey.value()}`, 'content-type': 'application/json', 'Idempotency-Key': `receipt_${uid}_${txId}` },
+      body: JSON.stringify(mail),
+    });
+    if (!res.ok) console.error(`[receipt] ${uid} ${txId}: Resend ${res.status}`);
+  } catch (err) {
+    console.error(`[receipt] ${uid} ${txId}:`, err.message);
+  }
+}
 
 // W0: the book of the coloring page they landed on, when it's a public one.
 const landingBook = async (db, path) => {

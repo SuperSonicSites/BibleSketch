@@ -330,6 +330,11 @@ by the owner before it goes out. `{first}` is the first name (the email opens wi
 
 - The purchase receipt itself is transactional (it's sent under the purchase, not under marketing consent) and stays
   separate from B1.
+- Built 2026-09-25 (`renderReceipt` in functions/email.js, sent by `onTransactionCreated` for every purchase
+  transaction, whatever the email choice): packs "Your Spark pack is ready", Premium "Welcome to Premium" / renewal
+  "Your 10 new credits are here", Prints plan "Unlimited printing is on" (with the period end). Links to the Zoho
+  portal to update a card or cancel; no offers, no unsubscribe link. Idempotency key `receipt_<uid>_<txId>`. When B3
+  is built, fold it into the renewal receipt rather than sending two emails.
 
 ### 5.7 Re-engagement: the 9-word emails (never archive)
 - **Who:** everyone opted in with no activity for 90+ days (`dormant`). It repeats every 90 days, a few weeks
@@ -672,6 +677,7 @@ send next, and never ask what their behaviour already tells us.
 |---|---|---|
 | Firebase Auth (`firebaseapp.com`) | verify your email, reset your password | the account holder (security only) |
 | Zoho Billing | invoices, receipts, subscription notices | buyers (billing only) |
+| Resend (`renaud@e.biblesketch.app`) | the branded purchase receipt (§5) | every buyer |
 | Cloudflare Email Routing (`reports@biblesketch.app`) | the monthly Pinterest report | the owner (and Brent) only, never users |
 | Resend (`renaud@e.biblesketch.app`) | every lifecycle and marketing email in §5 | people who opted in |
 | Owner in Zoho Mail (`hello@biblesketch.app`) | personal replies | whoever wrote |

@@ -280,4 +280,55 @@ function offerEnd(now, tz) {
   return Date.parse(`${ymd}T23:59:00${sign}${h.padStart(2, '0')}:${m.padStart(2, '0')}`);
 }
 
-module.exports = { EMAILS, REPLIES, render, due, firstName, offerEnd, OUTAGE, OFFER_DAYS, FIRST_PACK_BONUS, PRINTS_PLANS, STUCK_MS, SITE, DAY, HOUR };
+
+// Purchase receipts (transactional: every buyer gets one, whatever their email choice; no offers in them).
+// `t` is the purchase transaction written by handleZohoWebhook; `p` has uid, email, first, timezone.
+const PACKS = { spark: ['The Spark', 20], torch: ['The Torch', 80], beacon: ['The Beacon', 200] };
+const PORTAL = 'https://billing.zohosecure.ca/portal/biblesketch';
+function receipt(t, p) {
+  const start = `[Start making pages](${link('/', 'receipt')}) or [find pages to print](${link('/gallery', 'receipt')}).`;
+  if (t.type === 'credit_purchase' && PACKS[t.pack]) {
+    const [name, n] = PACKS[t.pack];
+    return {
+      subject: `Your ${name.replace('The ', '')} pack is ready`,
+      body: [`Thank you! ${name} is in your account: ${n} credits (each one makes a new coloring page of your own, and they never expire) and ${n} prints.`, start],
+    };
+  }
+  if (t.type === 'subscription') {
+    const renewal = /renewal/i.test(t.description || '');
+    return {
+      subject: renewal ? 'Your 10 new credits are here' : 'Welcome to Premium',
+      body: [
+        renewal
+          ? 'Your Premium membership renewed: 10 new credits are in your account, and printing stays unlimited.'
+          : 'Thank you! Premium is on: unlimited prints and downloads, 10 credits every month to make pages of your own, and high-resolution PDFs with no watermark.',
+        start,
+        `To update your card or cancel, use [your billing page](${PORTAL}).`,
+      ],
+    };
+  }
+  if (t.type === 'prints_subscription') {
+    const until = t.termEndsAt ? ` Your current period runs to ${longDate(Date.parse(t.termEndsAt), p.timezone)}, and it renews automatically.` : '';
+    return {
+      subject: 'Unlimited printing is on',
+      body: [`Thank you! You can now print or download any page, as often as you like.${until}`, `[Find pages to print](${link('/gallery', 'receipt')}). To update your card or cancel, use [your billing page](${PORTAL}).`],
+    };
+  }
+  return null;
+}
+function renderReceipt(t, p) {
+  const r = receipt(t, p);
+  if (!r) return null;
+  const hi = p.first ? `Hi ${p.first},` : 'Hi,';
+  const foot = `This is the receipt for your purchase on biblesketch.app. Questions? Just reply. ${ADDRESS}`;
+  return {
+    from: FROM, to: p.email, reply_to: REPLY_TO, subject: r.subject,
+    text: [hi, ...r.body.map(asText), 'Renaud\nBible Sketch', '--', foot].join('\n\n'),
+    html: '<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.55;color:#222;max-width:560px">'
+      + [hi, ...r.body].map((x) => `<p>${asHtml(x)}</p>`).join('') + '<p>Renaud<br>Bible Sketch</p>'
+      + `<p style="margin-top:28px;padding-top:12px;border-top:1px solid #eee;font-size:12px;color:#888">${esc(foot)}</p></div>`,
+    tags: [{ name: 'campaign', value: `receipt-${t.type}` }],
+  };
+}
+
+module.exports = { EMAILS, REPLIES, render, renderReceipt, due, firstName, offerEnd, OUTAGE, OFFER_DAYS, FIRST_PACK_BONUS, PRINTS_PLANS, STUCK_MS, SITE, DAY, HOUR };
