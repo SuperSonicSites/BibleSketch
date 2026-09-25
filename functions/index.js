@@ -3497,6 +3497,8 @@ exports.onUserDeleted = onDocumentDeleted("users/{uid}", async (event) => {
     ...kept,
     deletedAt: FieldValue.serverTimestamp()
   });
+  // The email choice and sign-up context go with the account (the opt-in bonus marker stays, so it's paid once).
+  await admin.firestore().doc(`users/${event.params.uid}/private/profile`).delete();
 });
 
 // ---------------------------------------------------------
@@ -3835,4 +3837,32 @@ exports.cleanupDeletedAccounts = onSchedule({ schedule: "every 60 minutes", time
     await t.ref.update({ sketchesCleanedAt: FieldValue.serverTimestamp() });
     console.log(`[cleanupDeletedAccounts] ${t.id}: ${n} sketch docs deleted`);
   }
+});
+
+// ---------------------------------------------------------
+// 16. EMAIL OPT-IN BONUS (docs/email-marketing-plan.md §12.2)
+// ---------------------------------------------------------
+// The first opt-in on an account (sign-up checkbox or banner, users/{uid}/private/profile) earns bonus prints.
+// The marker in processedWebhooks is never deleted, so opting out and back in, or deleting and recreating the
+// user doc, never pays twice. Opting out later doesn't take the prints back.
+const OPT_IN_BONUS_PRINTS = 5;
+exports.onPrivateProfileWritten = onDocumentWritten("users/{uid}/private/{docId}", async (event) => {
+  const uid = event.params.uid;
+  if (event.params.docId !== 'profile' || event.data?.after?.get('emailOptIn') !== true) return;
+  if (event.data.before?.get('emailOptIn') === true) return;
+  const db = admin.firestore();
+  const userRef = db.collection('users').doc(uid);
+  const markerRef = db.collection('processedWebhooks').doc(`optin_bonus_${uid}`);
+  const granted = await db.runTransaction(async (tx) => {
+    const [marker, user] = [await tx.get(markerRef), await tx.get(userRef)];
+    if (marker.exists || !user.exists) return false;
+    tx.update(userRef, { downloadsRemaining: FieldValue.increment(OPT_IN_BONUS_PRINTS), updatedAt: FieldValue.serverTimestamp() });
+    tx.create(userRef.collection('transactions').doc(), {
+      userId: uid, amount: 0, downloadsAdded: OPT_IN_BONUS_PRINTS, description: 'Email opt-in bonus', type: 'bonus',
+      timestamp: FieldValue.serverTimestamp(),
+    });
+    tx.create(markerRef, { processedAt: FieldValue.serverTimestamp(), status: 'optin_bonus', userId: uid });
+    return true;
+  });
+  if (granted) console.log(`[optin] +${OPT_IN_BONUS_PRINTS} prints for ${uid}`);
 });

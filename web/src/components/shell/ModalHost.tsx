@@ -7,6 +7,7 @@ import AuthModal from './AuthModal.tsx';
 import AccountModal from './AccountModal.tsx';
 import CompletionModal from './CompletionModal.tsx';
 import PremiumModal from './PremiumModal.tsx';
+import OptInBanner from './OptInBanner.tsx';
 import Button, { buttonClass } from './Button.tsx';
 import Dialog from './Dialog.tsx';
 import { $modal, cancelModal } from '../../lib/store.ts';
@@ -15,7 +16,7 @@ import { startSession } from '../../lib/session.ts';
 export default function ModalHost() {
   const modal = useStore($modal);
   useEffect(startSession, []);
-  if (!modal) return null;
+  if (!modal) return <OptInBanner />;
   if (modal.name === 'auth') return <AuthModal view={modal.view} />;
   if (modal.name === 'account') return <AccountModal />;
   if (modal.name === 'completion') return <CompletionModal />;

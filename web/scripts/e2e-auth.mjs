@@ -80,13 +80,15 @@ const dialogText = () => page.$eval('[role=dialog]', (d) => d.textContent).catch
 const headerText = () => page.$eval('nav', (n) => n.textContent);
 
 try {
-  await step('sign-up writes the user doc and the Welcome Bonus, then signs out and asks for verification', async () => {
-    await open('/about');
+  await step('sign-up writes the user doc, the Welcome Bonus and the email choice (+5 prints), then signs out', async () => {
+    await open('/about?utm_source=pinterest&utm_medium=social&utm_campaign=rss-sunday-school');
     await click('Claim Free Credits');
     await type('input[autocomplete=name]', 'E2E Tester');
     await type('input[type=email]', email);
     for (const input of await page.$$('input[autocomplete=new-password]')) await input.type(password);
     await page.click('#terms-agree');
+    await page.click('#email-opt-in');
+    await page.select('[role=dialog] select', 'teacher');
     await click('Create Account');
     await waitFor(async () => (await dialogText()).includes('Verify your email'), 'verification view');
     const uid = await uidOf(email);
@@ -94,9 +96,17 @@ try {
     const user = await doc(`users/${uid}`);
     assert.equal(user.credits.integerValue, '5');
     assert.equal(user.displayName.stringValue, 'E2E Tester');
+    const choice = await doc(`users/${uid}/private/profile`);
+    assert.equal(choice.emailOptIn.booleanValue, true);
+    assert.match(choice.optInText.stringValue, /^Email me a Bible story page each week/);
+    assert.equal(choice.optInSource.stringValue, 'signup');
+    assert.equal(choice.persona.stringValue, 'teacher');
+    assert.ok(choice.optInAt.timestampValue && choice.timezone.stringValue, 'server time and time zone');
+    const first = choice.signup.mapValue.fields;
+    assert.deepEqual([first.path.stringValue, first.utmSource.stringValue, first.utmCampaign.stringValue], ['/about', 'pinterest', 'rss-sunday-school']);
+    await waitFor(async () => (await doc(`users/${uid}`)).downloadsRemaining.integerValue === '10', 'opt-in bonus prints');
     const tx = await (await fetch(`${FS}/users/${uid}/transactions`, { headers: OWNER })).json();
-    assert.equal(tx.documents?.length, 1, 'one Welcome Bonus transaction');
-    assert.equal(tx.documents[0].fields.type.stringValue, 'bonus');
+    assert.deepEqual(tx.documents.map((d) => d.fields.description.stringValue).sort(), ['Email opt-in bonus', 'Welcome Bonus']);
     assert.ok((await headerText()).includes('Log In'), 'signed out after sign-up');
     assert.equal((await oobCodes()).filter((c) => c.requestType === 'VERIFY_EMAIL').length, 1);
     const events = await page.evaluate(() => window.__z);
@@ -134,7 +144,7 @@ try {
     await waitFor(async () => (await dialogText()).includes('Image Credits'), 'account modal');
     const text = await dialogText();
     assert.match(text, /Image Credits5/);
-    assert.match(text, /Downloads\/Prints5/, 'downloadsRemaining shown (the bundle showed 0)');
+    assert.match(text, /Downloads\/Prints10/, 'downloadsRemaining shown, opt-in bonus included (the bundle showed 0)');
     await page.locator('[role=dialog] input[type=text][required]').fill('E2E Renamed');
     await click('Update Profile');
     const uid = await uidOf(email);
@@ -182,6 +192,39 @@ try {
     await click('Send Reset Link');
     await waitFor(async () => (await dialogText()).includes('Check your inbox'), 'reset view');
     assert.ok((await oobCodes()).some((c) => c.requestType === 'PASSWORD_RESET'));
+  });
+
+  await step('an account that was never asked gets the opt-in banner once; "Yes" stores it and pays the bonus', async () => {
+    const mail = `e2e-old-${run}@test.local`;
+    const { localId } = await (await fetch(`${AUTH}/identitytoolkit.googleapis.com/v1/accounts:signUp?key=any`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: mail, password, returnSecureToken: true }),
+    })).json();
+    await fetch(`${AUTH}/identitytoolkit.googleapis.com/v1/projects/${PROJECT}/accounts:update`, {
+      method: 'POST', headers: { ...OWNER, 'content-type': 'application/json' }, body: JSON.stringify({ localId, emailVerified: true }),
+    });
+    // An account from before the checkbox: a user doc, no private/profile.
+    await fetch(`${FS}/users/${localId}`, {
+      method: 'PATCH', headers: { ...OWNER, 'content-type': 'application/json' },
+      body: JSON.stringify({ fields: { uid: { stringValue: localId }, displayName: { stringValue: 'Old Timer' }, credits: { integerValue: '5' },
+        downloadsRemaining: { integerValue: '5' }, isPremium: { booleanValue: false }, profileComplete: { booleanValue: true },
+        photoURL: { stringValue: '' }, blessedSketchIds: { arrayValue: {} } } }),
+    });
+    await open('/about');
+    await click('Log In');
+    await type('input[type=email]', mail);
+    await type('input[autocomplete=current-password]', password);
+    await click('Sign In');
+    const banner = () => page.$('[aria-label="Email sign-up"]');
+    await waitFor(async () => (await banner()) !== null, 'banner');
+    await click('Yes, sign me up');
+    await waitFor(async () => (await doc(`users/${localId}/private/profile`))?.optInSource?.stringValue === 'banner', 'choice stored');
+    assert.equal((await doc(`users/${localId}/private/profile`)).signup, undefined, 'no sign-up context for an older account');
+    await waitFor(async () => (await doc(`users/${localId}`)).downloadsRemaining.integerValue === '10', 'bonus prints');
+    await waitFor(async () => (await banner()) === null, 'banner gone');
+    await open('/about');
+    await waitFor(async () => !(await headerText()).includes('Log In'), 'session restored');
+    await sleep(1500);
+    assert.equal(await banner(), null, 'the banner stays gone');
   });
 
   assert.deepEqual(errors, [], 'no uncaught page errors');

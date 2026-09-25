@@ -45,6 +45,8 @@ export const $authReady = atom(false);
 export const $user = atom<AuthUser | null>(null);
 // null = not loaded yet (or signed out); set from the live users/{uid} listener.
 export const $profile = atom<Profile | null>(null);
+// The email choice in users/{uid}/private/profile: 'none' = never asked (the opt-in banner shows).
+export const $emailChoice = atom<'unknown' | 'none' | 'in' | 'out'>('unknown');
 export const $modal = atom<Modal>(null);
 
 export const openModal = (m: Modal) => $modal.set(m);

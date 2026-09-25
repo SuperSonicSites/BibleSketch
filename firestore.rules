@@ -57,6 +57,42 @@ service cloud.firestore {
                           || (request.resource.data.type == 'usage' && request.resource.data.amount == -1));
         allow update, delete: if false; // Transactions are immutable for audit purposes
       }
+
+      // Email choice and sign-up context (docs/email-marketing-plan.md §6.2): private to the owner, unlike the
+      // profile above. The server records the opt-in bonus; clients can't delete (account deletion does).
+      match /private/{docId} {
+        allow get: if isOwner(userId) && docId == 'profile';
+        allow create: if isOwner(userId) && docId == 'profile'
+          && validEmailChoice(request.resource.data, request.resource.data.keys());
+        allow update: if isOwner(userId) && docId == 'profile'
+          && validEmailChoice(request.resource.data, request.resource.data.diff(resource.data).affectedKeys());
+      }
+    }
+
+    function optStr(m, k, n) {
+      return !(k in m) || (m[k] is string && m[k].size() <= n);
+    }
+    // `changed` = the keys this write sets. An opt-in must carry the exact wording, its source and server time
+    // (CASL proof); keys the server adds later are left alone.
+    function validEmailChoice(d, changed) {
+      return changed.hasOnly(['emailOptIn', 'optInAt', 'optInText', 'optInSource', 'persona', 'personaSource',
+               'timezone', 'locale', 'signup', 'updatedAt'])
+        && (!changed.hasAny(['emailOptIn']) || d.emailOptIn is bool)
+        && (!changed.hasAny(['emailOptIn']) || d.emailOptIn == false
+            || (changed.hasAny(['optInAt']) && ('optInText' in d) && ('optInSource' in d)))
+        && (!changed.hasAny(['optInAt']) || d.optInAt == request.time)
+        && (!changed.hasAny(['updatedAt']) || d.updatedAt == request.time)
+        && (!changed.hasAny(['optInText']) || optStr(d, 'optInText', 300))
+        && (!changed.hasAny(['optInSource']) || d.optInSource in ['signup', 'banner', 'account'])
+        && (!changed.hasAny(['persona']) || d.persona in ['teacher', 'family', 'adult'])
+        && (!changed.hasAny(['personaSource']) || d.personaSource in ['signup', 'banner', 'account'])
+        && (!changed.hasAny(['timezone']) || optStr(d, 'timezone', 64))
+        && (!changed.hasAny(['locale']) || optStr(d, 'locale', 35))
+        && (!changed.hasAny(['signup']) || (d.signup is map
+            && d.signup.keys().hasOnly(['path', 'utmSource', 'utmMedium', 'utmCampaign', 'referrer', 'epik', 'at'])
+            && optStr(d.signup, 'path', 300) && optStr(d.signup, 'utmSource', 100) && optStr(d.signup, 'utmMedium', 100)
+            && optStr(d.signup, 'utmCampaign', 100) && optStr(d.signup, 'referrer', 100) && optStr(d.signup, 'at', 30)
+            && (!('epik' in d.signup) || d.signup.epik is bool)));
     }
 
     function userUpdateAllowed() {

@@ -4,7 +4,7 @@ import { ArrowRight, ChevronLeft, CircleAlert, CircleCheck, Lock, Mail, User } f
 import Button from './Button.tsx';
 import Dialog from './Dialog.tsx';
 import { cancelModal, doneModal, openModal, type AuthView } from '../../lib/store.ts';
-import { logInWithEmail, sendReset, signInWithGoogle, signUpWithEmail } from '../../lib/session.ts';
+import { CONSENT_TEXT, logInWithEmail, sendReset, signInWithGoogle, signUpWithEmail, type Persona } from '../../lib/session.ts';
 
 const INPUT = 'w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 focus:border-[#7C3AED] focus:ring-2 focus:ring-purple-100 outline-none transition-all placeholder-gray-400';
 const EXISTS = 'User already exists. Sign in?';
@@ -39,6 +39,10 @@ export default function AuthModal({ view }: { view: AuthView }) {
   const [repeat, setRepeat] = useState('');
   const [name, setName] = useState('');
   const [agreed, setAgreed] = useState(false);
+  // Email opt-in (unticked by default, CASL) and the optional sorting question (plan §6.3).
+  const [optIn, setOptIn] = useState(false);
+  const [persona, setPersona] = useState<Persona | ''>('');
+  const choice = () => ({ optIn, ...(persona ? { persona } : {}) });
 
   const go = (v: AuthView) => {
     openModal({ name: 'auth', view: v });
@@ -47,6 +51,7 @@ export default function AuthModal({ view }: { view: AuthView }) {
       setPassword('');
       setRepeat('');
       setAgreed(false);
+      setOptIn(false);
     }
   };
 
@@ -63,7 +68,7 @@ export default function AuthModal({ view }: { view: AuthView }) {
   const google = () => run(async () => {
     if (view === 'signup' && !agreed) return setError('You must agree to the Terms of Service to create an account.');
     try {
-      await signInWithGoogle();
+      await signInWithGoogle(view === 'signup' ? choice() : undefined);
       doneModal();
     } catch (e) {
       if (code(e) === 'auth/popup-closed-by-user' || code(e) === 'auth/cancelled-popup-request') return;
@@ -82,7 +87,7 @@ export default function AuthModal({ view }: { view: AuthView }) {
         if (password !== repeat) return setError('Passwords do not match');
         if (password.length < 6) return setError('Password must be at least 6 characters');
         try {
-          await signUpWithEmail(email, password, name);
+          await signUpWithEmail(email, password, name, choice());
           go('verification_sent');
         } catch (err) {
           setError(code(err) === 'auth/email-already-in-use' ? EXISTS : (err as Error).message || 'Failed to sign up');
@@ -226,6 +231,23 @@ export default function AuthModal({ view }: { view: AuthView }) {
                         {' '}I confirm I am at least 18 years old or have parental consent.
                       </label>
                     </div>
+                    <div className="flex items-start gap-2">
+                      <input type="checkbox" id="email-opt-in" checked={optIn} onChange={(e) => setOptIn(e.target.checked)}
+                        className="mt-1 w-4 h-4 rounded border-gray-300 text-[#7C3AED] focus:ring-[#7C3AED] cursor-pointer" />
+                      <label htmlFor="email-opt-in" className="text-sm text-gray-500">
+                        {CONSENT_TEXT} <a href="/privacy" target="_blank" className="font-bold text-[#7C3AED] hover:underline">Privacy</a>
+                      </label>
+                    </div>
+                    <label className="flex items-center gap-2 text-sm text-gray-500">
+                      I'm making pages for
+                      <select value={persona} onChange={(e) => setPersona(e.target.value as Persona | '')}
+                        className="flex-1 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-gray-700 focus:border-[#7C3AED] outline-none">
+                        <option value="">(optional)</option>
+                        <option value="teacher">my class</option>
+                        <option value="family">my kids</option>
+                        <option value="adult">myself</option>
+                      </select>
+                    </label>
                   </>
                 )}
                 <Button type="submit" className="w-full mt-2 h-12 text-lg shadow-lg shadow-purple-200" isLoading={busy}>

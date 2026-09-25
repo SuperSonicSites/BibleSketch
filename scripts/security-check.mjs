@@ -155,6 +155,49 @@ await step('transactions: only the welcome bonus and usage entries', async () =>
   await denied(addDoc(col, { userId: alice.uid, amount: 200, description: 'x', type: 'credit_purchase' }), 'purchase');
 });
 
+// ---------------------------------------------------------------- email choice (users/{uid}/private/profile)
+const dora = await makeUser('dora');
+await setDoc(doc(dora.db, 'users', dora.uid), liveProfile(dora));
+const choiceRef = (u, viewer = u) => doc(viewer.db, 'users', u.uid, 'private', 'profile');
+const optIn = (extra = {}) => ({
+  emailOptIn: true, optInAt: serverTimestamp(), optInText: 'Email me a Bible story page each week.', optInSource: 'signup',
+  updatedAt: serverTimestamp(), ...extra,
+});
+
+await step('email choice: private to its owner, validated; an opt-in carries its wording and server time', async () => {
+  await denied(setDoc(choiceRef(dora), { emailOptIn: true, updatedAt: serverTimestamp() }), 'opt-in without wording');
+  await denied(setDoc(choiceRef(dora), optIn({ optInAt: new Date() })), 'client clock');
+  await denied(setDoc(choiceRef(dora), optIn({ persona: 'pastor' })), 'unknown persona');
+  await denied(setDoc(choiceRef(dora), optIn({ isPremium: true })), 'extra key');
+  await denied(setDoc(choiceRef(dora), optIn({ signup: { path: '/', ref: 'x' } })), 'unknown sign-up key');
+  await allowed(setDoc(choiceRef(dora), optIn({
+    persona: 'teacher', personaSource: 'signup', timezone: 'America/Toronto', locale: 'en-CA',
+    signup: { path: '/coloring-page/x', utmSource: 'pinterest', utmMedium: 'social', utmCampaign: 'rss-sunday-school',
+      referrer: 'pinterest.com', epik: true, at: new Date().toISOString() },
+  })), 'valid opt-in');
+  await denied(getDoc(choiceRef(dora, bob)), 'someone else reads it');
+  await denied(setDoc(doc(dora.db, 'users', dora.uid, 'private', 'other'), { emailOptIn: false }), 'another doc id');
+  await denied(deleteDoc(choiceRef(dora)), 'client delete');
+});
+
+await step('the first opt-in earns 5 bonus prints, once, even after opting out and in or recreating the doc', async () => {
+  await waitFor(async () => (await userDoc(dora)).get('downloadsRemaining') === 10, 'bonus prints');
+  await allowed(setDoc(choiceRef(dora), { emailOptIn: false, updatedAt: serverTimestamp() }, { merge: true }), 'opt out');
+  await allowed(setDoc(choiceRef(dora), optIn({ optInSource: 'banner' }), { merge: true }), 'opt back in, same wording');
+  await sleep(3000);
+  assert.equal((await userDoc(dora)).get('downloadsRemaining'), 10, 'no second bonus');
+  await allowed(deleteDoc(doc(dora.db, 'users', dora.uid)), 'delete the user doc');
+  await waitFor(async () => !(await adminDocExists(`users/${dora.uid}/private/profile`)), 'email choice deleted with it');
+  await allowed(setDoc(doc(dora.db, 'users', dora.uid), liveProfile(dora)), 'recreate');
+  await waitFor(async () => (await userDoc(dora)).get('downloadsRemaining') === 10, 'balance restored');
+  await allowed(setDoc(choiceRef(dora), optIn()), 'opt in on the recreated account');
+  await sleep(3000);
+  assert.equal((await userDoc(dora)).get('downloadsRemaining'), 10, 'no bonus after recreating');
+  const bonuses = (await getDocs(collection(dora.db, 'users', dora.uid, 'transactions'))).docs
+    .filter((d) => d.get('description') === 'Email opt-in bonus');
+  assert.equal(bonuses.length, 1);
+});
+
 // ---------------------------------------------------------------- sketches
 const sketchId = `sk-${run}`;
 await step('sketch rules: owner edits visibility/tags only, others can only bless', async () => {
