@@ -129,7 +129,10 @@ Only work that needs a human: console access, dashboards, decisions, or accounts
 - [x] 2026-09-23: Cutover steps 1 and 2 approved and live (owner: "push live, we'll debug there").
 - [ ] One real purchase test (the cheapest pack) to see the credits land and the Purchase event fire.
 - [ ] Cloudflare dashboard (optional, saves Worker requests): Workers Routes on biblesketch.app, add routes with Worker = **None** for `biblesketch.app/__/*`, `biblesketch.app/assets/*`, `biblesketch.app/references/*`, `biblesketch.app/sitemap.xml`. Today the Worker passes them through to Firebase, which works.
-- [ ] **Around 2026-09-30, approve the cleanup (phase 5):** removes the old app's functions and routes; after it there is no rollback to the old site.
+- [ ] **Phase 5 cleanup, three approvals in order** ([docs/phase5-cleanup-plan.md](docs/phase5-cleanup-plan.md), verified and step 0 done 2026-09-26; decided the same day: the Firebase domain keeps its 301s to biblesketch.app):
+  - [ ] Stage A: Hosting release that drops the 13 renderer rewrites (undo in seconds).
+  - [ ] Stage B: delete the 14 old functions; includes one live test generation (say who runs it). After it there is no quick rollback to the old site.
+  - [ ] Stage C: remove the code, the template and the old React source; deploy `sitemap` and `emailAction`.
 - [ ] Firebase console > Authentication > Sign-in method: disable **Anonymous** (owner decision; nothing uses it).
 - [ ] (Optional) Cloudflare Cache Rule: ignore the query string for `/` and `/bible-verse-coloring` in the cache key, so ad clicks (`?utm_…`, `?gclid`, `?fbclid`, `?epik`) share one cached page. Not needed for correctness.
 - [x] **Thumbnail palette PNGs** (optional). Firebase console > Extensions > Resize Images (0.3.0) > Reconfigure: set output options to palette PNG. Smaller thumbnails; slightly lossy where verse text is colored, so check a few by eye.
