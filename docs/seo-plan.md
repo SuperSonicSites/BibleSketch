@@ -42,9 +42,7 @@ before the previous one is verified live.
     check-sketch fixture refreshed for the new related grid.
   - Lesson: purge about 30 s after `wrangler deploy`, not right away; an isolate still on the old version can
     re-cache a page in between (happened once with /tags/ordinary-time; purged again).
-  - Open loose ends: (a) done in Stage 4. (b) `web/scripts/check-sketch.mjs` fails on "first related link"
-    because its Sep 22 fixture predates newer pages (fails the same on pre-stage-1 code): refresh the fixture
-    in Stage 3. (c) The old Firebase renderers (profileRender, sketchRender, tag renderer) still call community
+  - Open loose ends: (a) done in Stage 4. (b) done in Stage 3 (fixture refreshed; passes). (c) The old Firebase renderers (profileRender, sketchRender, tag renderer) still call community
     pages and profiles indexable; unused in production (the Worker serves those paths), removed in phase 5;
     security-check's "thin pages" step tests them, not the Worker.
 
