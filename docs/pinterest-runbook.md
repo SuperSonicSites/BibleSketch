@@ -74,9 +74,10 @@ A Claude Code scheduled task in the desktop app (`C:\Users\renau\.claude\schedul
 every day at 7:00 local, runs only while the app is open) adds **5 reviewed Pins a day** with the procedure in
 "Generating a batch of pages" below, following the **yearly calendar**. Owner-authorized scope: at most 10
 generations per run on the master account (with the planner's `guidance`); publishing the approved ones; editing
-`web/src/data/pins.json`, `pin-year.json` (refill only: add items, never remove used ones), `pin-learn.json` and
-this file's Status and "What's working" blocks; pins-check, pins-plan, pins-learn, build, `npx wrangler deploy`
-(Worker only); commit and push those files to `main`; the alt-text pass. Nothing else.
+`web/src/data/pins.json`, `pin-year.json` (refill only: add items, never remove used ones), `pin-learn.json`,
+`page-text.json` (only through `scripts/page-text-verses.mjs`, owner request 2026-09-25) and this file's Status and
+"What's working" blocks; pins-check, pins-plan, pins-learn, page-text-verses, build, `npx wrangler deploy` (Worker
+only); commit and push those files to `main`; the alt-text pass. Nothing else.
 
 ### The yearly calendar (owner request 2026-09-24)
 `web/src/data/pin-year.json` is the whole year, and `node scripts/pins-plan.mjs` (in `web/`) turns it into each
@@ -179,9 +180,13 @@ days old and all profiled; `lessons` in pin-learn.json has the detail):
    (likely the Gemini spend cap).
 6. Publish the approved pages. Write each entry with the slot's `release`, `board`, `template`, `ref`, `plan`, the
    review `tags`, and copy by §3.3a.
-7. Run pins-check (no errors, no warnings on new entries), build, deploy, check one new `/pin-img/`, then the
+7. `node scripts/page-text-verses.mjs`: adds the World English Bible text of every newly published owner page to
+   `page-text.json`, so the page shows its verse on the site (docs/seo-plan.md stage 3). It only fetches what is
+   missing. If bible-api fails, carry on and say so in the report; the next run fills the gap.
+8. Run pins-check (no errors, no warnings on new entries), build, deploy, check one new `/pin-img/`, then the
    alt-text pass.
-8. Update the Status block, commit `pins.json`, `pin-year.json`, `pin-learn.json` and this file, then push.
+9. Update the Status block, commit `pins.json`, `pin-year.json`, `pin-learn.json`, `page-text.json` and this file,
+   then push.
 
 Fewer than 5 approved is fine: never schedule a reject.
 

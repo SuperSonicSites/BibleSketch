@@ -31,6 +31,8 @@ before the previous one is verified live.
     printable"), unlock box no longer an h2. `scene`/`description` slots render when present (Stage 11).
     Pinterest text (`seo().description`, data-pin-description, share button) unchanged. check-sketch fixture
     refreshed (subtitle, first related link) and now checks the snippet: passes. All 372 live pages show the verse.
+  - `pinterest-daily` now runs `page-text-verses.mjs` after publishing and commits `page-text.json` (SKILL.md,
+    runbook Run step 7 and scope, CLAUDE.md updated 2026-09-25), so new owner pages get their verse automatically.
   - Lesson: purge about 30 s after `wrangler deploy`, not right away; an isolate still on the old version can
     re-cache a page in between (happened once with /tags/ordinary-time; purged again).
   - Open loose ends: (a) related grids on master pages still link some community pages (~5 of 85 links
