@@ -10,6 +10,7 @@ import { query } from '../../lib/firestore.ts';
 import { MASTER_UID } from '../../lib/config.ts';
 import { ORG_REF, ORIGIN, TAG_LABELS, audience, canonicalPath, heading, jsonLd, loadAuthors, type Sketch } from '../../lib/sketch.ts';
 import { SEASONS, applyFilters, isFiltered, parseFilters } from '../../lib/listing.ts';
+import { STORIES, storyOf } from '../../lib/stories.ts';
 
 const tagId = Astro.params.tagId ?? '';
 const label = TAG_LABELS[tagId];
@@ -71,6 +72,9 @@ const schema = jsonLd({
 });
 // The collection and its owner pages, in page order (docs/seo-plan.md stage 6; community pages are unlisted).
 const owned = items.filter((s) => s.userId === MASTER_UID);
+// Stories these pages belong to, in Bible order (links to /coloring-pages/<story>, docs/seo-plan.md stage 9).
+const storyIds = new Set(owned.map((s) => storyOf(s)?.id).filter(Boolean));
+const tagStories = STORIES.filter((st) => storyIds.has(st.id));
 const collection = jsonLd({
   '@context': 'https://schema.org',
   '@type': 'CollectionPage',
@@ -114,6 +118,14 @@ const collection = jsonLd({
       </div>
     </div>
 
+    {tagStories.length > 0 && (
+      <nav aria-label="Stories" class="mb-6">
+        <span class="text-sm font-bold text-gray-500 mr-2">By story:</span>
+        {tagStories.map((st, i) => (
+          <>{i > 0 && <span class="text-gray-300 mx-1">·</span>}<a href={`/coloring-pages/${st.id}`} class="text-sm font-bold text-[#7C3AED] hover:underline">{st.name.replace(/^The /, '')}</a></>
+        ))}
+      </nav>
+    )}
     <FilterForm filters={f} action={path} defaultSort="popular" />
 
     {failed ? (

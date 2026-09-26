@@ -6,8 +6,8 @@ before the previous one is verified live.
 
 ## Where we are
 
-- Current stage: **Stage 10 (not started)**; Stage 7 owner steps open; Stage 9 pages await owner review before linking
-- Last verified live: Stage 9 + layout rework (2026-09-25, Worker 267ef5d0)
+- Current stage: **Stage 10 (not started)**; Stage 7 owner steps open
+- Last verified live: Stage 9 linked (2026-09-25, Worker 2d2d42ab + functions:sitemap)
 - Notes:
   - Stage 1: master pages' og:image, JSON-LD, share buttons and image sitemap use
     `/img/w800/<original path>` (800x1071 WebP); community pages use their 400x533 thumbnail; the w800 route
@@ -127,8 +127,12 @@ before the previous one is verified live.
     Sticky bar tucked under the header (measured header bottoms 61-77 px; bar at 56/68/72 px): no gap. Titles and
     H1 drop a leading "The" ("Nativity Coloring Pages"); section H2s carry the subject ("Nativity Coloring Pages
     for Toddlers", "Luke 2:6-7 Coloring Pages for Adults", "Nativity Verse Art").
-    To do after the owner's review: link /coloring-pages from the header and home, link story/verse pages from
-    tag pages and coloring pages (breadcrumb, "Part of"), add them to the sitemap (functions:sitemap deploy).
+    Linked after the owner approved the design (2026-09-25): header "Bible Stories" (desktop gap tightened and
+    labels nowrap so 7 links fit at 1280 px), a home link under Featured Coloring Pages, coloring pages show a
+    breadcrumb Bible Coloring Pages > <Story> > <ref> (JSON-LD too) and link their verse page from the verse
+    caption, tag pages list their stories ("By story: Nativity, Wise Men"). Sitemap: the Firebase index now lists
+    /coloring-pages/sitemap.xml, served by the Worker (index + stories with 10+ pages + verses with 3+ pages: 46
+    URLs, all 200 and indexable). IndexNow: the 46 URLs submitted (200). Sweeps: 457 + 58 pages clean.
   - Lesson: purge about 30 s after `wrangler deploy`, not right away; an isolate still on the old version can
     re-cache a page in between (happened once with /tags/ordinary-time; purged again).
   - Open loose ends: (a) done in Stage 4. (b) done in Stage 3 (fixture refreshed; passes). (c) The old Firebase renderers (profileRender, sketchRender, tag renderer) still call community

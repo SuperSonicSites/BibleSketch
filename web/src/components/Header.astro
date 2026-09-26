@@ -7,6 +7,7 @@ const links = [
   ['/', 'Scene Art', 'Scene Art'],
   ['/bible-verse-coloring', 'Verse Art', 'Verse Art'],
   ['/gallery', 'Gallery', 'Gallery'],
+  ['/coloring-pages', 'Bible Stories', 'Bible Stories'],
   ['/pricing', 'Pricing', 'Pricing & Credits'],
   ['/blog', 'Blog', 'Blog'],
   ['/about', 'About', 'About'],
@@ -15,18 +16,19 @@ const links = [
 const path = Astro.url.pathname;
 const active =
   path === '/' ? '/'
+  : /^\/coloring-pages(\/|$)/.test(path) ? '/coloring-pages'
   : /^\/(gallery|profile|tags|coloring-page)(\/|$)/.test(path) ? '/gallery'
   : links.find(([href]) => href !== '/' && (path === href || path.startsWith(`${href}/`)))?.[0];
 ---
 <nav class="w-full sticky top-0 z-50 transition-all duration-300 border-b bg-[#FFF7ED]/95 backdrop-blur-md border-purple-100 py-3 shadow-sm">
-  <div class="max-w-7xl mx-auto px-4 md:px-8 flex items-center justify-between">
+  <div class="max-w-7xl mx-auto px-4 md:px-8 flex items-center justify-between gap-6">
     <a href="/" class="flex items-center gap-2 group">
       <div class="relative transition-transform duration-300 group-hover:scale-105">
         <img alt="Bible Sketch Logo" class="w-10 h-10 md:w-12 md:h-12 object-contain" src="/logo.webp" width="48" height="48" />
       </div>
-      <span class="text-xl md:text-3xl font-display font-bold text-[#1F2937]">Bible Sketch</span>
+      <span class="text-xl md:text-3xl font-display font-bold text-[#1F2937] whitespace-nowrap">Bible Sketch</span>
     </a>
-    <div class="hidden xl:flex items-center gap-8">
+    <div class="hidden xl:flex items-center gap-6 whitespace-nowrap">
       {links.map(([href, label]) => (
         <a href={href} aria-current={href === active ? 'page' : undefined}
           class:list={['text-lg font-bold hover:text-[#7C3AED] transition-colors', href === active ? 'text-[#7C3AED]' : 'text-gray-500']}>{label}</a>

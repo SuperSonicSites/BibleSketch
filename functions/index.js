@@ -466,6 +466,8 @@ exports.sitemap = onRequest(async (req, res) => {
           const last = newestOf(urls.map((u) => u.lastmod));
           return `<sitemap><loc>${SITE}/sitemap.xml?type=${key}</loc>${last ? `<lastmod>${last}</lastmod>` : ''}</sitemap>`;
         }).join('')
+        // Story and verse collections (docs/seo-plan.md stage 9): the Worker lists the indexable ones.
+        + `<sitemap><loc>${SITE}/coloring-pages/sitemap.xml</loc></sitemap>`
         + '</sitemapindex>';
     } else if (groups.has(type)) {
       const urls = groups.get(type);

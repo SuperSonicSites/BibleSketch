@@ -74,7 +74,8 @@ const schema = jsonLd({
   {favorites.length > 0 && (
     <section data-form-only class="max-w-7xl mx-auto px-4 py-16" aria-labelledby="favorites">
       <h2 id="favorites" class="font-display text-3xl font-bold text-gray-800 mb-2">Featured Coloring Pages</h2>
-      <p class="text-gray-500 mb-8">Explore favorite coloring pages from the Bible Sketch library. Bless your favorites or save them to your personal collection.</p>
+      <p class="text-gray-500 mb-8">Explore favorite coloring pages from the Bible Sketch library. Bless your favorites or save them to your personal collection.
+        Or <a href="/coloring-pages" class="font-bold text-[#7C3AED] hover:underline">browse Bible coloring pages by story</a>, from Creation to the Resurrection.</p>
       <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <CardIcons />
         {favorites.map((s) => <ListingCard sketch={s} author={s.userId ? authors.get(s.userId) : undefined} />)}

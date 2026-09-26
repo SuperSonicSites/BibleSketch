@@ -10,7 +10,7 @@ import OwnerControls from '../../components/OwnerControls.tsx';
 import OwnerPrivate from '../../components/OwnerPrivate.tsx';
 import VerseCollection from '../../components/VerseCollection.astro';
 import { AGE_GROUPS } from '../../lib/listing.ts';
-import { VERSE_MIN, VERSE_SLUG, bookOfSlug, ownerPages, pagesOfVerse } from '../../lib/stories.ts';
+import { VERSE_MIN, VERSE_SLUG, bookOfSlug, ownerPages, pagesOfVerse, storyOf } from '../../lib/stories.ts';
 import { getDoc } from '../../lib/firestore.ts';
 import { MASTER_UID } from '../../lib/config.ts';
 import {
@@ -95,6 +95,10 @@ const title = text?.scene && ref ? `${text.scene} Coloring Page (${ref}) | Bible
 const h1 = text?.scene && ref ? `${text.scene} Coloring Page` : heading(p);
 const alt = text?.scene && ref ? `${text.scene} coloring page (${ref})` : sketch?.promptData ? heading(p) : 'Bible coloring page';
 const url = sketch ? ORIGIN + canonicalPath(sketch) : undefined;
+// The page's Bible story and passage collection (docs/seo-plan.md stage 9).
+const story = sketch?.promptData ? storyOf(sketch) : undefined;
+const storyName = story?.name.replace(/^The /, '');
+const versePath = sketch?.promptData ? `/coloring-page/${canonicalPath(sketch).split('/')[2]}` : undefined;
 const profileUrl = sketch ? `${ORIGIN}/profile/${sketch.userId}` : '';
 const schemas = sketch && meta ? [
   jsonLd({
@@ -116,8 +120,14 @@ const schemas = sketch && meta ? [
   jsonLd({
     '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [
       { '@type': 'ListItem', position: 1, name: 'Home', item: `${ORIGIN}/` },
-      { '@type': 'ListItem', position: 2, name: 'Gallery', item: `${ORIGIN}/gallery` },
-      { '@type': 'ListItem', position: 3, name: heading(p), item: url },
+      ...(story ? [
+        { '@type': 'ListItem', position: 2, name: 'Bible Coloring Pages', item: `${ORIGIN}/coloring-pages` },
+        { '@type': 'ListItem', position: 3, name: `${storyName} Coloring Pages`, item: `${ORIGIN}/coloring-pages/${story.id}` },
+        { '@type': 'ListItem', position: 4, name: heading(p), item: url },
+      ] : [
+        { '@type': 'ListItem', position: 2, name: 'Gallery', item: `${ORIGIN}/gallery` },
+        { '@type': 'ListItem', position: 3, name: heading(p), item: url },
+      ]),
     ],
   }),
 ] : [];
@@ -135,6 +145,13 @@ const card = 'flex-1 py-3 rounded-xl border flex items-center justify-center tra
 ) : sketch && meta ? (
   <Base title={title} description={metaDescription(sketch, text)} canonical={url} image={previewUrl(sketch)} schemas={schemas} robots={unlisted ? 'noindex' : undefined}>
     <div class="max-w-7xl mx-auto px-4 py-12">
+      {story ? (
+        <nav class="mb-8 text-sm text-gray-500" aria-label="Breadcrumb">
+          <a href="/coloring-pages" class="hover:text-[#7C3AED] hover:underline">Bible Coloring Pages</a>
+          <span class="mx-1 text-gray-300">›</span><a href={`/coloring-pages/${story.id}`} class="font-bold text-[#7C3AED] hover:underline">{storyName}</a>
+          <span class="mx-1 text-gray-300">›</span><span>{ref}</span>
+        </nav>
+      ) : (
       <div class="mb-8">
         <a class="inline-flex items-center gap-2 text-gray-500 hover:text-[#7C3AED] font-bold transition-colors" href="/gallery">
           <div class="p-1 bg-white rounded-full border border-gray-200">
@@ -143,6 +160,7 @@ const card = 'flex-1 py-3 rounded-xl border flex items-center justify-center tra
           Back to Gallery
         </a>
       </div>
+      )}
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-12">
         <div class="lg:col-span-7">
           <div class="bg-white rounded-3xl shadow-xl border border-gray-100 p-6 md:p-10 bg-[#E5E5E5] flex items-center justify-center overflow-hidden relative">
@@ -191,7 +209,7 @@ const card = 'flex-1 py-3 rounded-xl border flex items-center justify-center tra
             {text?.verse && (
               <figure class="mb-5 border-l-4 border-purple-200 pl-4">
                 <blockquote class="text-gray-700 italic leading-relaxed">{text.verse}</blockquote>
-                <figcaption class="text-sm text-gray-500 mt-1">{ref} (World English Bible)</figcaption>
+                <figcaption class="text-sm text-gray-500 mt-1"><a href={versePath} class="hover:text-[#7C3AED] hover:underline">{ref}</a> (World English Bible)</figcaption>
               </figure>
             )}
             <p class="text-xs text-gray-400 mb-5">Drawn with AI from the Bible text.</p>
