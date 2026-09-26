@@ -3,17 +3,16 @@
 // the neighbouring passages and a "make your own" link. Rendered by pages/coloring-page/[...path].astro, which
 // sets the headers (noindex below VERSE_MIN pages).
 import Base from '../layouts/Base.astro';
-import ListingCard from './ListingCard.astro';
-import CardIcons from './CardIcons.astro';
+import AudienceSections from './AudienceSections.astro';
 import pageTexts from '../data/page-text.json';
-import { ORG_REF, ORIGIN, type PageText, type Sketch, canonicalPath, heading, jsonLd, loadAuthors, reference, slugOf, audience } from '../lib/sketch.ts';
+import { ORG_REF, ORIGIN, type PageText, type Sketch, canonicalPath, heading, jsonLd, loadAuthors, slugOf, audience } from '../lib/sketch.ts';
 import { VERSE_MIN, byBibleOrder, makeYourOwn, storyOf } from '../lib/stories.ts';
 
 interface Props { slug: string; pages: Sketch[]; bookPages: Sketch[] }
 const { slug, pages, bookPages } = Astro.props;
 const first = pages[0];
 const p = first.promptData!;
-const ref = reference(p);
+const ref = heading(p).replace(/ Coloring Page$/, ''); // "Psalm 23:1", as in the H1
 const h1 = `${heading(p)}s`;
 const story = storyOf(first);
 const verse = pages.map((s) => (pageTexts as Record<string, PageText>)[s.id]?.verse).find(Boolean);
@@ -26,7 +25,7 @@ const authors = await loadAuthors(pages.slice(0, 1));
 // Neighbouring passages of the same book that have pages, in Bible order.
 const slugs = [...new Set([...bookPages].sort(byBibleOrder).map(slugOf))];
 const at = slugs.indexOf(slug);
-const refOf = (x: string) => reference(bookPages.find((s) => slugOf(s) === x)!.promptData!);
+const refOf = (x: string) => heading(bookPages.find((s) => slugOf(s) === x)!.promptData!).replace(/ Coloring Page$/, '');
 const prev = at > 0 ? slugs[at - 1] : undefined;
 const next = at >= 0 && at < slugs.length - 1 ? slugs[at + 1] : undefined;
 
@@ -71,10 +70,7 @@ const schemas = [
       )}
     </div>
 
-    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-      <CardIcons />
-      {pages.map((s) => <ListingCard sketch={s} author={s.userId ? authors.get(s.userId) : undefined} />)}
-    </div>
+    <AudienceSections pages={pages} authors={authors} />
 
     <div class="mt-12 flex flex-wrap items-center justify-between gap-4 border-t border-gray-100 pt-6">
       {prev ? <a href={`/coloring-page/${prev}`} class="font-bold text-[#7C3AED] hover:underline">← {refOf(prev)}</a> : <span />}

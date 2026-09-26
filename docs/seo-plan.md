@@ -7,7 +7,7 @@ before the previous one is verified live.
 ## Where we are
 
 - Current stage: **Stage 10 (not started)**; Stage 7 owner steps open; Stage 9 pages await owner review before linking
-- Last verified live: Stage 9 (2026-09-25, Worker f7f72407)
+- Last verified live: Stage 9 + layout rework (2026-09-25, Worker 3ec2eb13)
 - Notes:
   - Stage 1: master pages' og:image, JSON-LD, share buttons and image sitemap use
     `/img/w800/<original path>` (800x1071 WebP); community pages use their 400x533 thumbnail; the w800 route
@@ -117,6 +117,13 @@ before the previous one is verified live.
     prophecies 10, Nativity 54, Wise Men 10, Resurrection 15. 100 owner pages (Psalms, Proverbs, most verse art)
     belong to no story. `/coloring-pages` added to LIVE_PREFIXES; purge accepts `stories`. Empty or unknown
     stories 404 exactly like unknown tags. Regression sweep: 457/457 ok.
+    Layout rework after the owner's feedback (styles looked disjointed; passage chips were a wall on mobile):
+    story and verse pages now group pages by audience (`components/AudienceSections.astro`: Toddlers, Young
+    Children, Teens, Adults, Verse Art), each section in Bible order and one style, with a sticky row of jump
+    buttons under the header (scrolls sideways on phones, no script, no per-age URLs). Cards on these pages are
+    compact (ListingCard `compact`: picture, passage and style; no author/Bless/share row; gallery and tags keep
+    the full card). Passages moved into a collapsed "Every passage in <story>, in Bible order" numbered list.
+    Verse pages use the heading form of the reference ("Psalm 23:1") throughout.
     To do after the owner's review: link /coloring-pages from the header and home, link story/verse pages from
     tag pages and coloring pages (breadcrumb, "Part of"), add them to the sitemap (functions:sitemap deploy).
   - Lesson: purge about 30 s after `wrangler deploy`, not right away; an isolate still on the old version can

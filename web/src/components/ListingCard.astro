@@ -7,8 +7,10 @@ import { cardSubtitle } from '../lib/listing.ts';
 
 // Card images are always lazy: on phones the stacked filters push the first row below the fold, and eager
 // images there only competed with the page's first paint (Lighthouse 94 -> 99).
-interface Props { sketch: Sketch; author?: string }
-const { sketch, author } = Astro.props;
+// compact: picture and passage only (collection pages, docs/seo-plan.md stage 9), without the author, Bless and
+// share row that the gallery and tag pages show.
+interface Props { sketch: Sketch; author?: string; compact?: boolean }
+const { sketch, author, compact = false } = Astro.props;
 const href = canonicalPath(sketch);
 const ref = sketch.promptData ? reference(sketch.promptData) : 'Bible Scene';
 const url = encodeURIComponent(ORIGIN + href);
@@ -27,7 +29,7 @@ const pin = sketch.promptData
       <p class="text-xs text-gray-500 truncate mt-1">{cardSubtitle(sketch)}</p>
     </div>
   </a>
-  <div class="px-3 pb-3">
+  {!compact && <div class="px-3 pb-3">
     <div class="flex items-center justify-between mt-3 pt-2 border-t border-gray-50">
       {sketch.userId ? (
         <a href={`/profile/${encodeURIComponent(sketch.userId)}`} title={author}
@@ -52,5 +54,6 @@ const pin = sketch.promptData
         </a>
       )}
     </div>
-  </div>
+  </div>}
+  {compact && <div class="pb-3" />}
 </article>

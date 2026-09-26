@@ -3,8 +3,7 @@
 // to each passage's verse page and to the previous and next story. Unlinked until the
 // owner reviews it; indexable with STORY_MIN+ pages, 404 with none. Cached with `stories` and related:<id>.
 import Base from '../../layouts/Base.astro';
-import ListingCard from '../../components/ListingCard.astro';
-import CardIcons from '../../components/CardIcons.astro';
+import AudienceSections from '../../components/AudienceSections.astro';
 import { ORG_REF, ORIGIN, type Sketch, canonicalPath, heading, jsonLd, loadAuthors, reference, slugOf } from '../../lib/sketch.ts';
 import { STORIES, STORY_MIN, allOwnerPages, makeYourOwn, pagesOfStory, rangeText, storyById, storyOf } from '../../lib/stories.ts';
 
@@ -90,26 +89,25 @@ const schemas = [
       <p class="text-center py-16 text-gray-500">These coloring pages are temporarily unavailable. Please try again in a couple of minutes.</p>
     ) : (
       <>
-        <section class="mb-8">
-          <h2 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Passages in {storyName}</h2>
-          <ul class="flex flex-wrap gap-2">
+        <AudienceSections pages={pages} authors={authors} />
+        <details class="mt-14 bg-white rounded-2xl border border-purple-100 group">
+          <summary class="cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden flex items-center justify-between gap-3 px-6 py-4 font-bold text-gray-800">
+            <span>Every passage in {storyName}, in Bible order <span class="font-semibold text-gray-400">({groups.length})</span></span>
+            <span class="text-[#7C3AED] transition-transform group-open:rotate-180" aria-hidden="true">▾</span>
+          </summary>
+          <ol class="px-6 pb-5 grid sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-1 list-decimal list-inside text-sm marker:text-gray-400">
             {groups.map((g) => (
-              <li><a href={`/coloring-page/${g.slug}`} class="inline-flex items-center rounded-full px-3 py-1 text-sm font-medium bg-purple-100 text-[#7C3AED] hover:bg-purple-200 transition-colors">
-                {g.ref}{g.items.length > 1 ? ` (${g.items.length})` : ''}
-              </a></li>
+              <li class="py-1"><a href={`/coloring-page/${g.slug}`} class="text-[#7C3AED] hover:underline font-medium">{g.ref}</a>
+                <span class="text-gray-400"> · {g.items.length} page{g.items.length === 1 ? '' : 's'}</span></li>
             ))}
-          </ul>
-        </section>
-        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          <CardIcons />
-          {pages.map((s) => <ListingCard sketch={s} author={s.userId ? authors.get(s.userId) : undefined} />)}
-        </div>
+          </ol>
+        </details>
       </>
     )}
 
     <div class="mt-12 flex flex-wrap items-center justify-between gap-4 border-t border-gray-100 pt-6">
       {prev ? <a href={`/coloring-pages/${prev.id}`} class="font-bold text-[#7C3AED] hover:underline">← {prev.name}</a> : <span />}
-      {pages[0] && <a href={makeYourOwn(pages[0])} class="text-sm text-gray-500 hover:text-[#7C3AED] hover:underline">Make your own {storyName} coloring page</a>}
+      {pages[0] && <a href={makeYourOwn(pages[0])} class="text-sm text-gray-500 hover:text-[#7C3AED] hover:underline">Make your own {story.name.replace(/^The /, '')} coloring page</a>}
       {next ? <a href={`/coloring-pages/${next.id}`} class="font-bold text-[#7C3AED] hover:underline">{next.name} →</a> : <span />}
     </div>
   </div>
