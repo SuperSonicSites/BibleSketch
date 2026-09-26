@@ -6,8 +6,8 @@ before the previous one is verified live.
 
 ## Where we are
 
-- Current stage: **Stage 7 (not started)**
-- Last verified live: Stage 6 + QA fix (2026-09-25, Worker fea6a623)
+- Current stage: **Stage 7: code done; owner steps open (below)**
+- Last verified live: Stage 7 code (2026-09-25, Worker 4b39583e)
 - Notes:
   - Stage 1: master pages' og:image, JSON-LD, share buttons and image sitemap use
     `/img/w800/<original path>` (800x1071 WebP); community pages use their 400x533 thumbnail; the w800 route
@@ -84,6 +84,17 @@ before the previous one is verified live.
     Fixed: "Commercial rights included for ... retreats" in the Joshua 1:9 post (missed by the case-sensitive
     search in stage 5). Expected, not a bug: the master profile's ProfilePage JSON-LD image is the account avatar
     on Firebase (profiles are noindexed).
+  - Stage 7: IndexNow key `2c2cf7276dcf89edc85f8e0516f8197a` served at /2c2cf7276dcf89edc85f8e0516f8197a.txt
+    (web/public). Tried pinging from /api/purge: api.indexnow.org and www.bing.com both answer 429 to Cloudflare
+    Worker traffic, while the same request from the owner's machine gets 200/202. So the Worker does not ping;
+    `scripts/page-text-verses.mjs` (run by pinterest-daily after publishing) submits the pages it just filled to
+    www.bing.com/indexnow, plus / and /gallery; `--indexnow-all` submits every owner page, tag page and main page.
+    One-time full submission done: 390 URLs -> 200. Runbook Run step 7 and SKILL.md updated.
+    Owner steps still open: (1) Bing Webmaster Tools: sign in at bing.com/webmasters, "Import from Google Search
+    Console", then Sitemaps -> submit https://biblesketch.app/sitemap.xml; (2) Cloudflare dashboard -> Security ->
+    Bots: confirm Bot Fight Mode / "Block AI bots" don't challenge verified bots (Googlebot, Bingbot,
+    OAI-SearchBot, PerplexityBot, Claude-SearchBot); (3) Short.io: set img.biblesketch.app's root redirect to
+    https://biblesketch.app/ (its placeholder page is indexed).
   - Lesson: purge about 30 s after `wrangler deploy`, not right away; an isolate still on the old version can
     re-cache a page in between (happened once with /tags/ordinary-time; purged again).
   - Open loose ends: (a) done in Stage 4. (b) done in Stage 3 (fixture refreshed; passes). (c) The old Firebase renderers (profileRender, sketchRender, tag renderer) still call community
@@ -228,7 +239,7 @@ builds the slots; the words themselves arrive gradually (verse text now, descrip
 **Checks**
 - Rich Results Test on one master page and `/tags/christmas`; `check-pages.mjs` passes.
 
-## Stage 7: Bing and IndexNow  [ ]
+## Stage 7: Bing and IndexNow  [x] code live 2026-09-25; owner steps open
 
 **Changes**
 - IndexNow key file in `web/public/`; `/api/purge` (already called for every publish) also pings IndexNow

@@ -182,7 +182,8 @@ days old and all profiled; `lessons` in pin-learn.json has the detail):
    review `tags`, and copy by §3.3a.
 7. `node scripts/page-text-verses.mjs`: adds the World English Bible text of every newly published owner page to
    `page-text.json`, so the page shows its verse on the site (docs/seo-plan.md stage 3). It only fetches what is
-   missing. If bible-api fails, carry on and say so in the report; the next run fills the gap.
+   missing, then tells IndexNow (Bing) about the new pages (stage 7; expect "IndexNow: N URLs -> 200" or 202). If
+   bible-api or IndexNow fails, carry on and say so in the report; the next run fills the gap.
 8. Run pins-check (no errors, no warnings on new entries), build, deploy, check one new `/pin-img/`, then the
    alt-text pass.
 9. Update the Status block, commit `pins.json`, `pin-year.json`, `pin-learn.json`, `page-text.json` and this file,
