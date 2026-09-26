@@ -7,7 +7,7 @@ before the previous one is verified live.
 ## Where we are
 
 - Current stage: **Stage 7 (not started)**
-- Last verified live: Stage 6 (2026-09-25, Worker 66488b4f)
+- Last verified live: Stage 6 + QA fix (2026-09-25, Worker fea6a623)
 - Notes:
   - Stage 1: master pages' og:image, JSON-LD, share buttons and image sitemap use
     `/img/w800/<original path>` (800x1071 WebP); community pages use their 400x533 thumbnail; the w800 route
@@ -76,6 +76,14 @@ before the previous one is verified live.
   - sameAs now also lists Facebook (canonical https://www.facebook.com/p/Bible-Sketch-App-61584416399533/, resolved
     from the owner's share link) and Instagram (https://www.instagram.com/biblesketchapp/), confirmed by the owner.
     Worker f25dfac2.
+  - QA of stages 5-6 (2026-09-25): sweep of 58 non-coloring pages (home, about, pricing, terms, privacy, verse
+    page, blog index + 6 posts, 20 gallery pages, 15 tags, 3 profiles, 6 checkout plans, 404): statuses, false
+    claims (case-insensitive), raw markdown, Firebase URLs, JSON-LD validity, shared Organization @id + 3 sameAs,
+    BlogPosting author @id, CollectionPage items; /terms#rights anchor present, 7 pages link to it. schema.org
+    validator (Google): 0 errors, 0 warnings on a coloring page, /tags/christmas, /about, a blog post and home.
+    Fixed: "Commercial rights included for ... retreats" in the Joshua 1:9 post (missed by the case-sensitive
+    search in stage 5). Expected, not a bug: the master profile's ProfilePage JSON-LD image is the account avatar
+    on Firebase (profiles are noindexed).
   - Lesson: purge about 30 s after `wrangler deploy`, not right away; an isolate still on the old version can
     re-cache a page in between (happened once with /tags/ordinary-time; purged again).
   - Open loose ends: (a) done in Stage 4. (b) done in Stage 3 (fixture refreshed; passes). (c) The old Firebase renderers (profileRender, sketchRender, tag renderer) still call community
