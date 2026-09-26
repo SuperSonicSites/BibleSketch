@@ -73,6 +73,9 @@ before the previous one is verified live.
     of their owner pages. Blog: author = founder @id (his posts) or the Organization; publisher = Organization.
     No FAQ/HowTo/SearchAction/review markup added (the existing pricing FAQPage stays). check-pages.mjs now fails
     on any Firebase Storage URL in head or JSON-LD (profiles excluded: avatar). Live sweep: 457/457 pages correct.
+  - sameAs now also lists Facebook (canonical https://www.facebook.com/p/Bible-Sketch-App-61584416399533/, resolved
+    from the owner's share link) and Instagram (https://www.instagram.com/biblesketchapp/), confirmed by the owner.
+    Worker f25dfac2.
   - Lesson: purge about 30 s after `wrangler deploy`, not right away; an isolate still on the old version can
     re-cache a page in between (happened once with /tags/ordinary-time; purged again).
   - Open loose ends: (a) done in Stage 4. (b) done in Stage 3 (fixture refreshed; passes). (c) The old Firebase renderers (profileRender, sketchRender, tag renderer) still call community

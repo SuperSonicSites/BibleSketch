@@ -7,14 +7,19 @@ import { query } from './firestore.ts';
 
 export const ORIGIN = 'https://biblesketch.app';
 
-// One identity for the site in structured data (docs/seo-plan.md stage 6). sameAs lists only profiles the site
-// itself links to (Pinterest, /privacy); add others when the owner confirms them.
+// One identity for the site in structured data (docs/seo-plan.md stage 6). sameAs: the owner's confirmed profiles
+// (Pinterest; Facebook and Instagram confirmed 2026-09-25; Facebook by its canonical URL, not the share link).
 export const ORG_ID = `${ORIGIN}/#organization`;
 export const FOUNDER_ID = `${ORIGIN}/about#founder`;
 export const ORG_REF = { '@type': 'Organization', '@id': ORG_ID, name: 'Bible Sketch', url: `${ORIGIN}/` };
 export const ORGANIZATION = {
   ...ORG_REF, logo: `${ORIGIN}/logo.png`, email: 'hello@biblesketch.app',
-  sameAs: ['https://www.pinterest.com/biblesketch/'], founder: { '@id': FOUNDER_ID },
+  sameAs: [
+    'https://www.pinterest.com/biblesketch/',
+    'https://www.facebook.com/p/Bible-Sketch-App-61584416399533/',
+    'https://www.instagram.com/biblesketchapp/',
+  ],
+  founder: { '@id': FOUNDER_ID },
 };
 // IPTC digital source type for images made by a generative model (Google Images shows it as "AI-generated").
 export const AI_SOURCE = 'http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia';
