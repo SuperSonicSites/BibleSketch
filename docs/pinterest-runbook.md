@@ -93,8 +93,9 @@ every day at 7:00 local, runs only while the app is open) adds **5 reviewed Pins
 collection lane below). Owner-authorized scope: at most 15 generations per run on the master account (with the
 planners' `guidance`; raised from 10 on 2026-09-26 for the collection lane); publishing the approved ones; editing
 `web/src/data/pins.json`, `pin-year.json` (refill only: add items, never remove used ones), `pin-learn.json`,
-`page-text.json` (only through `scripts/page-text-verses.mjs`, owner request 2026-09-25) and this file's Status and
-"What's working" blocks; pins-check, pins-plan, pins-learn, page-text-verses, build, `npx wrangler deploy` (Worker
+`page-text.json` (only through `scripts/page-text-verses.mjs`, owner request 2026-09-25, and
+`scripts/page-text-scenes.mjs`, owner request 2026-09-26) and this file's Status and "What's working" blocks;
+pins-check, pins-plan, pins-learn, page-text-verses, page-text-scenes, build, `npx wrangler deploy` (Worker
 only); commit and push those files to `main`; the alt-text pass. Nothing else.
 
 ### The collection lane (owner decisions 2026-09-26)
@@ -223,6 +224,20 @@ days old and all profiled; `lessons` in pin-learn.json has the detail):
    `page-text.json`, so the page shows its verse on the site (docs/seo-plan.md stage 3). It only fetches what is
    missing, then tells IndexNow (Bing) about the new pages (stage 7; expect "IndexNow: N URLs -> 200" or 202). If
    bible-api or IndexNow fails, carry on and say so in the report; the next run fills the gap.
+7b. Page words (docs/seo-plan.md stage 11, owner 2026-09-26): `node scripts/page-text-scenes.mjs --next <N>`, with
+   N = the pages published today + 5 (new pages come first, then the backlog: Nativity, Wise Men, Noah, the
+   season's stories; Creation is held until Oct 17 as the comparison group). Open each `image` up close and write
+   `{"<id>": {"scene", "description"}}` to a scratchpad file, then `--write <file>` (it checks the words, writes
+   `page-text.json` and tells IndexNow). The rules:
+   - **scene**: the name people search for the moment, in title case, 3 to about 25 characters ("Noah's Ark and
+     the Animals", "Baby Jesus in the Manger", "Angel Gabriel Visits Mary"). It becomes the page's H1 and title
+     ("<scene> Coloring Page (<ref>)"). Name the story's own words (ark, manger, star, giant) where the picture
+     shows them.
+   - **description**: 80-155 characters, one or two plain sentences of only what is drawn (who, doing what,
+     where, the main objects), starting with the subject. It shows under "What's in this picture" and as Google's
+     snippet. Faithful to the image and the text: never describe something that isn't drawn; no hype words, no
+     "AI", no audience or sales line (the page already says those).
+   - List every entry in the report so the owner can object; a correction is a new `--write` for that id.
 8. Run pins-check (no errors, no warnings on new entries), build, deploy, check one new `/pin-img/`, then the
    alt-text pass.
 9. Update the Status block, commit `pins.json`, `pin-year.json`, `pin-learn.json`, `page-text.json` and this file,

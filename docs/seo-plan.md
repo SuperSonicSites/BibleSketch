@@ -6,8 +6,8 @@ before the previous one is verified live.
 
 ## Where we are
 
-- Current stage: **all tonight's stages done (1-10)**; Stage 7 owner steps open; next: Stage 11 from Oct 8
-- Last verified live: Stage 10 (2026-09-26, Worker 63bf6237)
+- Current stage: **Stage 11 running** (page words through pinterest-daily, started 2026-09-26); stages 1-10 done
+- Last verified live: Stage 11 pilot, 3 Nativity pages (2026-09-26, Worker 8b30ebf0)
 - Notes:
   - Stage 1: master pages' og:image, JSON-LD, share buttons and image sitemap use
     `/img/w800/<original path>` (800x1071 WebP); community pages use their 400x533 thumbnail; the w800 route
@@ -90,7 +90,7 @@ before the previous one is verified live.
     `scripts/page-text-verses.mjs` (run by pinterest-daily after publishing) submits the pages it just filled to
     www.bing.com/indexnow, plus / and /gallery; `--indexnow-all` submits every owner page, tag page and main page.
     One-time full submission done: 390 URLs -> 200. Runbook Run step 7 and SKILL.md updated.
-    Owner steps still open: (1) Bing Webmaster Tools: sign in at bing.com/webmasters, "Import from Google Search
+    Owner steps done 2026-09-26: (1) Bing Webmaster Tools: sign in at bing.com/webmasters, "Import from Google Search
     Console", then Sitemaps -> submit https://biblesketch.app/sitemap.xml; (2) Cloudflare dashboard -> Security ->
     Bots: confirm Bot Fight Mode / "Block AI bots" don't challenge verified bots (Googlebot, Bingbot,
     OAI-SearchBot, PerplexityBot, Claude-SearchBot); (3) Short.io: set img.biblesketch.app's root redirect to
@@ -163,7 +163,8 @@ before the previous one is verified live.
 - **Not part of this plan:** a public print offer, free samples, making the repo private, changing
   `hosting-public/` files (byte-exact, Hosting procedure only).
 - **No bulk AI text.** Google's September 2026 spam update runs Sep 24 to about Oct 8. Page descriptions are
-  written a few pages a day by the daily task, starting after Oct 8 (Stage 11).
+  written a few pages a day by the daily task (Stage 11; the owner started it 2026-09-26, before Oct 8, at that
+  gradual pace).
 - `web/` must stay deployable after every stage: `pinterest-daily` deploys whatever is in the working tree.
   Commit each stage once it is verified.
 - Deploys: Worker from `web/` with `npm run build` then `npx wrangler deploy` (stop `astro preview` first).
@@ -289,7 +290,7 @@ builds the slots; the words themselves arrive gradually (verse text now, descrip
 **Checks**
 - Rich Results Test on one master page and `/tags/christmas`; `check-pages.mjs` passes.
 
-## Stage 7: Bing and IndexNow  [x] code live 2026-09-25; owner steps open
+## Stage 7: Bing and IndexNow  [x] code live 2026-09-25; owner steps done 2026-09-26
 
 **Changes**
 - IndexNow key file in `web/public/`; `/api/purge` (already called for every publish) also pings IndexNow
@@ -346,7 +347,11 @@ and meta description unchanged (18.5% CTR). Live without cache-buster; 8 main ro
 
 ## After tonight (scheduled, not tonight)
 
-- **Stage 11 (from Oct 8): page text through the daily task.** Owner extends `pinterest-daily`'s scope in
+- **Stage 11 (started 2026-09-26, owner): page text through the daily task.** Tool: `web/scripts/page-text-scenes.mjs`
+  (`--next`, `--write` with checks + IndexNow, `--status`); runbook Run step 7b has the writing rules; pilot of 3
+  Nativity pages verified live (H1, title, "What's in this picture", snippet, image caption; Pin text unchanged).
+  The owner reviews the entries in each run's report instead of before publishing. Creation held until 2026-10-17.
+  Original plan: Owner extends `pinterest-daily`'s scope in
   `docs/pinterest-runbook.md`. Each run writes `page-text.json` entries for 5-8 existing master pages
   (order: Nativity 64, Wise Men 9, Noah 20; Creation 60 held 3 weeks as the comparison group), owner approves
   them in the Pin review, and every new master page is born with its text. About mid-December for all 372.
