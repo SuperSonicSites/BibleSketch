@@ -161,6 +161,29 @@ export function seo(s: Sketch) {
   return { title, description: desc, pinDescription: `${title}\n\n${desc}` };
 }
 
+// Extra words for an owner page, from src/data/page-text.json (docs/seo-plan.md stage 3): the verse (WEB, filled
+// by scripts/page-text-verses.mjs) and, later, a reviewed scene name and description.
+export interface PageText { verse?: string; scene?: string; description?: string }
+
+const clip = (t: string, n: number) => (t.length <= n ? t : `${t.slice(0, t.lastIndexOf(' ', n - 1)).replace(/[,;:]$/, '')}…`);
+
+// Search snippet: about 150 characters, no hashtags or disclaimer. seo().description stays the Pinterest text.
+export function metaDescription(s: Sketch, text?: PageText): string {
+  const p = s.promptData;
+  if (text?.description) return clip(text.description, 155);
+  if (!p) return 'A Bible coloring page to print for Sunday school, VBS, homeschool and family devotions.';
+  const ref = reference(p);
+  return clip(s.type === 'verse'
+    ? `${ref} Bible verse coloring page in ${p.font_style || 'Elegant Script'} lettering. Print it for Sunday school, Bible journaling or quiet time at home.`
+    : `${ref} coloring page for ${audience(p.age_group).toLowerCase()}, drawn in ${p.art_style || 'Classic'} style. A Bible scene to print for Sunday school, homeschool or family devotions.`, 155);
+}
+
+// The line under the H1.
+export function subtitleOf(s: Sketch): string {
+  const p = s.promptData ?? {};
+  return s.type === 'verse' ? `${p.font_style || 'Elegant Script'} verse art coloring page` : `Bible coloring page for ${audience(p.age_group)}`;
+}
+
 // Related sketches, same queries as sketchRender and the bundle's `B8` (indexes in firestore.indexes.json).
 export function relatedQuery(s: Sketch): { filters: [string, string | boolean][]; heading: string } | null {
   const p = s.promptData || {};

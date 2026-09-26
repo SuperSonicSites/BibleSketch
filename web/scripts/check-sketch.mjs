@@ -1,11 +1,12 @@
 // Port check: the Worker's sketch helpers must produce what the live bundle renders today.
 // Fixture = the live pages captured in headless Chrome on 2026-09-22 (title, meta description, canonical, H1,
-// subtitle, related heading and links). Reads production Firestore unauthenticated (read-only).
+// subtitle, related heading and links); subtitle and first related link refreshed 2026-09-25 (docs/seo-plan.md).
+// Reads production Firestore unauthenticated (read-only).
 // Run: node scripts/check-sketch.mjs   (Node >= 22.18 strips the .ts types)
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { getDoc } from '../src/lib/firestore.ts';
-import { ORIGIN, canonicalPath, seo, heading, ageDisplay, loadRelated, isDocId, slugOf } from '../src/lib/sketch.ts';
+import { ORIGIN, canonicalPath, seo, heading, loadRelated, isDocId, slugOf, metaDescription, subtitleOf } from '../src/lib/sketch.ts';
 
 const live = JSON.parse(readFileSync(new URL('./fixtures/live-seo.json', import.meta.url), 'utf8'));
 
@@ -17,11 +18,10 @@ for (const [id, want] of Object.entries(live)) {
   assert.equal(got.description, want.description, `${id} description`);
   assert.equal(ORIGIN + canonicalPath(s), want.canonical, `${id} canonical`);
   assert.equal(heading(s.promptData), want.h1, `${id} h1`);
-  const p = s.promptData;
-  const subtitle = s.type === 'verse'
-    ? `${p.font_style || 'Elegant Script'} verse art coloring page`
-    : `Free printable Bible coloring sheet for ${ageDisplay(p.age_group)}s`;
-  assert.equal(subtitle, want.subtitle, `${id} subtitle`);
+  assert.equal(subtitleOf(s), want.subtitle, `${id} subtitle`);
+  // Search snippet (docs/seo-plan.md stage 3): short, no hashtags or disclaimer; seo().description stays for Pins.
+  const snippet = metaDescription(s);
+  assert.ok(snippet.length <= 155 && !snippet.includes('#') && !/disclaimer/i.test(snippet), `${id} snippet: ${snippet}`);
   const related = await loadRelated(s);
   assert.equal(related?.heading, want.related, `${id} related heading`);
   // Newer public sketches can shift the list; the first link is the stable signal.

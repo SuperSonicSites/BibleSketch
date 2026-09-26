@@ -45,9 +45,9 @@ export default function SketchActions({ sketch }: { sketch: Sketch }) {
     ];
     return (
       <div className="bg-[#7C3AED] rounded-2xl p-6 mb-6 text-white overflow-hidden">
-        <h2 className="text-xl font-display font-bold mb-3 flex items-center gap-2">
+        <p className="text-xl font-display font-bold mb-3 flex items-center gap-2">
           <span className="text-2xl animate-float inline-block">🎁</span>Unlock This Coloring Page
-        </h2>
+        </p>
         <p className="text-purple-200 text-sm mb-4">Create a free account to:</p>
         <ul className="text-white text-sm space-y-2 mb-5">
           {items.map(([d, label], i) => (

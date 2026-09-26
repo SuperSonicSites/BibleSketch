@@ -6,8 +6,8 @@ before the previous one is verified live.
 
 ## Where we are
 
-- Current stage: **Stage 3 (not started)**
-- Last verified live: Stage 2 + QA fix (2026-09-25, Worker 221ae789 + functions:sitemap)
+- Current stage: **Stage 4 (not started)**
+- Last verified live: Stage 3 (2026-09-25, Worker 347c38b3)
 - Notes:
   - Stage 1: master pages' og:image, JSON-LD, share buttons and image sitemap use
     `/img/w800/<original path>` (800x1071 WebP); community pages use their 400x533 thumbnail; the w800 route
@@ -23,6 +23,14 @@ before the previous one is verified live.
     pages indexable, 85/85 community pages and thumbnails noindex (cached copies too); Worker tail: 29 requests,
     0 exceptions/errors/5xx. Fixed: tag pages with no owner page were indexable (`/tags/ordinary-time`); now
     noindex, matching the sitemap.
+  - Stage 3: `web/src/data/page-text.json` holds `verse` for all 372 owner pages (241 references, WEB via
+    bible-api with withLord, 24 long passages cut at 600 chars); rerun `node scripts/page-text-verses.mjs` after
+    new owner pages are published (idempotent). Template: verse blockquote + "(World English Bible)", "Drawn with
+    AI from the Bible text." line, snippet from `metaDescription()` (<=155 chars, no hashtags/disclaimer),
+    alt = full reference, subtitle "Bible coloring page for <Audience>" (fixes "Young Childrens", drops "free
+    printable"), unlock box no longer an h2. `scene`/`description` slots render when present (Stage 11).
+    Pinterest text (`seo().description`, data-pin-description, share button) unchanged. check-sketch fixture
+    refreshed (subtitle, first related link) and now checks the snippet: passes. All 372 live pages show the verse.
   - Lesson: purge about 30 s after `wrangler deploy`, not right away; an isolate still on the old version can
     re-cache a page in between (happened once with /tags/ordinary-time; purged again).
   - Open loose ends: (a) related grids on master pages still link some community pages (~5 of 85 links
@@ -103,7 +111,7 @@ search results. Every coloring page that earned a Google click in 12 months is a
   `X-Robots-Tag: noindex`, a master one does not; the sitemap has 372-ish coloring pages and no profiles.
 - Pinterest links to master pages unaffected (spot-check 2 recent pins' landing pages).
 
-## Stage 3: Coloring-page template that can carry the story  [ ]
+## Stage 3: Coloring-page template that can carry the story  [x] verified live 2026-09-25
 
 **Why:** pages have ~150 words, never name the story, and the first real sentence is the paywall. This stage
 builds the slots; the words themselves arrive gradually (verse text now, descriptions from Stage 11).
