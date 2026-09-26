@@ -140,6 +140,11 @@ before the previous one is verified live.
     season's stories (stories.json `collections`, `web/scripts/collection-plan.mjs`, runbook "The collection
     lane"); the Pin lane reuses those pages. Cap 15 generations per run. Start: nativity 47/107, wise men 11/30,
     Advent prophecies 7/17 (thin bank: 5 scenes).
+  - Stage 9 QA (2026-09-26, live sweep with counts computed independently from Firestore + stories.json): 377
+    owner pages, 276 in 27 stories, 244 verse slugs; 272 collection pages checked. Every page lists exactly its
+    expected owner pages; robots, sitemap (46 URLs) and canonicals agree; JSON-LD valid; ItemList counts match;
+    651 internal links resolve; empty stories and bad slugs 404 + noindex; sketch-id URLs still 301. Fixed 15
+    meta descriptions over 155 characters (commit 84014a0, ships with the next Worker deploy).
   - Lesson: purge about 30 s after `wrangler deploy`, not right away; an isolate still on the old version can
     re-cache a page in between (happened once with /tags/ordinary-time; purged again).
   - Open loose ends: (a) done in Stage 4. (b) done in Stage 3 (fixture refreshed; passes). (c) The old Firebase renderers (profileRender, sketchRender, tag renderer) still call community
