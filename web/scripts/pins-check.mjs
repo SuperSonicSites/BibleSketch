@@ -78,7 +78,9 @@ for (const e of entries) {
   if (s.userId !== MASTER_UID) err(e, 'not the master account');
   if (s.isPublic !== true) err(e, 'not public');
   if (slugOf(s) !== e.ref) err(e, `ref ${e.ref} but the page slug is ${slugOf(s)}`);
-  if (s.promptData && !e.title.includes(reference(s.promptData))) warn(e, `title lacks the reference "${reference(s.promptData)}"`);
+  // The text stores the book as "Psalms"; a title names one psalm, "Psalm 23:1".
+  const ref = s.promptData && reference(s.promptData).replace(/^Psalms /, 'Psalm ');
+  if (ref && !e.title.replace(/\bPsalms\b/g, 'Psalm').includes(ref)) warn(e, `title lacks the reference "${ref}"`);
 }
 
 // Copy variety and passage spacing, per board.

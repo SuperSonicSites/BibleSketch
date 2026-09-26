@@ -16,6 +16,14 @@ As of **2026-09-26** (third `pinterest-daily` run: 5 Pins Oct 14-18, 5 collectio
   nothing re-enters. **Owner to do:** delete one of each duplicated pair on Pinterest (keep the older one when it has
   alt text). Keep the largest release gap on every connected board under 14 days (the planner fills Sunday School
   after Nov 13).
+- **pins-check warnings cleared 2026-09-26** (owner saw 28): 15 were the check wanting "Psalms 23:1" where a title
+  rightly says "Psalm 23:1" (fixed in pins-check); 13 were hand-scheduled repeats of a passage within 30 days on one
+  board (the Sept 23 batches, not the planner: `pins-plan` already keeps the same slug 30 days apart, `SLUG_GAP`).
+  Ten entries were moved to the nearest free slot 30+ days from the twin (unreleased Pins only), plus four date
+  swaps so the Creation series doesn't run two same-opener Pins in a row. **Still warned, owner to decide:** the four
+  nativity drawings of Luke 2:6-7 (Oct 21 manger, Nov 11 first Christmas night, Nov 30 icon, Dec 12 stained glass)
+  can't all sit 30 days apart before Dec 19; either accept (four styles of the most-searched Christmas image) or
+  unapprove one.
 - **Calendar** (`web/src/data/pins.json`, 183 entries, `pins-check`: no errors):
 
   | Board | Pins | Dates |
