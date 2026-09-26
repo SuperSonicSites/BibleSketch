@@ -25,8 +25,14 @@ try {
 }
 const authors = await loadAuthors(verses);
 
-const title = 'Bible Verse Coloring Pages | Create Custom Scripture Art | Bible Sketch';
-const description = 'Turn any Bible verse into a beautiful coloring page. Choose from elegant script, modern brush, playful, or classic serif typography styles. Printable scripture art.';
+// Stage 10 (docs/seo-plan.md): "generator" in the title, keeping "Bible verse coloring pages" (the searched phrase).
+const title = 'Bible Verse Coloring Pages Generator | Bible Sketch';
+const description = 'A Bible verse coloring page generator: pick any verse, choose elegant script, modern brush, playful or classic serif lettering, and print it in about a minute.';
+const steps: [string, string][] = [
+  ['Pick a verse', 'Choose the book, chapter and verse, from Genesis to Revelation, or start from a favorite like Psalm 23 or Joshua 1:9.'],
+  ['Choose the lettering', 'Elegant script, modern brush, playful bubble letters or classic serif, each framed with decorations drawn for that verse.'],
+  ['Print and color', 'Your page is ready in about a minute. Print it as a PDF for Sunday school, Bible journaling or quiet time at home.'],
+];
 const schema = jsonLd({
   '@context': 'https://schema.org',
   '@type': 'WebPage',
@@ -69,6 +75,19 @@ const schema = jsonLd({
       </div>
     </div>
   </main>
+
+  <section data-form-only class="max-w-7xl mx-auto px-4 pt-16" aria-labelledby="how-it-works">
+    <h2 id="how-it-works" class="font-display text-3xl font-bold text-gray-800 mb-6">How the Verse Coloring Page Generator Works</h2>
+    <ol class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {steps.map(([name, text], i) => (
+        <li class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-[#7C3AED] text-white font-bold mb-3" aria-hidden="true">{i + 1}</span>
+          <h3 class="font-bold text-gray-800 mb-1">{name}</h3>
+          <p class="text-sm text-gray-600">{text}</p>
+        </li>
+      ))}
+    </ol>
+  </section>
 
   {verses.length > 0 && (
     <section data-form-only class="max-w-7xl mx-auto px-4 py-16" aria-labelledby="community-verse">
