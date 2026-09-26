@@ -136,6 +136,10 @@ before the previous one is verified live.
     /coloring-pages made cohesive: story covers are each story's toddler (else young-child) Sunday School page;
     stories with no such page (Tower of Babel, Samson, Holy Week) are text links under "More stories"; the verse
     list shows only memory verses outside any story, in balanced columns (story passages live on story pages).
+  - Collection lane (owner, 2026-09-26): pinterest-daily now also makes 5 site pages a day that complete the
+    season's stories (stories.json `collections`, `web/scripts/collection-plan.mjs`, runbook "The collection
+    lane"); the Pin lane reuses those pages. Cap 15 generations per run. Start: nativity 47/107, wise men 11/30,
+    Advent prophecies 7/17 (thin bank: 5 scenes).
   - Lesson: purge about 30 s after `wrangler deploy`, not right away; an isolate still on the old version can
     re-cache a page in between (happened once with /tags/ordinary-time; purged again).
   - Open loose ends: (a) done in Stage 4. (b) done in Stage 3 (fixture refreshed; passes). (c) The old Firebase renderers (profileRender, sketchRender, tag renderer) still call community

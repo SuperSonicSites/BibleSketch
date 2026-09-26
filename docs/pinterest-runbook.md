@@ -72,12 +72,27 @@ As of **2026-09-25** (second `pinterest-daily` run, stopped: browser signed out;
 ## Daily scheduled task (`pinterest-daily`, owner request 2026-09-24)
 A Claude Code scheduled task in the desktop app (`C:\Users\renau\.claude\scheduled-tasks\pinterest-daily\SKILL.md`,
 every day at 7:00 local, runs only while the app is open) adds **5 reviewed Pins a day** with the procedure in
-"Generating a batch of pages" below, following the **yearly calendar**. Owner-authorized scope: at most 10
-generations per run on the master account (with the planner's `guidance`); publishing the approved ones; editing
+"Generating a batch of pages" below, following the **yearly calendar**, and **5 collection pages a day** (the
+collection lane below). Owner-authorized scope: at most 15 generations per run on the master account (with the
+planners' `guidance`; raised from 10 on 2026-09-26 for the collection lane); publishing the approved ones; editing
 `web/src/data/pins.json`, `pin-year.json` (refill only: add items, never remove used ones), `pin-learn.json`,
 `page-text.json` (only through `scripts/page-text-verses.mjs`, owner request 2026-09-25) and this file's Status and
 "What's working" blocks; pins-check, pins-plan, pins-learn, page-text-verses, build, `npx wrangler deploy` (Worker
 only); commit and push those files to `main`; the alt-text pass. Nothing else.
+
+### The collection lane (owner decisions 2026-09-26)
+The story pages on the site (`/coloring-pages/<story>`) fill up ahead of each season, one story at a time, so SEO
+and Pinterest share one stock of pages. Rules live in `web/src/data/stories.json` `collections`:
+- **5 pages a day**, on top of the Pin lane; the cap is 15 generations per run for both lanes.
+- **Sprints** by month-day, repeating every year: Sept 26 to Nov 15 Advent and Christmas (nativity, wise men,
+  Advent prophecies); Nov 16 to Jan 31 Holy Week and the Resurrection; then the Old Testament favourites, Pentecost,
+  VBS and back-to-school stories. When a sprint's stories are complete, the lane moves through `evergreen`.
+- **A complete story**: each scene (the pin-year.json scene items inside its ranges) as a Toddler and a Young Child
+  page in Sunday School style and an Adult page in the story's `adult` style (Stained Glass for creation, Babel,
+  Abraham, Advent, nativity, wise men, Holy Week and the Resurrection; Classic otherwise), plus up to 2 verse-art
+  pages. Kids' pages come first. A scene counts as done when a page of that audience and style covers its verse.
+- `node scripts/collection-plan.mjs --status` prints progress per story and flags thin scene banks (under 6 scenes):
+  refill those stories' series in pin-year.json with the bank-refill rules (at most 20 new items a run).
 
 ### The yearly calendar (owner request 2026-09-24)
 `web/src/data/pin-year.json` is the whole year, and `node scripts/pins-plan.mjs` (in `web/`) turns it into each
@@ -174,12 +189,19 @@ days old and all profiled; `lessons` in pin-learn.json has the detail):
 1. Read the Status block; `git pull --ff-only` (stop if it fails or `pins.json`/this file have uncommitted changes).
 2. On or after the 25th, if `pin-learn.json` `updated` is older than 25 days: `node scripts/pins-learn.mjs`.
 3. `node scripts/pins-plan.mjs --check`: refill the bank if it warns.
-4. `node scripts/pins-plan.mjs --next 5`: exactly these slots, in this order.
-5. Generate each slot's `create` (it includes `guidance`), review up close, and log rejects. Regenerate a reject once;
-   if it fails again, ask the planner for the next pick. At most 10 generations; stop after 3 failures in a row
-   (likely the Gemini spend cap).
+4. `node scripts/pins-plan.mjs --next 5 | node scripts/collection-plan.mjs --reuse`: exactly these slots, in this
+   order. A slot whose `reuse` is a sketch id already has a public page made by the collection lane: review it up
+   close like a new page and pin it instead of generating.
+5. Generate each other slot's `create` (it includes `guidance`), review up close, and log rejects. Regenerate a
+   reject once; if it fails again, ask the planner for the next pick. At most 15 generations per run across both
+   lanes; stop after 3 failures in a row (likely the Gemini spend cap).
 6. Publish the approved pages. Write each entry with the slot's `release`, `board`, `template`, `ref`, `plan`, the
    review `tags`, and copy by §3.3a.
+6b. The collection lane: `node scripts/collection-plan.mjs --next 5` (run it after step 6, so today's Pin pages count).
+   Generate each slot's `create`, review with the same checklist, log rejects with
+   `node scripts/pins-plan.mjs --reject <plan> "<reason>"` (plan ids end in `:C-T`, `:C-Y`, `:C-A` or `:C-V`),
+   regenerate a reject once, and publish the approved ones (isPublic). They go on the site only: **not** into
+   `pins.json` (the Pin lane pins them later through `reuse`). Skip this step if the Pin lane used the whole cap.
 7. `node scripts/page-text-verses.mjs`: adds the World English Bible text of every newly published owner page to
    `page-text.json`, so the page shows its verse on the site (docs/seo-plan.md stage 3). It only fetches what is
    missing, then tells IndexNow (Bing) about the new pages (stage 7; expect "IndexNow: N URLs -> 200" or 202). If

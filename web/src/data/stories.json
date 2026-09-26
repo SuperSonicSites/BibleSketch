@@ -1,12 +1,25 @@
 {
   "_about": "Bible stories in Bible order (docs/seo-plan.md stage 9). A coloring page belongs to the first story whose range holds its starting verse; ranges are [book, fromChapter, fromVerse, toChapter, toVerse]. Seeded from the series in pin-year.json. wikidata only where checked. Story pages: /coloring-pages/<id>, indexable with 10+ owner pages.",
+  "collections": {
+    "_about": "Collection lane (owner decisions 2026-09-26): 5 pages a day, generated ahead of the season to complete one story at a time, published on the site at once, pinned later by the Pinterest lane. A story is complete when each of its scenes (pin-year.json items in its ranges) has a Toddler and a Young Child page in Sunday School style and an Adult page in the story's `adult` style (default Classic), plus up to 2 verse-art pages. Sprints repeat every year (month-day windows); when a sprint's stories are complete the lane moves on through `evergreen`.",
+    "perDay": 5,
+    "sprints": [
+      { "from": "09-26", "to": "11-15", "why": "Advent and Christmas", "stories": ["nativity", "wise-men", "advent-prophecies"] },
+      { "from": "11-16", "to": "01-31", "why": "Lent and Easter, ready before Ash Wednesday", "stories": ["holy-week", "resurrection"] },
+      { "from": "02-01", "to": "03-31", "why": "Winter Sunday school, Old Testament", "stories": ["moses", "david-and-goliath", "jonah", "daniel"] },
+      { "from": "04-01", "to": "05-15", "why": "Pentecost and the patriarchs", "stories": ["early-church", "joseph", "abraham-and-sarah"] },
+      { "from": "05-16", "to": "06-30", "why": "VBS favorites", "stories": ["noahs-ark", "creation", "jonah"] },
+      { "from": "07-01", "to": "09-25", "why": "Back to school and fall", "stories": ["creation", "adam-and-eve", "ruth", "cain-and-abel"] }
+    ],
+    "evergreen": ["noahs-ark", "creation", "david-and-goliath", "jonah", "daniel", "moses", "joseph", "parables", "feeding-the-5000", "jesus-walks-on-water", "zacchaeus", "esther", "joshua-and-jericho", "elijah", "ruth", "abraham-and-sarah", "adam-and-eve", "cain-and-abel", "david", "gideon", "hannah-and-samuel", "isaac-and-rebekah", "jacob-and-esau", "elisha", "tower-of-babel"]
+  },
   "stories": [
-    { "id": "creation", "name": "Creation", "wikidata": "Q137651", "ranges": [["Genesis", 1, 1, 2, 3]] },
+    { "id": "creation", "adult": "Stained Glass", "name": "Creation", "wikidata": "Q137651", "ranges": [["Genesis", 1, 1, 2, 3]] },
     { "id": "adam-and-eve", "name": "Adam and Eve", "wikidata": "Q58701", "ranges": [["Genesis", 2, 4, 3, 24]] },
     { "id": "cain-and-abel", "name": "Cain and Abel", "ranges": [["Genesis", 4, 1, 4, 26]] },
     { "id": "noahs-ark", "name": "Noah's Ark", "wikidata": "Q126553", "ranges": [["Genesis", 6, 1, 9, 29]] },
-    { "id": "tower-of-babel", "name": "The Tower of Babel", "ranges": [["Genesis", 11, 1, 11, 9]] },
-    { "id": "abraham-and-sarah", "name": "Abraham and Sarah", "ranges": [["Genesis", 12, 1, 23, 20]] },
+    { "id": "tower-of-babel", "adult": "Stained Glass", "name": "The Tower of Babel", "ranges": [["Genesis", 11, 1, 11, 9]] },
+    { "id": "abraham-and-sarah", "adult": "Stained Glass", "name": "Abraham and Sarah", "ranges": [["Genesis", 12, 1, 23, 20]] },
     { "id": "isaac-and-rebekah", "name": "Isaac and Rebekah", "ranges": [["Genesis", 24, 1, 25, 18]] },
     { "id": "jacob-and-esau", "name": "Jacob and Esau", "ranges": [["Genesis", 25, 19, 36, 43]] },
     { "id": "joseph", "name": "Joseph and His Brothers", "ranges": [["Genesis", 37, 1, 50, 26]] },
@@ -23,15 +36,15 @@
     { "id": "esther", "name": "Queen Esther", "ranges": [["Esther", 1, 1, 10, 3]] },
     { "id": "daniel", "name": "Daniel", "ranges": [["Daniel", 1, 1, 6, 28]] },
     { "id": "jonah", "name": "Jonah", "ranges": [["Jonah", 1, 1, 4, 11]] },
-    { "id": "advent-prophecies", "name": "The Advent Prophecies", "ranges": [["Isaiah", 7, 14, 7, 14], ["Isaiah", 9, 1, 9, 7], ["Isaiah", 11, 1, 11, 10], ["Isaiah", 40, 1, 40, 11], ["Micah", 5, 2, 5, 2]] },
-    { "id": "nativity", "name": "The Nativity", "wikidata": "Q51628", "ranges": [["Matthew", 1, 18, 1, 25], ["Luke", 1, 5, 2, 40]] },
-    { "id": "wise-men", "name": "The Wise Men", "wikidata": "Q51671", "ranges": [["Matthew", 2, 1, 2, 23]] },
+    { "id": "advent-prophecies", "adult": "Stained Glass", "name": "The Advent Prophecies", "ranges": [["Isaiah", 7, 14, 7, 14], ["Isaiah", 9, 1, 9, 7], ["Isaiah", 11, 1, 11, 10], ["Isaiah", 40, 1, 40, 11], ["Micah", 5, 2, 5, 2]] },
+    { "id": "nativity", "adult": "Stained Glass", "name": "The Nativity", "wikidata": "Q51628", "ranges": [["Matthew", 1, 18, 1, 25], ["Luke", 1, 5, 2, 40]] },
+    { "id": "wise-men", "adult": "Stained Glass", "name": "The Wise Men", "wikidata": "Q51671", "ranges": [["Matthew", 2, 1, 2, 23]] },
     { "id": "feeding-the-5000", "name": "Feeding the 5,000", "ranges": [["Matthew", 14, 13, 14, 21], ["Mark", 6, 30, 6, 44], ["Luke", 9, 10, 9, 17], ["John", 6, 1, 6, 14]] },
     { "id": "jesus-walks-on-water", "name": "Jesus Walks on Water", "ranges": [["Matthew", 14, 22, 14, 33], ["Mark", 6, 45, 6, 52], ["John", 6, 15, 6, 21]] },
     { "id": "parables", "name": "The Parables of Jesus", "ranges": [["Matthew", 13, 1, 13, 52], ["Matthew", 18, 10, 18, 14], ["Luke", 10, 25, 10, 37], ["Luke", 15, 1, 15, 32]] },
     { "id": "zacchaeus", "name": "Zacchaeus", "ranges": [["Luke", 19, 1, 19, 10]] },
-    { "id": "holy-week", "name": "Holy Week", "ranges": [["Matthew", 21, 1, 27, 66], ["Mark", 11, 1, 15, 47], ["Luke", 19, 28, 23, 56], ["John", 12, 12, 19, 42]] },
-    { "id": "resurrection", "name": "The Resurrection", "ranges": [["Matthew", 28, 1, 28, 20], ["Mark", 16, 1, 16, 20], ["Luke", 24, 1, 24, 53], ["John", 20, 1, 21, 25], ["Acts", 1, 1, 1, 11]] },
+    { "id": "holy-week", "adult": "Stained Glass", "name": "Holy Week", "ranges": [["Matthew", 21, 1, 27, 66], ["Mark", 11, 1, 15, 47], ["Luke", 19, 28, 23, 56], ["John", 12, 12, 19, 42]] },
+    { "id": "resurrection", "adult": "Stained Glass", "name": "The Resurrection", "ranges": [["Matthew", 28, 1, 28, 20], ["Mark", 16, 1, 16, 20], ["Luke", 24, 1, 24, 53], ["John", 20, 1, 21, 25], ["Acts", 1, 1, 1, 11]] },
     { "id": "early-church", "name": "The Early Church", "ranges": [["Acts", 1, 12, 28, 31]] }
   ]
 }

@@ -6,7 +6,7 @@ import { MASTER_UID } from './config.ts';
 import { BIBLE_BOOKS } from './listing.ts';
 import { type Sketch, slugOf } from './sketch.ts';
 
-export interface Story { id: string; name: string; wikidata?: string; ranges: [string, number, number, number, number][] }
+export interface Story { id: string; name: string; wikidata?: string; adult?: string; ranges: [string, number, number, number, number][] }
 export const STORIES = data.stories as Story[];
 
 // Thresholds for search engines: fewer pages than this and the collection is noindexed (thin page).
