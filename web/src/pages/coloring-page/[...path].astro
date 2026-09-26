@@ -1,5 +1,6 @@
 ---
 // /coloring-page/<id> and /coloring-page/<slug>/<id>. Same contract as sketchRender (functions/index.js):
+// (and /coloring-page/<verse-slug>, a passage's collection: components/VerseCollection.astro, seo-plan stage 9)
 // id = last segment, 301 to the canonical slug keeping the query, 404 + noindex when missing or private,
 // 503 on upstream errors. HTML and head match what the live bundle renders after boot.
 import Base from '../../layouts/Base.astro';
@@ -7,6 +8,9 @@ import RelatedGrid from '../../components/RelatedGrid.astro';
 import SketchActions from '../../components/SketchActions.tsx';
 import OwnerControls from '../../components/OwnerControls.tsx';
 import OwnerPrivate from '../../components/OwnerPrivate.tsx';
+import VerseCollection from '../../components/VerseCollection.astro';
+import { AGE_GROUPS } from '../../lib/listing.ts';
+import { VERSE_MIN, VERSE_SLUG, bookOfSlug, ownerPages, pagesOfVerse } from '../../lib/stories.ts';
 import { getDoc } from '../../lib/firestore.ts';
 import { MASTER_UID } from '../../lib/config.ts';
 import {
@@ -18,12 +22,22 @@ import pageTexts from '../../data/page-text.json';
 const id = (Astro.params.path ?? '').split('/').filter(Boolean).at(-1) ?? '';
 // Tagged per sketch so the purge endpoint can drop the page, its redirects and its 404 in one call.
 const tags = [`sketch:${id}`];
+// One segment shaped like a passage ("luke-2-6-7") is that passage's collection. Firestore ids have no hyphen, so
+// /coloring-page/<id> links keep their 301 to the canonical page.
+const verseSlug = !(Astro.params.path ?? '').includes('/') && VERSE_SLUG.test(id) ? id : null;
+let versePages: Sketch[] = [];
+let bookPages: Sketch[] = [];
 
 let sketch: Sketch | null = null;
 let author = 'A Bible Sketch User';
 let related: Awaited<ReturnType<typeof loadRelated>> = null;
 try {
-  if (isDocId(id)) sketch = (await getDoc('sketches', id)) as Sketch | null;
+  if (verseSlug) {
+    const book = bookOfSlug(verseSlug);
+    bookPages = book ? await ownerPages([book]) : [];
+    const rank = (x: Sketch) => (x.type === 'verse' ? 9 : AGE_GROUPS.indexOf(x.promptData?.age_group === 'Pre-Teen' ? 'Teen' : x.promptData?.age_group ?? ''));
+    versePages = pagesOfVerse(verseSlug, bookPages).sort((a, b) => rank(a) - rank(b));
+  } else if (isDocId(id)) sketch = (await getDoc('sketches', id)) as Sketch | null;
   if (sketch && sketch.isPublic === true) {
     const canon = canonicalPath(sketch);
     if (Astro.url.pathname !== canon) {
@@ -51,7 +65,11 @@ try {
   Astro.response.headers.set('Cache-Control', 'no-store');
 }
 
-if (!sketch && Astro.response.status !== 503) {
+if (versePages.length) {
+  if (versePages.length < VERSE_MIN) Astro.response.headers.set('X-Robots-Tag', 'noindex');
+  Astro.cache.set({ maxAge: 3600, swr: 86400, tags: [...tags, 'stories', ...versePages.map((v) => `related:${v.id}`)] });
+  Astro.response.headers.set('Cache-Control', 'public, max-age=300');
+} else if (!sketch && Astro.response.status !== 503) {
   // Missing and private look the same through the rules (403). Cached, so publishing must purge (onSketchWritten).
   Astro.response.status = 404;
   Astro.response.headers.set('X-Robots-Tag', 'noindex');
@@ -112,7 +130,9 @@ const island: Sketch | null = sketch && {
 };
 const card = 'flex-1 py-3 rounded-xl border flex items-center justify-center transition-colors gap-2 font-bold text-sm';
 ---
-{sketch && meta ? (
+{versePages.length ? (
+  <VerseCollection slug={verseSlug!} pages={versePages} bookPages={bookPages} />
+) : sketch && meta ? (
   <Base title={title} description={metaDescription(sketch, text)} canonical={url} image={previewUrl(sketch)} schemas={schemas} robots={unlisted ? 'noindex' : undefined}>
     <div class="max-w-7xl mx-auto px-4 py-12">
       <div class="mb-8">

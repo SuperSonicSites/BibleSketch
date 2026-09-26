@@ -8,8 +8,9 @@ import { env } from 'cloudflare:workers';
 
 const MAX_IDS = 40; // 2 tags per id + up to 20 lists; a purge call takes up to 100 tags
 // img: every /img/ response (after changing image headers, docs/seo-plan.md stage 2); pages: static pages such as
-// /pricing, /about, /terms; blog: every blog post (after copy changes, stage 5).
-const LIST = /^(gallery|home|verse|img|pages|blog|tag:[a-z-]{1,30}|profile:[A-Za-z0-9]{1,128})$/;
+// /pricing, /about, /terms; blog: every blog post (after copy changes, stage 5); stories: /coloring-pages and
+// story and verse collections (stage 9).
+const LIST = /^(gallery|home|verse|img|pages|blog|stories|tag:[a-z-]{1,30}|profile:[A-Za-z0-9]{1,128})$/;
 
 // Constant-time compare so the secret can't be guessed byte by byte from response timing.
 async function secretMatches(given: string, expected: string) {

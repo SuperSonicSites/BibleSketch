@@ -1,0 +1,85 @@
+---
+// /coloring-page/<verse-slug> (docs/seo-plan.md stage 9): every owner page of one passage, its verse, its story,
+// the neighbouring passages and a "make your own" link. Rendered by pages/coloring-page/[...path].astro, which
+// sets the headers (noindex below VERSE_MIN pages).
+import Base from '../layouts/Base.astro';
+import ListingCard from './ListingCard.astro';
+import CardIcons from './CardIcons.astro';
+import pageTexts from '../data/page-text.json';
+import { ORG_REF, ORIGIN, type PageText, type Sketch, canonicalPath, heading, jsonLd, loadAuthors, reference, slugOf, audience } from '../lib/sketch.ts';
+import { VERSE_MIN, byBibleOrder, makeYourOwn, storyOf } from '../lib/stories.ts';
+
+interface Props { slug: string; pages: Sketch[]; bookPages: Sketch[] }
+const { slug, pages, bookPages } = Astro.props;
+const first = pages[0];
+const p = first.promptData!;
+const ref = reference(p);
+const h1 = `${heading(p)}s`;
+const story = storyOf(first);
+const verse = pages.map((s) => (pageTexts as Record<string, PageText>)[s.id]?.verse).find(Boolean);
+const ages = [...new Set(pages.filter((s) => s.type !== 'verse').map((s) => audience(s.promptData?.age_group).toLowerCase()))];
+const hasVerseArt = pages.some((s) => s.type === 'verse');
+const forWhom = [ages.length ? `for ${ages.join(', ').replace(/, ([^,]*)$/, ' and $1')}` : '', hasVerseArt ? 'with verse art' : '']
+  .filter(Boolean).join(', ');
+const authors = await loadAuthors(pages.slice(0, 1));
+
+// Neighbouring passages of the same book that have pages, in Bible order.
+const slugs = [...new Set([...bookPages].sort(byBibleOrder).map(slugOf))];
+const at = slugs.indexOf(slug);
+const refOf = (x: string) => reference(bookPages.find((s) => slugOf(s) === x)!.promptData!);
+const prev = at > 0 ? slugs[at - 1] : undefined;
+const next = at >= 0 && at < slugs.length - 1 ? slugs[at + 1] : undefined;
+
+const url = `${ORIGIN}/coloring-page/${slug}`;
+const title = pages.length > 1 ? `${h1} (${pages.length} Printable Pages) | Bible Sketch` : `${h1} | Bible Sketch`;
+const description = `${pages.length} printable ${ref} coloring page${pages.length === 1 ? '' : 's'}${forWhom ? ` ${forWhom}` : ''}${story ? `, from the story of ${story.name.replace(/^The /, 'the ')}` : ''}. For Sunday school, homeschool and family devotions.`;
+const schemas = [
+  jsonLd({
+    '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': url, url, name: h1, description,
+    isPartOf: { '@type': 'WebSite', '@id': `${ORIGIN}/#website`, url: `${ORIGIN}/`, name: 'Bible Sketch' }, publisher: ORG_REF,
+    mainEntity: {
+      '@type': 'ItemList', numberOfItems: pages.length,
+      itemListElement: pages.map((s, i) => ({ '@type': 'ListItem', position: i + 1, url: ORIGIN + canonicalPath(s), name: heading(s.promptData!) })),
+    },
+  }),
+  jsonLd({
+    '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: `${ORIGIN}/` },
+      { '@type': 'ListItem', position: 2, name: 'Bible Coloring Pages', item: `${ORIGIN}/coloring-pages` },
+      ...(story ? [{ '@type': 'ListItem', position: 3, name: `${story.name} Coloring Pages`, item: `${ORIGIN}/coloring-pages/${story.id}` }] : []),
+      { '@type': 'ListItem', position: story ? 4 : 3, name: h1, item: url },
+    ],
+  }),
+];
+---
+<Base title={title} description={description} canonical={url} ogType="website" image={`${ORIGIN}/logo.png`}
+  imageAlt="Bible Sketch Logo" twitterCard="summary" schemas={schemas} robots={pages.length < VERSE_MIN ? 'noindex' : undefined}>
+  <div class="max-w-7xl mx-auto px-4 py-12">
+    <nav class="text-sm text-gray-500 mb-6" aria-label="Breadcrumb">
+      <a href="/coloring-pages" class="hover:text-[#7C3AED] hover:underline">Bible Coloring Pages</a>
+      {story && <><span class="mx-1 text-gray-300">›</span><a href={`/coloring-pages/${story.id}`} class="hover:text-[#7C3AED] hover:underline">{story.name}</a></>}
+      <span class="mx-1 text-gray-300">›</span><span>{ref}</span>
+    </nav>
+    <div class="bg-gradient-to-br from-purple-50 to-amber-50 rounded-3xl p-8 border border-purple-100 mb-10">
+      <h1 class="text-3xl md:text-4xl font-display font-bold text-gray-800 mb-3">{h1}</h1>
+      <p class="text-gray-600 text-base leading-relaxed mb-4">{description}</p>
+      {verse && (
+        <figure class="border-l-4 border-purple-200 pl-4">
+          <blockquote class="text-gray-700 italic leading-relaxed">{verse}</blockquote>
+          <figcaption class="text-sm text-gray-500 mt-1">{ref} (World English Bible)</figcaption>
+        </figure>
+      )}
+    </div>
+
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+      <CardIcons />
+      {pages.map((s) => <ListingCard sketch={s} author={s.userId ? authors.get(s.userId) : undefined} />)}
+    </div>
+
+    <div class="mt-12 flex flex-wrap items-center justify-between gap-4 border-t border-gray-100 pt-6">
+      {prev ? <a href={`/coloring-page/${prev}`} class="font-bold text-[#7C3AED] hover:underline">← {refOf(prev)}</a> : <span />}
+      <a href={makeYourOwn(first)} class="text-sm text-gray-500 hover:text-[#7C3AED] hover:underline">Make your own {ref} coloring page</a>
+      {next ? <a href={`/coloring-page/${next}`} class="font-bold text-[#7C3AED] hover:underline">{refOf(next)} →</a> : <span />}
+    </div>
+  </div>
+</Base>

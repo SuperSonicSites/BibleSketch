@@ -1,0 +1,89 @@
+---
+// /coloring-pages (docs/seo-plan.md stage 9): every Bible story with owner pages, in Bible order, then the verses
+// with enough pages for their own page. Unlinked until the owner reviews it. Cached with `stories`.
+import Base from '../../layouts/Base.astro';
+import { ORG_REF, ORIGIN, type Sketch, heading, jsonLd, reference, slugOf, thumbUrl } from '../../lib/sketch.ts';
+import { STORIES, VERSE_MIN, allOwnerPages, byBibleOrder, pagesOfStory } from '../../lib/stories.ts';
+
+let all: Sketch[] = [];
+let failed = false;
+try {
+  all = await allOwnerPages();
+} catch (e) {
+  console.error('[coloring-pages]', e);
+  failed = true;
+}
+const stories = STORIES.map((st) => ({ st, pages: pagesOfStory(st, all) })).filter((x) => x.pages.length);
+const verses = new Map<string, Sketch[]>();
+for (const s of [...all].sort(byBibleOrder)) verses.set(slugOf(s), [...(verses.get(slugOf(s)) ?? []), s]);
+const popular = [...verses.entries()].filter(([, v]) => v.length >= VERSE_MIN);
+
+if (failed) {
+  Astro.cache.set(false);
+  Astro.response.status = 503;
+  Astro.response.headers.set('Retry-After', '120');
+  Astro.response.headers.set('Cache-Control', 'no-store');
+} else {
+  Astro.cache.set({ maxAge: 3600, swr: 86400, tags: ['stories'] });
+  Astro.response.headers.set('Cache-Control', 'public, max-age=300');
+}
+
+const url = `${ORIGIN}/coloring-pages`;
+const h1 = 'Bible Coloring Pages by Story';
+const title = `${h1} | Printable Pages in Bible Order | Bible Sketch`;
+const span = stories.length ? ` from ${stories[0].st.name} to ${stories.at(-1)!.st.name.replace(/^The /, 'the ')}` : '';
+const description = `Printable Bible coloring pages for ${stories.length} Bible stories${span}, in Bible order. For Sunday school, homeschool and family devotions.`;
+const schemas = [
+  jsonLd({
+    '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': url, url, name: h1, description,
+    isPartOf: { '@type': 'WebSite', '@id': `${ORIGIN}/#website`, url: `${ORIGIN}/`, name: 'Bible Sketch' }, publisher: ORG_REF,
+    mainEntity: {
+      '@type': 'ItemList', itemListOrder: 'https://schema.org/ItemListOrderAscending', numberOfItems: stories.length,
+      itemListElement: stories.map(({ st }, i) => ({ '@type': 'ListItem', position: i + 1, url: `${url}/${st.id}`, name: `${st.name} Coloring Pages` })),
+    },
+  }),
+];
+---
+<Base title={title} description={description} canonical={url} ogType="website" image={`${ORIGIN}/logo.png`}
+  imageAlt="Bible Sketch Logo" twitterCard="summary" schemas={schemas}>
+  <div class="max-w-7xl mx-auto px-4 py-12">
+    <div class="bg-gradient-to-br from-purple-50 to-amber-50 rounded-3xl p-8 border border-purple-100 mb-10">
+      <h1 class="text-3xl md:text-4xl font-display font-bold text-gray-800 mb-3">{h1}</h1>
+      <p class="text-gray-600 text-base leading-relaxed">{description}</p>
+    </div>
+
+    {failed ? (
+      <p class="text-center py-16 text-gray-500">These coloring pages are temporarily unavailable. Please try again in a couple of minutes.</p>
+    ) : (
+      <>
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {stories.map(({ st, pages }) => (
+            <a href={`/coloring-pages/${st.id}`} class="group bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow border border-gray-100 overflow-hidden flex flex-col">
+              <div class="relative overflow-hidden bg-gray-100 aspect-[3/4]">
+                <img src={thumbUrl(pages[0])} alt={`${st.name} coloring page (${reference(pages[0].promptData!)})`} width="400" height="533"
+                  loading="lazy" decoding="async" class="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500" />
+              </div>
+              <div class="px-3 py-3">
+                <h2 class="font-bold text-gray-800">{st.name}</h2>
+                <p class="text-xs text-gray-500 mt-1">{pages.length} coloring page{pages.length === 1 ? '' : 's'}</p>
+              </div>
+            </a>
+          ))}
+        </div>
+
+        {popular.length > 0 && (
+          <section class="mt-14">
+            <h2 class="font-display text-2xl font-bold text-gray-800 mb-4">Popular Bible Verses</h2>
+            <ul class="flex flex-wrap gap-2">
+              {popular.map(([slug, v]) => (
+                <li><a href={`/coloring-page/${slug}`} class="inline-flex items-center rounded-full px-4 py-2 text-sm font-medium bg-purple-100 text-[#7C3AED] hover:bg-purple-200 transition-colors">
+                  {heading(v[0].promptData!).replace(/ Coloring Page$/, '')} ({v.length})
+                </a></li>
+              ))}
+            </ul>
+          </section>
+        )}
+      </>
+    )}
+  </div>
+</Base>

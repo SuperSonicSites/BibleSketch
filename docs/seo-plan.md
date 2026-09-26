@@ -6,8 +6,8 @@ before the previous one is verified live.
 
 ## Where we are
 
-- Current stage: **Stage 9 (not started)**; Stage 7 owner steps still open (below)
-- Last verified live: Stage 8 (2026-09-25, Worker 0fc40230)
+- Current stage: **Stage 10 (not started)**; Stage 7 owner steps open; Stage 9 pages await owner review before linking
+- Last verified live: Stage 9 (2026-09-25, Worker f7f72407)
 - Notes:
   - Stage 1: master pages' og:image, JSON-LD, share buttons and image sitemap use
     `/img/w800/<original path>` (800x1071 WebP); community pages use their 400x533 thumbnail; the w800 route
@@ -106,6 +106,19 @@ before the previous one is verified live.
     no leftover "best" -> "favorite" damage in any of the 6 posts (remaining uses are genuine). Full sweeps rerun
     after the sketch.ts change: 457 coloring pages and 58 other pages, no issues (only the expected profile
     avatar); related headings plural. Worker tail: 15 requests ok, no errors.
+  - Stage 9 (built UNLINKED: no nav link, not in the sitemap): `web/src/data/stories.json` (32 stories, verse
+    ranges in Bible order, seeded from pin-year.json series, wikidata only where checked); `web/src/lib/stories.ts`
+    (story membership, Bible order, per-book owner queries, equality-only: no new index). `/coloring-pages` index
+    (27 stories with pages, 36 popular verses), `/coloring-pages/<story>` (passage chips linking verse pages + one
+    Bible-order grid; noindex under 10 pages; 404 when empty), `/coloring-page/<verse-slug>` rendered by
+    `components/VerseCollection.astro` from the existing route (verse text, story link, prev/next passage,
+    "make your own" generator link; noindex under 3 pages; Firestore ids have no hyphen so /coloring-page/<id>
+    still 301s). Indexable stories today: Creation 43, Adam and Eve 38, Noah 20, Jericho 12, Esther 12, Advent
+    prophecies 10, Nativity 54, Wise Men 10, Resurrection 15. 100 owner pages (Psalms, Proverbs, most verse art)
+    belong to no story. `/coloring-pages` added to LIVE_PREFIXES; purge accepts `stories`. Empty or unknown
+    stories 404 exactly like unknown tags. Regression sweep: 457/457 ok.
+    To do after the owner's review: link /coloring-pages from the header and home, link story/verse pages from
+    tag pages and coloring pages (breadcrumb, "Part of"), add them to the sitemap (functions:sitemap deploy).
   - Lesson: purge about 30 s after `wrangler deploy`, not right away; an isolate still on the old version can
     re-cache a page in between (happened once with /tags/ordinary-time; purged again).
   - Open loose ends: (a) done in Stage 4. (b) done in Stage 3 (fixture refreshed; passes). (c) The old Firebase renderers (profileRender, sketchRender, tag renderer) still call community
@@ -273,7 +286,7 @@ builds the slots; the words themselves arrive gradually (verse text now, descrip
 **Checks**
 - Live grep for "favorite For", "Young Childs", "Proverb " returns nothing; `check-sketch.mjs` fixture updated.
 
-## Stage 9: Story list, verse pages and story pages (new URLs, unlinked)  [ ]
+## Stage 9: Story list, verse pages and story pages (new URLs, unlinked)  [x] live unlinked 2026-09-25; linking after owner review
 
 **Changes**
 - `web/src/data/stories.json`: stories with verse ranges, scenes, characters, memory verse, season, Wikidata

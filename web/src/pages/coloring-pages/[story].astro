@@ -1,0 +1,116 @@
+---
+// /coloring-pages/<story> (docs/seo-plan.md stage 9): every owner page of one Bible story in Bible order, with links
+// to each passage's verse page and to the previous and next story. Unlinked until the
+// owner reviews it; indexable with STORY_MIN+ pages, 404 with none. Cached with `stories` and related:<id>.
+import Base from '../../layouts/Base.astro';
+import ListingCard from '../../components/ListingCard.astro';
+import CardIcons from '../../components/CardIcons.astro';
+import { ORG_REF, ORIGIN, type Sketch, canonicalPath, heading, jsonLd, loadAuthors, reference, slugOf } from '../../lib/sketch.ts';
+import { STORIES, STORY_MIN, allOwnerPages, makeYourOwn, pagesOfStory, rangeText, storyById, storyOf } from '../../lib/stories.ts';
+
+const story = storyById(Astro.params.story ?? '');
+if (!story) return Astro.rewrite('/404');
+
+let all: Sketch[] = [];
+let failed = false;
+try {
+  all = await allOwnerPages();
+} catch (e) {
+  console.error('[story]', story.id, e);
+  failed = true;
+}
+const pages = pagesOfStory(story, all);
+if (!failed && pages.length === 0) return Astro.rewrite('/404');
+
+// Passages in Bible order, each with its pages.
+const groups: { slug: string; ref: string; items: Sketch[] }[] = [];
+for (const s of pages) {
+  const slug = slugOf(s);
+  const g = groups.find((x) => x.slug === slug);
+  if (g) g.items.push(s);
+  else groups.push({ slug, ref: reference(s.promptData!), items: [s] });
+}
+const authors = await loadAuthors(pages.slice(0, 1));
+
+// Previous and next stories that have pages, in Bible order.
+const withPages = new Set(all.map((s) => storyOf(s)?.id).filter(Boolean));
+const listed = STORIES.filter((st) => withPages.has(st.id));
+const at = listed.findIndex((st) => st.id === story.id);
+const prev = at > 0 ? listed[at - 1] : undefined;
+const next = at >= 0 && at < listed.length - 1 ? listed[at + 1] : undefined;
+
+if (failed) {
+  Astro.cache.set(false);
+  Astro.response.status = 503;
+  Astro.response.headers.set('Retry-After', '120');
+  Astro.response.headers.set('Cache-Control', 'no-store');
+} else {
+  if (pages.length < STORY_MIN) Astro.response.headers.set('X-Robots-Tag', 'noindex');
+  Astro.cache.set({ maxAge: 3600, swr: 86400, tags: ['stories', ...pages.map((s) => `related:${s.id}`)] });
+  Astro.response.headers.set('Cache-Control', 'public, max-age=300');
+}
+
+const url = `${ORIGIN}/coloring-pages/${story.id}`;
+const h1 = `${story.name} Coloring Pages`;
+const title = pages.length > 1 ? `${h1} (${pages.length} Printable Pages) | Bible Sketch` : `${h1} | Bible Sketch`;
+const storyName = story.name.replace(/^The /, 'the ');
+const description = `${pages.length} printable coloring page${pages.length === 1 ? '' : 's'} of ${storyName} from ${rangeText(story)}, in Bible order, for Sunday school, homeschool and family devotions.`;
+const schemas = [
+  jsonLd({
+    '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': url, url, name: h1, description,
+    isPartOf: { '@type': 'WebSite', '@id': `${ORIGIN}/#website`, url: `${ORIGIN}/`, name: 'Bible Sketch' }, publisher: ORG_REF,
+    about: { '@type': 'Thing', name: story.name, ...(story.wikidata ? { sameAs: `https://www.wikidata.org/wiki/${story.wikidata}` } : {}) },
+    mainEntity: {
+      '@type': 'ItemList', itemListOrder: 'https://schema.org/ItemListOrderAscending', numberOfItems: pages.length,
+      itemListElement: pages.map((s, i) => ({ '@type': 'ListItem', position: i + 1, url: ORIGIN + canonicalPath(s), name: heading(s.promptData!) })),
+    },
+  }),
+  jsonLd({
+    '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: `${ORIGIN}/` },
+      { '@type': 'ListItem', position: 2, name: 'Bible Coloring Pages', item: `${ORIGIN}/coloring-pages` },
+      { '@type': 'ListItem', position: 3, name: h1, item: url },
+    ],
+  }),
+];
+---
+<Base title={title} description={description} canonical={url} ogType="website" image={`${ORIGIN}/logo.png`}
+  imageAlt="Bible Sketch Logo" twitterCard="summary" schemas={schemas}>
+  <div class="max-w-7xl mx-auto px-4 py-12">
+    <nav class="text-sm text-gray-500 mb-6" aria-label="Breadcrumb">
+      <a href="/coloring-pages" class="hover:text-[#7C3AED] hover:underline">Bible Coloring Pages</a>
+      <span class="mx-1 text-gray-300">›</span><span>{story.name}</span>
+    </nav>
+    <div class="bg-gradient-to-br from-purple-50 to-amber-50 rounded-3xl p-8 border border-purple-100 mb-10">
+      <h1 class="text-3xl md:text-4xl font-display font-bold text-gray-800 mb-3">{h1}</h1>
+      <p class="text-gray-600 text-base leading-relaxed">{description}</p>
+    </div>
+
+    {failed ? (
+      <p class="text-center py-16 text-gray-500">These coloring pages are temporarily unavailable. Please try again in a couple of minutes.</p>
+    ) : (
+      <>
+        <section class="mb-8">
+          <h2 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Passages in {storyName}</h2>
+          <ul class="flex flex-wrap gap-2">
+            {groups.map((g) => (
+              <li><a href={`/coloring-page/${g.slug}`} class="inline-flex items-center rounded-full px-3 py-1 text-sm font-medium bg-purple-100 text-[#7C3AED] hover:bg-purple-200 transition-colors">
+                {g.ref}{g.items.length > 1 ? ` (${g.items.length})` : ''}
+              </a></li>
+            ))}
+          </ul>
+        </section>
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          <CardIcons />
+          {pages.map((s) => <ListingCard sketch={s} author={s.userId ? authors.get(s.userId) : undefined} />)}
+        </div>
+      </>
+    )}
+
+    <div class="mt-12 flex flex-wrap items-center justify-between gap-4 border-t border-gray-100 pt-6">
+      {prev ? <a href={`/coloring-pages/${prev.id}`} class="font-bold text-[#7C3AED] hover:underline">← {prev.name}</a> : <span />}
+      {pages[0] && <a href={makeYourOwn(pages[0])} class="text-sm text-gray-500 hover:text-[#7C3AED] hover:underline">Make your own {storyName} coloring page</a>}
+      {next ? <a href={`/coloring-pages/${next.id}`} class="font-bold text-[#7C3AED] hover:underline">{next.name} →</a> : <span />}
+    </div>
+  </div>
+</Base>
