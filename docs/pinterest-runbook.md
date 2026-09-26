@@ -20,10 +20,9 @@ As of **2026-09-26** (third `pinterest-daily` run: 5 Pins Oct 14-18, 5 collectio
   rightly says "Psalm 23:1" (fixed in pins-check); 13 were hand-scheduled repeats of a passage within 30 days on one
   board (the Sept 23 batches, not the planner: `pins-plan` already keeps the same slug 30 days apart, `SLUG_GAP`).
   Ten entries were moved to the nearest free slot 30+ days from the twin (unreleased Pins only), plus four date
-  swaps so the Creation series doesn't run two same-opener Pins in a row. **Still warned, owner to decide:** the four
-  nativity drawings of Luke 2:6-7 (Oct 21 manger, Nov 11 first Christmas night, Nov 30 icon, Dec 12 stained glass)
-  can't all sit 30 days apart before Dec 19; either accept (four styles of the most-searched Christmas image) or
-  unapprove one.
+  swaps so the Creation series doesn't run two same-opener Pins in a row. **Owner decision 2026-09-26: keep all four
+  nativity drawings of Luke 2:6-7** (Oct 21 manger, Nov 11 first Christmas night, Nov 30 icon, Dec 12 stained glass):
+  four styles of the most-searched Christmas image. Their three "same passage" warnings are expected; don't move them.
 - **Calendar** (`web/src/data/pins.json`, 183 entries, `pins-check`: no errors):
 
   | Board | Pins | Dates |
