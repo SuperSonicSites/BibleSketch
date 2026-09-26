@@ -10,7 +10,7 @@ import OwnerPrivate from '../../components/OwnerPrivate.tsx';
 import { getDoc } from '../../lib/firestore.ts';
 import { MASTER_UID } from '../../lib/config.ts';
 import {
-  ORIGIN, TAG_LABELS, type PageText, type Sketch, ageDisplay, canonicalPath, heading, isDocId, jsonLd, loadRelated,
+  AI_SOURCE, ORG_REF, ORIGIN, TAG_LABELS, type PageText, type Sketch, ageDisplay, canonicalPath, heading, isDocId, jsonLd, loadRelated,
   metaDescription, previewUrl, reference, seo, subtitleOf, thumbUrl,
 } from '../../lib/sketch.ts';
 import pageTexts from '../../data/page-text.json';
@@ -80,13 +80,20 @@ const url = sketch ? ORIGIN + canonicalPath(sketch) : undefined;
 const profileUrl = sketch ? `${ORIGIN}/profile/${sketch.userId}` : '';
 const schemas = sketch && meta ? [
   jsonLd({
-    '@context': 'https://schema.org', '@type': 'CreativeWork', name: meta.title, headline: meta.title,
-    description: meta.description, image: previewUrl(sketch), url, datePublished: sketch.createdAt,
+    '@context': 'https://schema.org', '@type': 'CreativeWork', name: title, headline: title,
+    description: metaDescription(sketch, text), url, datePublished: sketch.createdAt,
+    // docs/seo-plan.md stage 6: the owner's pages are licensable (Terms 2.3 via a free account) and labelled as
+    // AI-made; community pages belong to their creators, so no license markup there.
+    image: unlisted ? previewUrl(sketch) : {
+      '@type': 'ImageObject', contentUrl: previewUrl(sketch), url: previewUrl(sketch), caption: alt,
+      license: `${ORIGIN}/terms#rights`, acquireLicensePage: `${ORIGIN}/pricing`, creditText: 'Bible Sketch',
+      creator: ORG_REF, copyrightNotice: '© Bible Sketch', digitalSourceType: AI_SOURCE,
+    },
     keywords: sketch.tags?.length ? sketch.tags.join(', ') : 'Bible, Coloring Page, Christian Art',
     genre: p.art_style || 'Religious Art',
-    author: { '@type': 'Person', name: author, url: profileUrl },
-    creator: { '@type': 'Person', name: author, url: profileUrl },
-    copyrightHolder: { '@type': 'Person', name: author },
+    author: unlisted ? { '@type': 'Person', name: author, url: profileUrl } : ORG_REF,
+    creator: unlisted ? { '@type': 'Person', name: author, url: profileUrl } : ORG_REF,
+    copyrightHolder: unlisted ? { '@type': 'Person', name: author } : ORG_REF,
   }),
   jsonLd({
     '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [
@@ -120,7 +127,7 @@ const card = 'flex-1 py-3 rounded-xl border flex items-center justify-center tra
         <div class="lg:col-span-7">
           <div class="bg-white rounded-3xl shadow-xl border border-gray-100 p-6 md:p-10 bg-[#E5E5E5] flex items-center justify-center overflow-hidden relative">
             <div class="relative bg-white shadow-2xl w-full max-w-lg aspect-[3/4] select-none">
-              <img src={thumbUrl(sketch)} alt={alt} data-pin-description={meta.pinDescription}
+              <img src={unlisted ? thumbUrl(sketch) : previewUrl(sketch)?.replace(ORIGIN, '') ?? thumbUrl(sketch)} alt={alt} data-pin-description={meta.pinDescription}
                 width="400" height="533" fetchpriority="high" decoding="async"
                 class="w-full h-full object-contain relative z-0 bg-white" oncontextmenu="return false" />
               <div class="absolute inset-0 z-[50] w-full h-full pointer-events-none watermark" data-owner={sketch.userId}></div>

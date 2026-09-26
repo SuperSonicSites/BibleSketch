@@ -7,7 +7,7 @@ import ListingCard from '../components/ListingCard.astro';
 import CardIcons from '../components/CardIcons.astro';
 import Generator from '../components/Generator.tsx';
 import { count, query } from '../lib/firestore.ts';
-import { ORIGIN, jsonLd, loadAuthors, type Sketch } from '../lib/sketch.ts';
+import { ORGANIZATION, ORIGIN, jsonLd, loadAuthors, type Sketch } from '../lib/sketch.ts';
 
 let favorites: Sketch[] = [];
 let total = 0;
@@ -37,7 +37,7 @@ const schema = jsonLd({
   '@context': 'https://schema.org',
   '@graph': [
     { '@type': 'WebSite', '@id': `${ORIGIN}/#website`, url: `${ORIGIN}/`, name: 'Bible Sketch', publisher: { '@id': `${ORIGIN}/#organization` } },
-    { '@type': 'Organization', '@id': `${ORIGIN}/#organization`, name: 'Bible Sketch', url: `${ORIGIN}/`, logo: `${ORIGIN}/logo.png`, email: 'hello@biblesketch.app' },
+    ORGANIZATION,
   ],
 });
 ---

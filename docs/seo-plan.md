@@ -6,8 +6,8 @@ before the previous one is verified live.
 
 ## Where we are
 
-- Current stage: **Stage 6 (not started)**
-- Last verified live: Stage 5 (2026-09-25, Worker 39115a8d)
+- Current stage: **Stage 7 (not started)**
+- Last verified live: Stage 6 (2026-09-25, Worker 66488b4f)
 - Notes:
   - Stage 1: master pages' og:image, JSON-LD, share buttons and image sitemap use
     `/img/w800/<original path>` (800x1071 WebP); community pages use their 400x533 thumbnail; the w800 route
@@ -62,6 +62,17 @@ before the previous one is verified live.
     ranks), and the "+N Free Prints" chips on packs (prints included with the purchase).
   - Counts are live, rounded down to 50 so "N+" is always true: /gallery description (from its own query) and
     the home hero (was `Math.max(total, 500)`, which claimed 500+ with ~460 public pages). Worker ce144e51.
+  - Stage 6: one site identity in `web/src/lib/sketch.ts` (ORG_ID `/#organization`, FOUNDER_ID `/about#founder`,
+    ORGANIZATION with logo, email, sameAs Pinterest only (no other profile is linked from the site; add TikTok
+    etc. when confirmed), founder). Home and /about use it (/about adds legalName Supersonic Sites Inc. and the
+    founder Person @id). Owner coloring pages: author/creator/copyrightHolder = Organization, description =
+    metaDescription, image = ImageObject (contentUrl 800px preview, license /terms#rights, acquireLicensePage
+    /pricing, creditText, creator, copyrightNotice, digitalSourceType trainedAlgorithmicMedia). The visible <img>
+    on owner pages is now that same 800px preview (license applies to what is shown); Lighthouse live 96-97 vs 98
+    for a thumbnail page. Community pages: creator Person, no license markup. Tag pages: CollectionPage + ItemList
+    of their owner pages. Blog: author = founder @id (his posts) or the Organization; publisher = Organization.
+    No FAQ/HowTo/SearchAction/review markup added (the existing pricing FAQPage stays). check-pages.mjs now fails
+    on any Firebase Storage URL in head or JSON-LD (profiles excluded: avatar). Live sweep: 457/457 pages correct.
   - Lesson: purge about 30 s after `wrangler deploy`, not right away; an isolate still on the old version can
     re-cache a page in between (happened once with /tags/ordinary-time; purged again).
   - Open loose ends: (a) done in Stage 4. (b) done in Stage 3 (fixture refreshed; passes). (c) The old Firebase renderers (profileRender, sketchRender, tag renderer) still call community
@@ -192,7 +203,7 @@ builds the slots; the words themselves arrive gradually (verse text now, descrip
 - Live: `/ai.txt` and `/robots.txt` served by the Worker with the new text; `/pricing` perks and refund line;
   no "thousands" / "in seconds" left (`curl` + grep home, gallery, pricing).
 
-## Stage 6: Structured data  [ ]
+## Stage 6: Structured data  [x] verified live 2026-09-25
 
 **Changes**
 - Organization (home, `/about`): one `@id`, logo, `sameAs` Pinterest and TikTok.

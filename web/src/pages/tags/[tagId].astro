@@ -8,7 +8,7 @@ import CardIcons from '../../components/CardIcons.astro';
 import FilterForm from '../../components/FilterForm.astro';
 import { query } from '../../lib/firestore.ts';
 import { MASTER_UID } from '../../lib/config.ts';
-import { ORIGIN, TAG_LABELS, audience, jsonLd, loadAuthors, type Sketch } from '../../lib/sketch.ts';
+import { ORG_REF, ORIGIN, TAG_LABELS, audience, canonicalPath, heading, jsonLd, loadAuthors, type Sketch } from '../../lib/sketch.ts';
 import { SEASONS, applyFilters, isFiltered, parseFilters } from '../../lib/listing.ts';
 
 const tagId = Astro.params.tagId ?? '';
@@ -69,9 +69,29 @@ const schema = jsonLd({
     { '@type': 'ListItem', position: 3, name: `${label} Coloring Pages`, item: canonical },
   ],
 });
+// The collection and its owner pages, in page order (docs/seo-plan.md stage 6; community pages are unlisted).
+const owned = items.filter((s) => s.userId === MASTER_UID);
+const collection = jsonLd({
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  '@id': canonical,
+  url: canonical,
+  name: h1,
+  description,
+  isPartOf: { '@type': 'WebSite', '@id': `${ORIGIN}/#website`, url: `${ORIGIN}/`, name: 'Bible Sketch' },
+  publisher: ORG_REF,
+  mainEntity: {
+    '@type': 'ItemList',
+    numberOfItems: owned.length,
+    itemListElement: owned.map((s, i) => ({
+      '@type': 'ListItem', position: i + 1, url: `${ORIGIN}${canonicalPath(s)}`,
+      name: s.promptData ? heading(s.promptData) : 'Bible Coloring Page',
+    })),
+  },
+});
 ---
 <Base title={title} description={description} canonical={canonical} ogType="website" image={`${ORIGIN}/logo.png`}
-  imageAlt="Bible Sketch Logo" twitterCard="summary" schemas={[schema]}>
+  imageAlt="Bible Sketch Logo" twitterCard="summary" schemas={[schema, collection]}>
   <div class="max-w-7xl mx-auto px-4 py-12">
     <div class="mb-8">
       <a href="/gallery" class="inline-flex items-center gap-2 text-gray-500 hover:text-[#7C3AED] font-bold mb-6 transition-colors group">

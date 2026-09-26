@@ -7,7 +7,7 @@ import Base from '../../layouts/Base.astro';
 import SketchEmbed from '../../components/SketchEmbed.astro';
 import { getDoc } from '../../lib/firestore.ts';
 import { formatDate } from '../../lib/blog.ts';
-import { ORIGIN, jsonLd, type Sketch } from '../../lib/sketch.ts';
+import { FOUNDER_ID, ORG_REF, ORIGIN, jsonLd, type Sketch } from '../../lib/sketch.ts';
 
 const post = Astro.params.slug ? await getEntry('blog', Astro.params.slug) : undefined;
 if (!post) return Astro.rewrite('/404');
@@ -36,8 +36,8 @@ const schemas = [
     image: { '@type': 'ImageObject', url: image, width: cover.width, height: cover.height },
     datePublished: date,
     dateModified: lastmod || date,
-    author: { '@type': 'Person', name: author },
-    publisher: { '@type': 'Organization', name: 'Bible Sketch', logo: { '@type': 'ImageObject', url: `${ORIGIN}/logo.png` } },
+    author: author === 'Renaud Gagne' ? { '@type': 'Person', '@id': FOUNDER_ID, name: author, url: `${ORIGIN}/about` } : ORG_REF,
+    publisher: { ...ORG_REF, logo: { '@type': 'ImageObject', url: `${ORIGIN}/logo.png` } },
     mainEntityOfPage: { '@type': 'WebPage', '@id': url },
     url,
   }),

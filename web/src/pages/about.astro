@@ -2,7 +2,7 @@
 // Copy from the live About page (bundle `Zte`), corrected 2026-09 with the owner (ROADMAP 1, phase 1):
 // one contact address, no "Download the PDF" promise, generation time as it is today.
 import Page from '../layouts/Page.astro';
-import { ORIGIN, jsonLd } from '../lib/sketch.ts';
+import { FOUNDER_ID, ORGANIZATION, ORG_ID, ORG_REF, ORIGIN, jsonLd } from '../lib/sketch.ts';
 
 const title = 'About Bible Sketch - Our Story & Mission | Free Bible Coloring Pages';
 const description = 'Meet Renaud, founder of Bible Sketch. Learn how we create AI-powered Bible coloring pages for Sunday School, VBS, and homeschooling families.';
@@ -12,19 +12,18 @@ const schema = jsonLd({
   '@graph': [
     {
       '@type': 'Person',
+      '@id': FOUNDER_ID,
       name: 'Renaud Gagne',
+      url: `${ORIGIN}/about`,
       jobTitle: 'Founder',
       description: "Christian father of 4, homeschooling educator, and creator of Bible Sketch. Teaches God's Big Story curriculum at St. Timothy's Anglican Bible Church.",
       knowsAbout: ['Bible Coloring Pages', 'Christian Education', 'Homeschooling', 'Sunday School', "Children's Ministry", "God's Big Story Curriculum"],
-      worksFor: { '@type': 'Organization', name: 'Bible Sketch', url: ORIGIN },
+      worksFor: ORG_REF,
     },
     {
-      '@type': 'Organization',
-      url: ORIGIN,
-      name: 'Bible Sketch',
+      ...ORGANIZATION,
       description: 'AI-powered platform for creating custom, printable Bible coloring pages for Sunday School, VBS, and homeschooling families.',
-      founder: { '@type': 'Person', name: 'Renaud Gagne' },
-      logo: { '@type': 'ImageObject', url: `${ORIGIN}/logo.png` },
+      legalName: 'Supersonic Sites Inc.',
       contactPoint: { '@type': 'ContactPoint', email: 'hello@biblesketch.app', contactType: 'Customer Service' },
     },
     {
@@ -33,7 +32,8 @@ const schema = jsonLd({
       url,
       name: 'About Bible Sketch',
       description,
-      isPartOf: { '@type': 'WebSite', url: ORIGIN, name: 'Bible Sketch' },
+      isPartOf: { '@type': 'WebSite', '@id': `${ORIGIN}/#website`, url: `${ORIGIN}/`, name: 'Bible Sketch' },
+      about: { '@id': ORG_ID },
     },
   ],
 });

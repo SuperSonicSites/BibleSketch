@@ -67,3 +67,19 @@ for (const path of PATHS) {
 }
 assert.equal(diffs, 0, `${diffs} unintended head differences`);
 console.log('head parity ok');
+
+// The full-size original is never offered publicly (docs/seo-plan.md stages 1 and 6): no Firebase Storage URL in
+// any <head> or JSON-LD, including two coloring pages (an owner page and a community page). Profiles are left
+// out: their og:image is the account's avatar (not a coloring page) and they are all noindexed.
+const firebaseIn = (h) => {
+  const headPart = h.slice(0, h.indexOf('</head>') + 1);
+  const ld = [...h.matchAll(/<script type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/g)].map((m) => m[1]).join('');
+  return /firebasestorage\.googleapis\.com/.test(headPart + ld);
+};
+const SKETCHES = ['/coloring-page/genesis-21-2-3/0DhrOOagZsTeNidpmXfu', '/coloring-page/john-19-30-34/ebkDUWhgdHRiKnyUe0jw'];
+const leaks = [];
+for (const path of [...PATHS.filter((p) => !p.startsWith('/profile/')), ...SKETCHES]) {
+  if (firebaseIn(await fetch(`${CANDIDATE}${path}`).then((r) => r.text()))) leaks.push(path);
+}
+assert.deepEqual(leaks, [], `Firebase Storage URL in head or JSON-LD: ${leaks.join(', ')}`);
+console.log('no Firebase Storage URL in head or JSON-LD');
