@@ -1,8 +1,9 @@
 // Pinterest auto-publish (RSS). src/data/pins.json is the hand-approved calendar; the feeds and Pin images are
 // built from it at request time. Pinterest reads each feed about once a day and publishes new items oldest first.
 // Pacing lives in the calendar: a daily ramp from 1 to 5 releases for the whole account, boards taking turns
-// (scripts/pins-check.mjs enforces it). A feed only lists what was released in the last WINDOW_DAYS days, so a
-// late feed connection or a skipped Pinterest check can never publish a pile at once.
+// (scripts/pins-check.mjs enforces it). A feed lists what was released in the last WINDOW_DAYS days: long enough
+// that a connected feed is never empty between two releases (Pinterest flags an empty feed as broken), short enough
+// that a late feed connection publishes at most that many days at once. Connect a feed before its first release.
 import calendar from '../data/pins.json' with { type: 'json' };
 import { getDoc } from './firestore.ts';
 import { ORIGIN, type Sketch } from './sketch.ts';
@@ -11,7 +12,7 @@ import { ORIGIN, type Sketch } from './sketch.ts';
 export const MASTER_UID = 'TiAEiMqWxpWqxCLtoI5OgHAvtf33';
 export const BOARDS = ['sunday-school', 'christmas', 'adult', 'easter', 'scripture'] as const;
 export const TEMPLATES = ['purple', 'black', 'paper', 'plain'] as const; // plain: no banner, trimmed (verse art)
-export const WINDOW_DAYS = 2;
+export const WINDOW_DAYS = 14;
 
 // Posting ramp (ROADMAP 1.5): 1 Pin a day in the week from RAMP_START, 2 a day the next week, and so on up to 5.
 // The ceiling for every release day (pins-check enforces it, pins-plan fills under it).
@@ -61,15 +62,14 @@ export async function masterSketch(id: string): Promise<Sketch | null> {
 
 const day = (d: Date) => d.toISOString().slice(0, 10);
 
-// Approved entries of `board` released today or in the previous WINDOW_DAYS - 1 days, oldest first. Never empty
-// once the board has released anything: Pinterest flags an empty feed as an error (seen 2026-09-25, christmas.xml
-// between two releases), so a quiet day repeats the last released Pin, which Pinterest already has and skips.
+// Approved entries of `board` released today or in the previous WINDOW_DAYS - 1 days, oldest first. An item that
+// stays in the feed is created once (guid = sketchId); an item that leaves and comes back is created again, which
+// duplicated three Pins on 2026-09-25 (a 2-day window with a "repeat the last Pin" fallback). So: a long window,
+// no fallback, and nothing ever re-enters.
 export function dueEntries(board: string, now = new Date()): PinEntry[] {
   const from = day(new Date(now.getTime() - (WINDOW_DAYS - 1) * 86400000));
   const to = day(now);
-  const released = entries
-    .filter((e) => e.board === board && e.approved && e.release <= to)
+  return entries
+    .filter((e) => e.board === board && e.approved && e.release >= from && e.release <= to)
     .sort((a, b) => a.release.localeCompare(b.release));
-  const due = released.filter((e) => e.release >= from);
-  return due.length ? due : released.slice(-1);
 }

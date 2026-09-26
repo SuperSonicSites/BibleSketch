@@ -7,13 +7,15 @@ Owner-only steps: CHECKLIST, "Pinterest auto-publish".
 ## Status (update this block at the end of every Pinterest session)
 
 As of **2026-09-26** (third `pinterest-daily` run: 5 Pins Oct 14-18, 5 collection pages; Pinterest signed out, so no alt text):
-- **ACTION FOR THE OWNER: the repeated feed items WERE republished.** Checked 2026-09-26 (public PinResource, no
-  login): the three RSS Pins Joshua 1:9 (1078049229577782121), Mark 4:39 (1078049229577814549) and Luke 2:15-16
-  now return "Pin not found", and Pinterest created new Pins for all three on 2026-09-25 23:42-23:44 UTC
-  (1078049229577844243 Christmas, 1078049229577844260 Scripture, 1078049229577844278 Sunday School). So the
-  `dueEntries` fallback (repeat the last released Pin) makes Pinterest re-create Pins. Per the plan above, revert it
-  to an empty feed (a code change outside the daily task's scope, so not done by the task) and decide whether to
-  keep the re-created Pins. They have no alt text yet.
+- **Duplicate Pins, fixed 2026-09-26.** The `dueEntries` fallback (repeat the last released Pin when nothing was
+  due in the 2-day window) made Pinterest re-create Joshua 1:9, Mark 4:39 and Luke 2:15-16 on 2026-09-25 23:42-23:44
+  UTC (new Pins 1078049229577844243 Christmas, 1078049229577844260 Scripture, 1078049229577844278 Sunday School);
+  the owner's profile showed each of the three twice. Rule learned: an item that stays in the feed is created
+  once; an item that leaves the feed and comes back is created again. Fix (Worker): `WINDOW_DAYS` 2 → 14 and no
+  fallback, so a connected feed is never empty (the largest gap between two releases on any board is 11 days) and
+  nothing re-enters. **Owner to do:** delete one of each duplicated pair on Pinterest (keep the older one when it has
+  alt text). Keep the largest release gap on every connected board under 14 days (the planner fills Sunday School
+  after Nov 13).
 - **Calendar** (`web/src/data/pins.json`, 183 entries, `pins-check`: no errors):
 
   | Board | Pins | Dates |
