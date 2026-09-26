@@ -8,6 +8,7 @@ import CardIcons from '../../components/CardIcons.astro';
 import FilterForm from '../../components/FilterForm.astro';
 import Pagination from '../../components/Pagination.astro';
 import { query } from '../../lib/firestore.ts';
+import { MASTER_UID } from '../../lib/config.ts';
 import { ORIGIN, TAG_LABELS, audience, jsonLd, loadAuthors, type Sketch } from '../../lib/sketch.ts';
 import { SEASONS, applyFilters, filterQuery, isFiltered, paginate, parseFilters } from '../../lib/listing.ts';
 
@@ -51,7 +52,8 @@ if (failed) {
   Astro.response.headers.set('Cache-Control', 'no-store');
 } else {
   // Empty tag (no public sketch at all): keep it out of the index, as tagRender does.
-  if (all.length === 0) Astro.response.headers.set('X-Robots-Tag', 'noindex');
+  // Indexable only with at least one owner page, like the sitemap (docs/seo-plan.md stage 2).
+  if (!all.some((s) => s.userId === MASTER_UID)) Astro.response.headers.set('X-Robots-Tag', 'noindex');
   Astro.cache.set({ maxAge: 3600, swr: 86400, tags: [`tag:${tagId}`, ...items.map((s) => `related:${s.id}`)] });
   Astro.response.headers.set('Cache-Control', 'public, max-age=300');
 }

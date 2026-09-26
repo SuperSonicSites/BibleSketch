@@ -7,7 +7,7 @@ before the previous one is verified live.
 ## Where we are
 
 - Current stage: **Stage 3 (not started)**
-- Last verified live: Stage 2 (2026-09-25, Worker 6ed790c8 + functions:sitemap)
+- Last verified live: Stage 2 + QA fix (2026-09-25, Worker 221ae789 + functions:sitemap)
 - Notes:
   - Stage 1: master pages' og:image, JSON-LD, share buttons and image sitemap use
     `/img/w800/<original path>` (800x1071 WebP); community pages use their 400x533 thumbnail; the w800 route
@@ -18,6 +18,19 @@ before the previous one is verified live.
     `X-Robots-Tag: noindex`; all profiles noindex; sitemap = 372 master pages, 0 profiles, 378 images (372
     previews + 6 blog covers). `/api/purge` now accepts `lists: ["img"]`; purged img + the 85 community pages
     once. security-check: sitemap step now writes owner sketches with admin access (54/54 pass).
+  - QA of stages 1-2 (2026-09-25): all 378 sitemap images 200; all 85 community og images 200 on our domain,
+    0 Firebase; no Firebase URL in head/JSON-LD/share links on 10 page types; RSS feeds clean; 40 sampled master
+    pages indexable, 85/85 community pages and thumbnails noindex (cached copies too); Worker tail: 29 requests,
+    0 exceptions/errors/5xx. Fixed: tag pages with no owner page were indexable (`/tags/ordinary-time`); now
+    noindex, matching the sitemap.
+  - Lesson: purge about 30 s after `wrangler deploy`, not right away; an isolate still on the old version can
+    re-cache a page in between (happened once with /tags/ordinary-time; purged again).
+  - Open loose ends: (a) related grids on master pages still link some community pages (~5 of 85 links
+    sampled): Stage 4 makes them master-only. (b) `web/scripts/check-sketch.mjs` fails on "first related link"
+    because its Sep 22 fixture predates newer pages (fails the same on pre-stage-1 code): refresh the fixture
+    in Stage 3. (c) The old Firebase renderers (profileRender, sketchRender, tag renderer) still call community
+    pages and profiles indexable; unused in production (the Worker serves those paths), removed in phase 5;
+    security-check's "thin pages" step tests them, not the Worker.
 
 ## Ground rules (every stage)
 
