@@ -1,0 +1,8 @@
+{
+  // Vite (Rolldown) reads the nearest tsconfig when transforming src/**/*.ts(x). Until phase 5 that was the repo-root
+  // tsconfig.json of the old SPA; this keeps the one option that changes the Worker's output (class fields in
+  // src/lib/generate.ts), so the build is byte-identical with or without the root file.
+  "compilerOptions": {
+    "useDefineForClassFields": false
+  }
+}

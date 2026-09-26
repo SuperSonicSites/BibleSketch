@@ -655,8 +655,12 @@ await step('sitemap: each URL once, only indexable pages, escaped XML, cacheable
   const idx = await fetch(`${HOSTING}/sitemap.xml`);
   assert.match(idx.headers.get('cache-control') || '', /public.*s-maxage/);
   const children = [...(await idx.text()).matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
+  // The index also lists the Worker's collections sitemap (web/src/pages/coloring-pages/sitemap.xml.ts), which only
+  // biblesketch.app serves; the Hosting emulator answers 404 for it, so only the ?type= children are fetched here.
+  assert.equal(children.filter((c) => c.endsWith('/coloring-pages/sitemap.xml')).length, 1, 'Worker collections sitemap listed once');
+  const hostingChildren = children.filter((c) => c.includes('/sitemap.xml?type='));
   const locs = [];
-  for (const c of children) {
+  for (const c of hostingChildren) {
     const xml = await (await fetch(local(c))).text();
     assert.ok(!/&(?!amp;|lt;|gt;|quot;|#039;)/.test(xml), `bare & in ${c}`);
     const l = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
@@ -672,7 +676,7 @@ await step('sitemap: each URL once, only indexable pages, escaped XML, cacheable
   assert.ok(!locs.some((l) => l.includes(`/${sketchId}-comic`) || l.includes(`/${sketchId}-verse`)), 'community sketch listed');
   assert.ok(locs.some((l) => l.endsWith(`/${sketchId}-mcomic`)), 'owner sketch missing');
   const images = [];
-  for (const c of children) images.push(...[...(await (await fetch(local(c))).text()).matchAll(/<image:loc>([^<]+)</g)].map((m) => m[1]));
+  for (const c of hostingChildren) images.push(...[...(await (await fetch(local(c))).text()).matchAll(/<image:loc>([^<]+)</g)].map((m) => m[1]));
   assert.ok(!images.some((i) => i.includes('firebasestorage')), 'full-size original in the image sitemap');
   assert.ok(images.some((i) => i.endsWith(`/img/w800/user_uploads/${MASTER_UID}/sketches/${sketchId}-mcomic.png`)), 'owner preview');
   assert.ok(!locs.includes('https://biblesketch.app/tags/pentecost'), 'empty tag listed');

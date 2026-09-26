@@ -153,7 +153,7 @@ Built 2026-09-23 in `web/`: `src/data/pins.json` (the calendar), `src/lib/pins.t
   - the public sketch doc has no prompt fields.
 
   Details: runbook "Daily scheduled task".
-- Not verified yet: the `security-check.mjs` step for the master account's 250 cap (the emulators were held by another session on 2026-09-23). Run it with the next emulator suite.
+- Verified 2026-09-26: the `security-check.mjs` step for the master account's 250 cap passes in the emulators (it was skipped on 2026-09-23 because another session held the emulators).
 - Local test of `/pin-img`: set `"remote": true` on the `images` binding in `wrangler.jsonc` (local mode can't draw overlays), and remove it after.
 
 ### 1.6 Lifecycle email (Resend)
