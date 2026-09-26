@@ -106,8 +106,8 @@ export function previewUrl(s: Sketch): string | undefined {
   return thumb ? `${ORIGIN}/img/${thumb}` : undefined;
 }
 
-// `Mc`: singular book name in the H1.
-export const bookDisplay = (book: string) => (book === 'Psalms' ? 'Psalm' : book === 'Proverbs' ? 'Proverb' : book);
+// `Mc`: the book name in the H1: a single psalm is "Psalm 23"; Proverbs keeps its name ("Proverbs 3:5").
+export const bookDisplay = (book: string) => (book === 'Psalms' ? 'Psalm' : book);
 
 // Pre-Teen is shown as Teen on the page (`Rn`).
 export const ageDisplay = (age?: string) => (age === 'Pre-Teen' ? 'Teen' : age);
@@ -212,7 +212,7 @@ export function relatedQuery(s: Sketch): { filters: [string, string | boolean][]
   if (!p.age_group || !p.art_style) return null;
   return {
     filters: [['isPublic', true], ['promptData.age_group', p.age_group], ['promptData.art_style', p.art_style]],
-    heading: `More Bible Coloring Pages For ${ageDisplay(p.age_group)}`,
+    heading: `More Bible Coloring Pages For ${audience(p.age_group)}`,
   };
 }
 

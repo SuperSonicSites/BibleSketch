@@ -6,8 +6,8 @@ before the previous one is verified live.
 
 ## Where we are
 
-- Current stage: **Stage 7: code done; owner steps open (below)**
-- Last verified live: Stage 7 code (2026-09-25, Worker 4b39583e)
+- Current stage: **Stage 9 (not started)**; Stage 7 owner steps still open (below)
+- Last verified live: Stage 8 (2026-09-25, Worker 0fc40230)
 - Notes:
   - Stage 1: master pages' og:image, JSON-LD, share buttons and image sitemap use
     `/img/w800/<original path>` (800x1071 WebP); community pages use their 400x533 thumbnail; the w800 route
@@ -95,6 +95,12 @@ before the previous one is verified live.
     Bots: confirm Bot Fight Mode / "Block AI bots" don't challenge verified bots (Googlebot, Bingbot,
     OAI-SearchBot, PerplexityBot, Claude-SearchBot); (3) Short.io: set img.biblesketch.app's root redirect to
     https://biblesketch.app/ (its placeholder page is indexed).
+  - Stage 8: blog "best" -> "favorite" damage fixed in christian-christmas-coloring-pages (7 "Best For:", "Tips for
+    Best Results", "best typography layout", "looks best", "The best all-family", "Best for detailed meditation";
+    legitimate "favorite" uses and the title "7 Favorite ..." kept). "Educational Authority hats" line reworded.
+    Toddler Christmas post links /tags/christmas in its intro. H1 "Proverb 3:5" -> "Proverbs 3:5" (bookDisplay
+    keeps "Psalm"); fallback related headings plural ("For Toddlers"). "Young Childs" was already gone (stage 3)
+    and titles already said "Toddlers" (the earlier "for Toddler" was a truncated readout).
   - Lesson: purge about 30 s after `wrangler deploy`, not right away; an isolate still on the old version can
     re-cache a page in between (happened once with /tags/ordinary-time; purged again).
   - Open loose ends: (a) done in Stage 4. (b) done in Stage 3 (fixture refreshed; passes). (c) The old Firebase renderers (profileRender, sketchRender, tag renderer) still call community
@@ -250,7 +256,7 @@ builds the slots; the words themselves arrive gradually (verse text now, descrip
 **Checks**
 - Key file returns 200 text; a test purge logs a 200/202 from IndexNow; Bing shows the sitemap.
 
-## Stage 8: Typos and the blog bug  [ ]
+## Stage 8: Typos and the blog bug  [x] verified live 2026-09-25
 
 **Changes**
 - `functions/blog-posts.json`: the "best" -> "favorite" damage in `christian-christmas-coloring-pages`
