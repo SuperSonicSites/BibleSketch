@@ -3,7 +3,7 @@
 // with enough pages for their own page. Unlinked until the owner reviews it. Cached with `stories`.
 import Base from '../../layouts/Base.astro';
 import { ORG_REF, ORIGIN, type Sketch, heading, jsonLd, reference, slugOf, thumbUrl } from '../../lib/sketch.ts';
-import { STORIES, VERSE_MIN, allOwnerPages, byBibleOrder, pagesOfStory } from '../../lib/stories.ts';
+import { STORIES, VERSE_MIN, allOwnerPages, byBibleOrder, pagesOfStory, storyOf } from '../../lib/stories.ts';
 
 let all: Sketch[] = [];
 let failed = false;
@@ -16,7 +16,15 @@ try {
 const stories = STORIES.map((st) => ({ st, pages: pagesOfStory(st, all) })).filter((x) => x.pages.length);
 const verses = new Map<string, Sketch[]>();
 for (const s of [...all].sort(byBibleOrder)) verses.set(slugOf(s), [...(verses.get(slugOf(s)) ?? []), s]);
-const popular = [...verses.entries()].filter(([, v]) => v.length >= VERSE_MIN);
+// Memory verses: popular passages that belong to no story (story passages are on their story's page).
+const popular = [...verses.entries()].filter(([, v]) => v.length >= VERSE_MIN && !storyOf(v[0]));
+
+// One look for the story covers: the toddler Sunday School page, else the young-child one. Stories without either
+// are listed as text links below the grid instead of breaking its style (docs/seo-plan.md stage 9).
+const cover = (pages: Sketch[], age: string) =>
+  pages.find((s) => s.type !== 'verse' && s.promptData?.art_style === 'Sunday School' && s.promptData?.age_group === age);
+const covered = stories.map((x) => ({ ...x, cover: cover(x.pages, 'Toddler') ?? cover(x.pages, 'Young Child') })).filter((x) => x.cover);
+const uncovered = stories.filter((x) => !covered.some((c) => c.st.id === x.st.id));
 
 if (failed) {
   Astro.cache.set(false);
@@ -57,28 +65,35 @@ const schemas = [
     ) : (
       <>
         <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {stories.map(({ st, pages }) => (
+          {covered.map(({ st, pages, cover }) => (
             <a href={`/coloring-pages/${st.id}`} class="group bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow border border-gray-100 overflow-hidden flex flex-col">
-              <div class="relative overflow-hidden bg-gray-100 aspect-[3/4]">
-                <img src={thumbUrl(pages[0])} alt={`${st.name} coloring page (${reference(pages[0].promptData!)})`} width="400" height="533"
+              <div class="relative overflow-hidden bg-white aspect-[3/4]">
+                <img src={thumbUrl(cover!)} alt={`${st.name} coloring page (${reference(cover!.promptData!)})`} width="400" height="533"
                   loading="lazy" decoding="async" class="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500" />
               </div>
-              <div class="px-3 py-3">
-                <h2 class="font-bold text-gray-800">{st.name}</h2>
+              <div class="px-3 py-3 border-t border-gray-50">
+                <h2 class="font-bold text-gray-800">{st.name.replace(/^The /, '')}</h2>
                 <p class="text-xs text-gray-500 mt-1">{pages.length} coloring page{pages.length === 1 ? '' : 's'}</p>
               </div>
             </a>
           ))}
         </div>
+        {uncovered.length > 0 && (
+          <p class="mt-6 text-sm text-gray-500"><span class="font-bold">More stories:</span>
+            {uncovered.map(({ st, pages }, i) => (
+              <>{i > 0 ? ' · ' : ' '}<a href={`/coloring-pages/${st.id}`} class="font-bold text-[#7C3AED] hover:underline">{st.name.replace(/^The /, '')}</a> ({pages.length})</>
+            ))}
+          </p>
+        )}
 
         {popular.length > 0 && (
           <section class="mt-14">
-            <h2 class="font-display text-2xl font-bold text-gray-800 mb-4">Popular Bible Verses</h2>
-            <ul class="flex flex-wrap gap-2">
+            <h2 class="font-display text-2xl font-bold text-gray-800 mb-1">Popular Memory Verses</h2>
+            <p class="text-gray-500 text-sm mb-6">Verses with several coloring pages. Story passages are on each story's page.</p>
+            <ul class="columns-1 sm:columns-2 lg:columns-3 gap-8 bg-white rounded-2xl border border-purple-100 p-6">
               {popular.map(([slug, v]) => (
-                <li><a href={`/coloring-page/${slug}`} class="inline-flex items-center rounded-full px-4 py-2 text-sm font-medium bg-purple-100 text-[#7C3AED] hover:bg-purple-200 transition-colors">
-                  {heading(v[0].promptData!).replace(/ Coloring Page$/, '')} ({v.length})
-                </a></li>
+                <li class="text-sm py-1 break-inside-avoid"><a href={`/coloring-page/${slug}`} class="text-[#7C3AED] font-bold hover:underline">{heading(v[0].promptData!).replace(/ Coloring Page$/, '')}</a>
+                  <span class="text-gray-400"> · {v.length} coloring pages</span></li>
               ))}
             </ul>
           </section>

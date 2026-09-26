@@ -133,6 +133,9 @@ before the previous one is verified live.
     caption, tag pages list their stories ("By story: Nativity, Wise Men"). Sitemap: the Firebase index now lists
     /coloring-pages/sitemap.xml, served by the Worker (index + stories with 10+ pages + verses with 3+ pages: 46
     URLs, all 200 and indexable). IndexNow: the 46 URLs submitted (200). Sweeps: 457 + 58 pages clean.
+    /coloring-pages made cohesive: story covers are each story's toddler (else young-child) Sunday School page;
+    stories with no such page (Tower of Babel, Samson, Holy Week) are text links under "More stories"; the verse
+    list shows only memory verses outside any story, in balanced columns (story passages live on story pages).
   - Lesson: purge about 30 s after `wrangler deploy`, not right away; an isolate still on the old version can
     re-cache a page in between (happened once with /tags/ordinary-time; purged again).
   - Open loose ends: (a) done in Stage 4. (b) done in Stage 3 (fixture refreshed; passes). (c) The old Firebase renderers (profileRender, sketchRender, tag renderer) still call community
