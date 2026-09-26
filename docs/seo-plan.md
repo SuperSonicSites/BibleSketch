@@ -6,8 +6,8 @@ before the previous one is verified live.
 
 ## Where we are
 
-- Current stage: **Stage 10 (not started)**; Stage 7 owner steps open
-- Last verified live: Stage 9 linked (2026-09-25, Worker 2d2d42ab + functions:sitemap)
+- Current stage: **all tonight's stages done (1-10)**; Stage 7 owner steps open; next: Stage 11 from Oct 8
+- Last verified live: Stage 10 (2026-09-26, Worker 63bf6237)
 - Notes:
   - Stage 1: master pages' og:image, JSON-LD, share buttons and image sitemap use
     `/img/w800/<original path>` (800x1071 WebP); community pages use their 400x533 thumbnail; the w800 route
@@ -328,7 +328,12 @@ builds the slots; the words themselves arrive gradually (verse text now, descrip
 - `/coloring-page/luke-2-6-7` renders the verse page (8 master pages); `/coloring-page/<a sketch id>` still
   301s to its canonical; `/coloring-pages/nativity` renders; unknown slugs 404 + noindex.
 
-## Stage 10: Generator page wording  [ ]
+## Stage 10: Generator page wording  [x] verified live 2026-09-26
+
+Done: title "Bible Verse Coloring Pages Generator | Bible Sketch" (not "...Page Generator": the plural phrase
+gets ~2,900 US searches a month, "bible verse coloring page generator" ~10), new description, a 3-step "How the
+Verse Coloring Page Generator Works" (hidden while a result shows). Home: hero line names the generator; title
+and meta description unchanged (18.5% CTR). Live without cache-buster; 8 main routes 200.
 
 **Changes**
 - `/bible-verse-coloring`: title "Bible Verse Coloring Page Generator | Bible Sketch", a 3-step "How it works".
