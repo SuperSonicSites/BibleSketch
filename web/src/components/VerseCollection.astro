@@ -31,7 +31,10 @@ const next = at >= 0 && at < slugs.length - 1 ? slugs[at + 1] : undefined;
 
 const url = `${ORIGIN}/coloring-page/${slug}`;
 const title = pages.length > 1 ? `${h1} (${pages.length} Printable Pages) | Bible Sketch` : `${h1} | Bible Sketch`;
-const description = `${pages.length} printable ${ref} coloring page${pages.length === 1 ? '' : 's'}${forWhom ? ` ${forWhom}` : ''}${story ? `, from the story of ${story.name.replace(/^The /, 'the ')}` : ''}. For Sunday school, homeschool and family devotions.`;
+const describe = (tail: string) => `${pages.length} printable ${ref} coloring page${pages.length === 1 ? '' : 's'}${forWhom ? ` ${forWhom}` : ''}${story ? `, from the story of ${story.name.replace(/^The /, 'the ')}` : ''}. ${tail}`;
+// Snippets stay under ~155 characters.
+const description = describe('For Sunday school, homeschool and family devotions.').length <= 155
+  ? describe('For Sunday school, homeschool and family devotions.') : describe('For Sunday school and homeschool.');
 const schemas = [
   jsonLd({
     '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': url, url, name: h1, description,

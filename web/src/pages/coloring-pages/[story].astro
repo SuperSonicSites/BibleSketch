@@ -55,7 +55,9 @@ const subject = story.name.replace(/^The /, '');
 const h1 = `${subject} Coloring Pages`;
 const title = pages.length > 1 ? `${h1} (${pages.length} Printable Pages) | Bible Sketch` : `${h1} | Bible Sketch`;
 const storyName = story.name.replace(/^The /, 'the ');
-const description = `${pages.length} printable coloring page${pages.length === 1 ? '' : 's'} of ${storyName} from ${rangeText(story)}, in Bible order, for Sunday school, homeschool and family devotions.`;
+// Snippets stay under ~155 characters: stories spread over many passages drop the passage list.
+const describe = (from: string) => `${pages.length} printable coloring page${pages.length === 1 ? '' : 's'} of ${storyName}${from}, in Bible order, for Sunday school, homeschool and family devotions.`;
+const description = describe(` from ${rangeText(story)}`).length <= 155 ? describe(` from ${rangeText(story)}`) : describe('');
 const schemas = [
   jsonLd({
     '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': url, url, name: h1, description,
