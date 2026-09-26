@@ -40,9 +40,9 @@ const phraseParts = [
 ].filter(Boolean);
 const phrase = phraseParts.length ? ` ${phraseParts.join(', ')}` : '';
 const h1 = [f.style, `${label} Coloring Pages`, f.age && `For ${audience(f.age)}`, f.book && `From ${f.book}`].filter(Boolean).join(' ');
-const title = [h1, !isFiltered(f) && 'Free Printable Bible Coloring Sheets', 'Bible Sketch'].filter(Boolean).join(' | ');
+const title = [h1, !isFiltered(f) && 'Printable Bible Coloring Sheets', 'Bible Sketch'].filter(Boolean).join(' | ');
 const description = season
-  ? `Discover beautiful ${label} coloring pages${phrase} from Bible stories. Perfect for celebrating the ${label} season in Sunday School, VBS, or family devotionals. Free printable Bible coloring sheets.`
+  ? `Discover beautiful ${label} coloring pages${phrase} from Bible stories. Perfect for celebrating the ${label} season in Sunday School, VBS, or family devotionals. Printable Bible coloring sheets.`
   : `Explore ${label} coloring pages${phrase} from Scripture. These Biblical coloring sheets feature stories and lessons about ${label.toLowerCase()}. Perfect for Sunday School, homeschool, or personal Bible study.`;
 const subtitle = `Browse ${matches.length} ${label} coloring page${matches.length === 1 ? '' : 's'}${phrase} from Bible stories. Perfect for ${season ? `celebrating the ${label} season` : `teaching about ${label.toLowerCase()}`} in your church, Sunday School, or home.`;
 

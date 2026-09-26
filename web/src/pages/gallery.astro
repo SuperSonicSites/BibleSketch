@@ -38,14 +38,14 @@ if (failed) {
 // Unfiltered, newest-first page N is its own page (docs/seo-plan.md stage 4); filtered or re-sorted views (the
 // same pages in another order) still point at /gallery.
 const canonical = `${ORIGIN}/gallery${!isFiltered(f) && f.sort === 'newest' && page > 1 ? filterQuery(f, 'newest', page) : ''}`;
-const title = `Bible Coloring Pages Gallery${page > 1 ? ` - Page ${page}` : ''} - Free Printable Christian Coloring Sheets | Bible Sketch`;
-const description = 'Browse thousands of free printable Bible coloring pages. Discover coloring sheets for every Bible book, age group, and art style. Perfect for Sunday School, VBS, homeschool, and family devotionals.';
+const title = `Bible Coloring Pages Gallery${page > 1 ? ` - Page ${page}` : ''} - Printable Christian Coloring Sheets | Bible Sketch`;
+const description = 'Browse 450+ printable Bible coloring pages. Discover coloring sheets for every Bible book, age group, and art style. Perfect for Sunday School, VBS, homeschool, and family devotionals.';
 ---
 <Base title={title} description={description} canonical={canonical} ogType="website" image={`${ORIGIN}/logo.png`} imageAlt="Bible Sketch Logo" twitterCard="summary">
   <div class="max-w-7xl mx-auto px-4 py-12">
     <div class="text-center mb-8">
       <h1 class="font-display text-4xl md:text-5xl font-bold text-[#1F2937] mb-4">Bible Coloring Pages Gallery</h1>
-      <p class="text-lg text-gray-500 max-w-2xl mx-auto">Free printable coloring pages from every book of the Bible, for every age. Created by the Bible Sketch community.</p>
+      <p class="text-lg text-gray-500 max-w-2xl mx-auto">Printable coloring pages from every book of the Bible, for every age. Your first 5 prints are free with a free account.</p>
     </div>
 
     <GalleryTabs client:idle />

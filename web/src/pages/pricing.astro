@@ -17,11 +17,14 @@ const packs = [
   { id: 'torch', name: 'The Torch', price: 14.99, credits: 80, perImage: 0.19, savings: '25%', audience: 'For families & devotionals', variant: 'primary', label: 'Get Torch Pack', Icon: Flame, highlight: true },
   { id: 'beacon', name: 'The Beacon', price: 29.99, credits: 200, perImage: 0.15, savings: '40%', audience: 'For Ministry Directors', variant: 'secondary', label: 'Get Beacon Pack', Icon: Crown, highlight: false },
 ] as const;
-const premiumPerks = ['Unlimited Downloads & Prints', '10 Credits Per Month Included', 'High-Res PDF Download', 'No Watermark'];
-const packPerks = ['High-Res PDF Download', 'No Watermark', 'Private Mode', 'Commercial Rights'];
+// Only what the plan adds (docs/seo-plan.md stage 5): every account already gets PDFs, private pages and the
+// rights in Terms 2.1, and no download has a watermark.
+const premiumPerks = ['Unlimited Downloads & Prints', '10 Credits Per Month Included', 'Print Any Page in the Gallery'];
+const packPerks = ['Credits Never Expire', 'Any Bible Passage or Verse', 'Print-Ready PDF, Letter or A4'];
 const faq = [
+  ['Can I get a refund?', "Credit purchases are final (Terms 3.1). A generation that fails never costs you: its credit comes back automatically. If a page comes out defective, email us within 24 hours (Terms 3.2). Premium can be cancelled at any time from your receipt."],
   ['Do these credits expire?', 'No! Your purchased credits never expire. You can buy a pack today and use it next year for Easter.'],
-  ['Can I print these for my whole Sunday School class?', 'Yes! Once you generate an image, you own the rights to print it as many times as you need for your class or ministry.'],
+  ['Can I print these for my whole Sunday School class?', 'Yes! Pages you create are yours: print them as many times as you need, even commercially (Terms 2.1). Pages from the gallery can be printed and shared for your class, church or home (Terms 2.3).'],
   ['Should I subscribe or buy a credit pack?', "If you teach regularly (weekly Sunday School, homeschool), Premium gives you the best value with unlimited downloads and 10 monthly credits. If you only need images occasionally (VBS, special events), credit packs let you pay once and use whenever you're ready."],
 ];
 const faqSchema = JSON.stringify({
@@ -136,7 +139,7 @@ const faqSchema = JSON.stringify({
     </div>
 
     <div class="text-center mt-12">
-      <p class="text-sm text-gray-400">Payments are securely processed. <br />Need help? Contact <a href="mailto:hello@biblesketch.app" class="underline hover:text-[#7C3AED]">hello@biblesketch.app</a></p>
+      <p class="text-sm text-gray-400">Bible Sketch is operated by Supersonic Sites Inc., Ucluelet, BC, Canada. Payments are securely processed. <br />Need help? Contact <a href="mailto:hello@biblesketch.app" class="underline hover:text-[#7C3AED]">hello@biblesketch.app</a></p>
     </div>
   </div>
   <script>import '../scripts/pricing.ts';</script>

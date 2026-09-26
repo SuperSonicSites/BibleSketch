@@ -6,8 +6,8 @@ before the previous one is verified live.
 
 ## Where we are
 
-- Current stage: **Stage 5 (not started)**
-- Last verified live: Stage 4 + QA fix (2026-09-25, Worker 5dc739cc)
+- Current stage: **Stage 6 (not started)**
+- Last verified live: Stage 5 (2026-09-25, Worker 39115a8d)
 - Notes:
   - Stage 1: master pages' og:image, JSON-LD, share buttons and image sitemap use
     `/img/w800/<original path>` (800x1071 WebP); community pages use their 400x533 thumbnail; the w800 route
@@ -48,6 +48,18 @@ before the previous one is verified live.
     Worker tail: 19/19 ok. Fixed: `/gallery?page=2&sort=popular` was self-canonical (same pages re-sorted); now
     only newest-first unfiltered pages are self-canonical. Noted for Stage 8: fallback related headings say
     "For Toddler" / "For Young Child" (singular; 16 pages).
+  - Stage 5: everything aligned to the Terms the owner approved (2.1 you own what you create, incl. commercial;
+    2.3 gallery pages may be printed; 3.1 purchases final): /pricing perks now Premium = unlimited prints, 10
+    credits, print any gallery page; packs = credits never expire, any passage, print-ready PDF; rights FAQ cites
+    2.1/2.3; new refund FAQ (final, failed generations auto-refunded, defects within 24 h, cancel Premium any time);
+    "operated by Supersonic Sites Inc., Ucluelet, BC". Checkout Premium perk "no watermark" removed. /about rights
+    line + link to /terms#rights (anchor added; Terms text unchanged). Blog: 8 rights sentences, the Premium list
+    and 3 "in seconds" fixed in functions/blog-posts.json. "in seconds" -> "about a minute", "thousands" -> "450+",
+    "Free Printable" -> "Printable" in gallery/tag/profile/verse titles and descriptions, "Community Favorites" ->
+    "Featured Coloring Pages". robots.txt (identical) and a rewritten ai.txt now come from web/public (the Worker's
+    assets win over Firebase; hosting-public untouched). /api/purge accepts `pages` and `blog`.
+    Not changed (owner call): blog post titles that say "Free Printable" (4 posts; the toddler Christmas post
+    ranks), and the "+N Free Prints" chips on packs (prints included with the purchase).
   - Lesson: purge about 30 s after `wrangler deploy`, not right away; an isolate still on the old version can
     re-cache a page in between (happened once with /tags/ordinary-time; purged again).
   - Open loose ends: (a) done in Stage 4. (b) done in Stage 3 (fixture refreshed; passes). (c) The old Firebase renderers (profileRender, sketchRender, tag renderer) still call community
@@ -162,7 +174,7 @@ builds the slots; the words themselves arrive gradually (verse text now, descrip
 - Live: `/tags/christmas` lists all 54 pages on one URL; `/gallery?page=2` canonical is itself; the Luke 2:6-7
   page's related grid shows Christmas pages; blog embeds show descriptive link text.
 
-## Stage 5: Say only true things  [ ]
+## Stage 5: Say only true things  [x] verified live 2026-09-25
 
 **Changes**
 - `/pricing`: remove "No Watermark", "Private Mode", "Commercial Rights" as paid perks; add company name

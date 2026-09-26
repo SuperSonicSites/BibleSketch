@@ -13,7 +13,7 @@ const PRINTS = ['Print or download any page, as often as you like', 'Every page 
 export const CHECKOUT: Record<string, CheckoutPlan> = {
   premium: {
     name: 'Bible Sketch Premium', price: 4.99, cadence: 'a month',
-    perks: ['Unlimited prints and downloads', '10 credits every month to make pages of your own', 'High-resolution PDF, no watermark', 'Cancel anytime'],
+    perks: ['Unlimited prints and downloads', '10 credits every month to make pages of your own', 'Cancel anytime'],
   },
   'prints-monthly': { name: 'Unlimited Prints', price: 1.99, cadence: 'a month', perks: [...PRINTS, 'Cancel anytime'] },
   'prints-yearly': {

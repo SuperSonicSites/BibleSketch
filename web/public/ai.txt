@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+
+# Bible Sketch (https://biblesketch.app): printable Bible coloring pages, drawn with AI from the Bible text
+# (World English Bible) for Sunday school, homeschool and family devotions.
+# AI search and answer engines are welcome to read and cite these pages.
+# Usage rights for the pages and images: https://biblesketch.app/terms#rights
