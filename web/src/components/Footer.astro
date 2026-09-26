@@ -1,13 +1,22 @@
 ---
-// Live footer markup, with real links (the bundle used navigate() buttons) and an About link.
+// Live footer markup, with real links (the bundle used navigate() buttons) and an About link. The social links are
+// the Organization's sameAs profiles (docs/seo-plan.md stage 6), so both stay in step.
+import { ORGANIZATION } from '../lib/sketch.ts';
+const [pinterest, facebook, instagram] = ORGANIZATION.sameAs;
+const social: [string, string][] = [[pinterest, 'Pinterest'], [facebook, 'Facebook'], [instagram, 'Instagram']];
 ---
 <footer class="bg-[#FFF7ED] border-t border-purple-50 py-12 mt-12">
   <div class="max-w-7xl mx-auto px-4 text-center">
     <p class="text-gray-600 text-sm mb-4">© {new Date().getUTCFullYear()} Bible Sketch. All rights reserved.</p>
-    <div class="flex justify-center gap-6">
+    <div class="flex flex-wrap justify-center gap-x-6 gap-y-2">
       <a href="/about" class="text-gray-600 hover:text-[#7C3AED] text-sm font-medium transition-colors">About</a>
       <a href="/terms" class="text-gray-600 hover:text-[#7C3AED] text-sm font-medium transition-colors">Terms of Service</a>
       <a href="/privacy" class="text-gray-600 hover:text-[#7C3AED] text-sm font-medium transition-colors">Privacy Policy</a>
+    </div>
+    <div class="flex flex-wrap justify-center gap-x-6 gap-y-2 mt-3">
+      {social.map(([href, name]) => (
+        <a href={href} rel="me noopener" target="_blank" class="text-gray-600 hover:text-[#7C3AED] text-sm font-medium transition-colors">{name}</a>
+      ))}
     </div>
   </div>
 </footer>

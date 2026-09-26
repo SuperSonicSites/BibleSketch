@@ -1,0 +1,30 @@
+{
+  "_about": "The Advent coloring calendar on /tags/advent (docs/seo-plan.md stage 12): one passage a day, Dec 1-25, from Isaiah's promises to the birth of Jesus. Each day shows the owner's page for that passage (exact passage first, then the Sunday School kids' pages); a day with no page yet links to the generator. The passages are in pin-year.json, so the collection lane makes the missing pages. ref: [book, chapter, fromVerse, toVerse].",
+  "days": [
+    { "title": "The Sign of Immanuel", "ref": ["Isaiah", 7, 14, 14] },
+    { "title": "A Great Light in the Darkness", "ref": ["Isaiah", 9, 2, 2] },
+    { "title": "Unto Us a Child Is Born", "ref": ["Isaiah", 9, 6, 6] },
+    { "title": "A Shoot from Jesse's Stump", "ref": ["Isaiah", 11, 1, 2] },
+    { "title": "The Wolf and the Lamb", "ref": ["Isaiah", 11, 6, 6] },
+    { "title": "Prepare the Way", "ref": ["Isaiah", 40, 3, 3] },
+    { "title": "The Shepherd Carries the Lambs", "ref": ["Isaiah", 40, 11, 11] },
+    { "title": "Little Town of Bethlehem", "ref": ["Micah", 5, 2, 2] },
+    { "title": "The Angel Visits Zechariah", "ref": ["Luke", 1, 11, 13] },
+    { "title": "Gabriel Visits Mary", "ref": ["Luke", 1, 26, 28] },
+    { "title": "Mary Says Yes", "ref": ["Luke", 1, 38, 38] },
+    { "title": "Mary Visits Elizabeth", "ref": ["Luke", 1, 39, 45] },
+    { "title": "Mary's Song", "ref": ["Luke", 1, 46, 47] },
+    { "title": "Baby John Is Born", "ref": ["Luke", 1, 57, 58] },
+    { "title": "An Angel Speaks to Joseph", "ref": ["Matthew", 1, 20, 21] },
+    { "title": "Joseph Welcomes Mary", "ref": ["Matthew", 1, 24, 24] },
+    { "title": "Caesar's Decree", "ref": ["Luke", 2, 1, 3] },
+    { "title": "The Road to Bethlehem", "ref": ["Luke", 2, 4, 5] },
+    { "title": "No Room at the Inn", "ref": ["Luke", 2, 7, 7] },
+    { "title": "Shepherds in the Fields", "ref": ["Luke", 2, 8, 8] },
+    { "title": "The Angel Appears", "ref": ["Luke", 2, 9, 10] },
+    { "title": "Glory to God in the Highest", "ref": ["Luke", 2, 13, 14] },
+    { "title": "The Shepherds Hurry to Bethlehem", "ref": ["Luke", 2, 15, 16] },
+    { "title": "The Wise Men See the Star", "ref": ["Matthew", 2, 1, 2] },
+    { "title": "Jesus Is Born", "ref": ["Luke", 2, 6, 7] }
+  ]
+}

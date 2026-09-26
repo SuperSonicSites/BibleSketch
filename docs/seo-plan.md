@@ -6,8 +6,8 @@ before the previous one is verified live.
 
 ## Where we are
 
-- Current stage: **Stage 11 running** (page words through pinterest-daily, started 2026-09-26); stages 1-10 done
-- Last verified live: Stage 11 pilot, 3 Nativity pages (2026-09-26, Worker 8b30ebf0)
+- Current stage: **Stage 11 running** (page words through pinterest-daily); stages 1-10, 12 and 13 done; stage 14 waits on the owner
+- Last verified live: Stage 12 (2026-09-26, Worker 6a5deb47)
 - Notes:
   - Stage 1: master pages' og:image, JSON-LD, share buttons and image sitemap use
     `/img/w800/<original path>` (800x1071 WebP); community pages use their 400x533 thumbnail; the w800 route
@@ -355,12 +355,25 @@ and meta description unchanged (18.5% CTR). Live without cache-buster; 8 main ro
   `docs/pinterest-runbook.md`. Each run writes `page-text.json` entries for 5-8 existing master pages
   (order: Nativity 64, Wise Men 9, Noah 20; Creation 60 held 3 weeks as the comparison group), owner approves
   them in the Pin review, and every new master page is born with its text. About mid-December for all 372.
-- **Stage 12 (by Nov 1): `/tags/christmas` and `/tags/advent` upgraded in place.** Owner-written intro,
-  scene sections in Bible order, toddler section, "How I use these in Sunday school"; Advent becomes the
-  25-day calendar (missing scenes added to `pin-year.json`). Link the verse and story pages from them.
-- **Stage 13: links.** From about Oct 12, 30-50 hand-picked church, homeschool and Advent resource pages.
-- **Stage 14: measurement.** Search Console (Web, Images, AI report), Bing AI Performance, sign-ups by landing
-  page in the monthly report, 20 fixed AI prompts a month.
+- **Stage 12: `/tags/christmas` and `/tags/advent` upgraded in place.  [x] live 2026-09-26 (Worker 6a5deb47)**
+  Unfiltered views only (filtered views keep the plain listing). Advent: new title/description/intro and a 25-day
+  calendar (`web/src/data/advent.json`, `web/src/components/AdventCalendar.astro`): each day shows the owner page
+  for its passage (exact first, then overlapping, kids' Sunday School preferred, each page once); 23/25 days have
+  a page, Dec 3 (Isaiah 9:6) and Dec 6 (Isaiah 40:3) link to the generator until the collection lane makes them
+  (sprint reordered: advent-prophecies first). Christmas: title/description/intro, the owner's pages by age via
+  AudienceSections (Bible order: Matthew before Luke, so the intro says so), community pages below. Cross links
+  Advent <-> Christmas; "By story" links kept. JSON-LD valid. Not done: the owner's own "How I use these in
+  Sunday school" words (never written for the owner in the first person; add when the owner writes them).
+  Also shipped: footer links to Pinterest, Facebook and Instagram (from ORGANIZATION.sameAs).
+- **Stage 13: links.  [x] list ready 2026-09-26.** `docs/link-prospects.md`: 40 verified pages (directories that
+  take suggestions, blog roundups, church pages) with contact paths and the page of ours to pitch, and 9 to ask
+  before mid-November. Owner decision: no email marketing; outreach is by hand, when the owner chooses.
+- **Stage 14: measurement.** Already built: the first visit (landing path, UTM, referrer) is kept in the browser
+  (`Base.astro`, `bs_first`) and saved at sign-up to `users/{uid}/private/profile.signup` (`web/src/lib/session.ts`).
+  Gap found 2026-09-26: a new Google account made from the Log In view (no email-choice form) saves no `signup`.
+  The fix (write only `signup` + `updatedAt` for those accounts; the rules already allow it) was blocked by the
+  session's personal-data guard and waits on the owner's OK. A sign-ups-by-landing-page report reads private
+  profiles, so it also waits on the owner. Owner side: Search Console (Web, Images), Bing Webmaster Tools.
 - **Always:** `pin-year.json` decides what gets made, for Pinterest and search at once; never make a
   published master page private or delete it; when community pages pass ~10,000, block search engines
   from the gallery's deep lists.

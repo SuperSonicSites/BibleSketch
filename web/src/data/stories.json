@@ -4,7 +4,7 @@
     "_about": "Collection lane (owner decisions 2026-09-26): 5 pages a day, generated ahead of the season to complete one story at a time, published on the site at once, pinned later by the Pinterest lane. A story is complete when each of its scenes (pin-year.json items in its ranges) has a Toddler and a Young Child page in Sunday School style and an Adult page in the story's `adult` style (default Classic), plus up to 2 verse-art pages. Sprints repeat every year (month-day windows); when a sprint's stories are complete the lane moves on through `evergreen`.",
     "perDay": 5,
     "sprints": [
-      { "from": "09-26", "to": "11-15", "why": "Advent and Christmas", "stories": ["nativity", "wise-men", "advent-prophecies"] },
+      { "from": "09-26", "to": "11-15", "why": "Advent and Christmas", "stories": ["advent-prophecies", "nativity", "wise-men"] },
       { "from": "11-16", "to": "01-31", "why": "Lent and Easter, ready before Ash Wednesday", "stories": ["holy-week", "resurrection"] },
       { "from": "02-01", "to": "03-31", "why": "Winter Sunday school, Old Testament", "stories": ["moses", "david-and-goliath", "jonah", "daniel"] },
       { "from": "04-01", "to": "05-15", "why": "Pentecost and the patriarchs", "stories": ["early-church", "joseph", "abraham-and-sarah"] },

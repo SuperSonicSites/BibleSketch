@@ -6,11 +6,13 @@ import Base from '../../layouts/Base.astro';
 import ListingCard from '../../components/ListingCard.astro';
 import CardIcons from '../../components/CardIcons.astro';
 import FilterForm from '../../components/FilterForm.astro';
+import AudienceSections from '../../components/AudienceSections.astro';
+import AdventCalendar from '../../components/AdventCalendar.astro';
 import { query } from '../../lib/firestore.ts';
 import { MASTER_UID } from '../../lib/config.ts';
 import { ORG_REF, ORIGIN, TAG_LABELS, audience, canonicalPath, heading, jsonLd, loadAuthors, type Sketch } from '../../lib/sketch.ts';
 import { SEASONS, applyFilters, isFiltered, parseFilters } from '../../lib/listing.ts';
-import { STORIES, storyOf } from '../../lib/stories.ts';
+import { STORIES, allOwnerPages, storyOf } from '../../lib/stories.ts';
 
 const tagId = Astro.params.tagId ?? '';
 const label = TAG_LABELS[tagId];
@@ -41,11 +43,31 @@ const phraseParts = [
 ].filter(Boolean);
 const phrase = phraseParts.length ? ` ${phraseParts.join(', ')}` : '';
 const h1 = [f.style, `${label} Coloring Pages`, f.age && `For ${audience(f.age)}`, f.book && `From ${f.book}`].filter(Boolean).join(' ');
-const title = [h1, !isFiltered(f) && 'Printable Bible Coloring Sheets', 'Bible Sketch'].filter(Boolean).join(' | ');
-const description = season
+// Season landing pages (docs/seo-plan.md stage 12): the unfiltered /tags/advent is a 25-day coloring calendar and
+// /tags/christmas the owner's pages in story order by age; filtered views keep the plain listing.
+const landing = !isFiltered(f) && (tagId === 'advent' || tagId === 'christmas') ? tagId : undefined;
+const LANDING = {
+  advent: {
+    title: 'Advent Coloring Pages: A 25-Day Bible Coloring Calendar | Bible Sketch',
+    h1: 'Advent Coloring Pages',
+    description: "An Advent coloring calendar: a printable Bible coloring page for each day of December 1-25, from Isaiah's promises to the birth of Jesus.",
+    intro: "Count down to Christmas with one Bible coloring page a day. The calendar starts with the prophets who promised a coming King, follows Zechariah, Mary, Elizabeth and Joseph, and arrives at the manger on December 25. Print the day's page, read its verse together, and color while you talk about it.",
+  },
+  christmas: {
+    title: 'Christian Christmas Coloring Pages: The Nativity Story | Bible Sketch',
+    h1: 'Christmas Coloring Pages',
+    description: 'Christian Christmas coloring pages from Matthew and Luke: the wise men, Gabriel and Mary, the road to Bethlehem, the manger and the shepherds, toddlers to adults.',
+    intro: 'The Christmas story as Matthew and Luke tell it, in Bible order: Joseph\'s dream and the wise men following the star, then the angel Gabriel visiting Mary, the road to Bethlehem, Jesus born in a manger and the angels singing to the shepherds. Pages are grouped by age, from big simple shapes for toddlers to detailed art for adults.',
+  },
+}[landing ?? ''] as { title: string; h1: string; description: string; intro: string } | undefined;
+const title = LANDING?.title ?? [h1, !isFiltered(f) && 'Printable Bible Coloring Sheets', 'Bible Sketch'].filter(Boolean).join(' | ');
+const description = LANDING ? LANDING.description : season
   ? `Discover beautiful ${label} coloring pages${phrase} from Bible stories. Perfect for celebrating the ${label} season in Sunday School, VBS, or family devotionals. Printable Bible coloring sheets.`
   : `Explore ${label} coloring pages${phrase} from Scripture. These Biblical coloring sheets feature stories and lessons about ${label.toLowerCase()}. Perfect for Sunday School, homeschool, or personal Bible study.`;
 const subtitle = `Browse ${matches.length} ${label} coloring page${matches.length === 1 ? '' : 's'}${phrase} from Bible stories. Perfect for ${season ? `celebrating the ${label} season` : `teaching about ${label.toLowerCase()}`} in your church, Sunday School, or home.`;
+
+// The calendar matches its days against every owner page, not only the ones tagged advent.
+const calendarPages = landing === 'advent' && !failed ? await allOwnerPages().catch(() => []) : [];
 
 if (failed) {
   Astro.cache.set(false);
@@ -56,7 +78,7 @@ if (failed) {
   // Empty tag (no public sketch at all): keep it out of the index, as tagRender does.
   // Indexable only with at least one owner page, like the sitemap (docs/seo-plan.md stage 2).
   if (!all.some((s) => s.userId === MASTER_UID)) Astro.response.headers.set('X-Robots-Tag', 'noindex');
-  Astro.cache.set({ maxAge: 3600, swr: 86400, tags: [`tag:${tagId}`, ...items.map((s) => `related:${s.id}`)] });
+  Astro.cache.set({ maxAge: 3600, swr: 86400, tags: [`tag:${tagId}`, ...items.map((s) => `related:${s.id}`), ...(calendarPages.length ? ['stories'] : [])] });
   Astro.response.headers.set('Cache-Control', 'public, max-age=300');
 }
 
@@ -110,11 +132,18 @@ const collection = jsonLd({
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-8 h-8 text-white" aria-hidden="true"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"></path><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"></circle></svg>
           </div>
           <div>
-            <h1 class="text-3xl font-display font-bold text-gray-800">{h1}</h1>
+            <h1 class="text-3xl font-display font-bold text-gray-800">{LANDING?.h1 ?? h1}</h1>
             <p class="text-gray-500 capitalize">{season ? 'season' : 'theme'}</p>
           </div>
         </div>
-        <p class="text-gray-600 text-base leading-relaxed">{subtitle}</p>
+        <p class="text-gray-600 text-base leading-relaxed">{LANDING?.intro ?? subtitle}</p>
+        {landing && (
+          <p class="mt-3 text-sm font-bold">
+            {landing === 'advent'
+              ? <a href="/tags/christmas" class="text-[#7C3AED] hover:underline">Christmas coloring pages in story order →</a>
+              : <a href="/tags/advent" class="text-[#7C3AED] hover:underline">The 25-day Advent coloring calendar →</a>}
+          </p>
+        )}
       </div>
     </div>
 
@@ -126,6 +155,11 @@ const collection = jsonLd({
         ))}
       </nav>
     )}
+    {landing === 'advent' && calendarPages.length > 0 && <AdventCalendar pages={calendarPages} />}
+    {landing === 'christmas' && owned.length > 0 && (
+      <div class="mb-14"><AudienceSections pages={owned} authors={authors} subject="Christmas" /></div>
+    )}
+    {landing && <h2 class="font-display text-2xl font-bold text-gray-800 mb-4">{landing === 'advent' ? 'All Advent Coloring Pages' : 'More Christmas Coloring Pages'}</h2>}
     <FilterForm filters={f} action={path} defaultSort="popular" />
 
     {failed ? (
@@ -138,7 +172,7 @@ const collection = jsonLd({
     ) : (
       <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         <CardIcons />
-        {items.map((s) => <ListingCard sketch={s} author={s.userId ? authors.get(s.userId) : undefined} />)}
+        {(landing === 'christmas' ? items.filter((s) => s.userId !== MASTER_UID) : items).map((s) => <ListingCard sketch={s} author={s.userId ? authors.get(s.userId) : undefined} />)}
       </div>
     )}
   </div>

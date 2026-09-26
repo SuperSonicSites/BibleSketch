@@ -1,0 +1,70 @@
+---
+// The 25-day Advent coloring calendar on /tags/advent (docs/seo-plan.md stage 12, days in src/data/advent.json).
+// Each day shows one owner page for its passage: the exact passage first, then an overlapping one, preferring the
+// kids' Sunday School pages; a page is used once. A day with no page yet links to the generator, filled in.
+import data from '../data/advent.json';
+import { type Sketch, canonicalPath, reference, thumbUrl } from '../lib/sketch.ts';
+
+interface Props { pages: Sketch[] }
+type Day = { title: string; ref: [string, number, number, number] };
+const days = data.days as Day[];
+
+const span = (s: Sketch) => [s.promptData!.start_verse ?? 1, s.promptData!.end_verse ?? s.promptData!.start_verse ?? 1];
+const fits = (s: Sketch, [book, ch, from, to]: Day['ref'], exact: boolean) => {
+  const p = s.promptData;
+  if (!p || p.book !== book || p.chapter !== ch) return false;
+  const [a, b] = span(s);
+  return exact ? a === from && b === to : a <= to && b >= from;
+};
+const rank = (s: Sketch) => (s.type === 'verse' ? 3 : s.promptData?.art_style !== 'Sunday School' ? 2 : s.promptData?.age_group === 'Toddler' ? 0 : 1);
+const pool = [...Astro.props.pages].sort((a, b) => rank(a) - rank(b));
+const used = new Set<string>();
+const pick: (Sketch | undefined)[] = days.map(() => undefined);
+for (const exact of [true, false]) {
+  days.forEach((d, i) => {
+    if (pick[i]) return;
+    const s = pool.find((x) => !used.has(x.id) && fits(x, d.ref, exact));
+    if (s) { pick[i] = s; used.add(s.id); }
+  });
+}
+const refText = ([book, ch, from, to]: Day['ref']) => `${book} ${ch}:${from}${to > from ? `-${to}` : ''}`;
+const make = ([book, ch, from, to]: Day['ref']) =>
+  `/?${new URLSearchParams({ book, chapter: String(ch), verse: String(from), ...(to > from ? { to: String(to) } : {}) })}`;
+---
+<section aria-labelledby="advent-calendar" class="mb-14">
+  <h2 id="advent-calendar" class="font-display text-2xl md:text-3xl font-bold text-gray-800 mb-1">Advent Coloring Calendar: December 1 to 25</h2>
+  <p class="text-gray-500 mb-6">One Bible coloring page a day, from Isaiah's promises to the night Jesus was born.</p>
+  <ol class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+    {days.map((d, i) => {
+      const s = pick[i];
+      return (
+        <li class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
+          {s ? (
+            <a href={canonicalPath(s)} class="group flex flex-col flex-1">
+              <div class="relative overflow-hidden bg-white aspect-[3/4]">
+                <img src={thumbUrl(s)} alt={`${d.title} coloring page (${reference(s.promptData!)})`} width="400" height="533"
+                  loading="lazy" decoding="async" class="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500" />
+                <span class="absolute top-2 left-2 bg-[#7C3AED] text-white text-xs font-bold px-2.5 py-1 rounded-full">Dec {i + 1}</span>
+              </div>
+              <div class="px-3 py-3 border-t border-gray-50">
+                <h3 class="font-bold text-gray-800 text-sm">{d.title}</h3>
+                <p class="text-xs text-gray-500 mt-0.5">{refText(d.ref)}</p>
+              </div>
+            </a>
+          ) : (
+            <div class="flex flex-col flex-1">
+              <div class="relative aspect-[3/4] bg-purple-50/60 border-b border-dashed border-purple-200 flex items-center justify-center p-4 text-center">
+                <span class="absolute top-2 left-2 bg-[#7C3AED] text-white text-xs font-bold px-2.5 py-1 rounded-full">Dec {i + 1}</span>
+                <a href={make(d.ref)} class="text-sm font-bold text-[#7C3AED] hover:underline">Make this page</a>
+              </div>
+              <div class="px-3 py-3">
+                <h3 class="font-bold text-gray-800 text-sm">{d.title}</h3>
+                <p class="text-xs text-gray-500 mt-0.5">{refText(d.ref)}</p>
+              </div>
+            </div>
+          )}
+        </li>
+      );
+    })}
+  </ol>
+</section>
