@@ -228,7 +228,26 @@
       "image": "https://firebasestorage.googleapis.com/v0/b/biblesketch-5104c.firebasestorage.app/o/user_uploads%2FTiAEiMqWxpWqxCLtoI5OgHAvtf33%2Fsketches%2F1764336310698.png?alt=media&token=adfeb5ea-c40b-473c-b5b3-8ef0129b8daa"
     }
   ],
-  "rejects": {},
+  "rejects": {
+    "angels-bethlehem:0": [
+      {
+        "date": "2026-09-26",
+        "reason": "only two angels in a mostly bare starry sky, not a multitude; small worried shepherd"
+      }
+    ],
+    "annunciation:0": [
+      {
+        "date": "2026-09-26",
+        "reason": "Mary worried, large bare wall areas; sparse setting"
+      }
+    ],
+    "mary-ponders:C-T": [
+      {
+        "date": "2026-09-26",
+        "reason": "two crescent moons in the sky (duplicated element)"
+      }
+    ]
+  },
   "traits": {
     "tag:layout:scroll": {
       "n": 11,

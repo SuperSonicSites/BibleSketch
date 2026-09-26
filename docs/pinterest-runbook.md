@@ -6,18 +6,24 @@ Owner-only steps: CHECKLIST, "Pinterest auto-publish".
 
 ## Status (update this block at the end of every Pinterest session)
 
-As of **2026-09-25** (second `pinterest-daily` run, stopped: browser signed out; calendar unchanged since 2026-09-24):
-- **Calendar** (`web/src/data/pins.json`, 178 entries, `pins-check`: no errors):
+As of **2026-09-26** (third `pinterest-daily` run: 5 Pins Oct 14-18, 5 collection pages; Pinterest signed out, so no alt text):
+- **ACTION FOR THE OWNER: the repeated feed items WERE republished.** Checked 2026-09-26 (public PinResource, no
+  login): the three RSS Pins Joshua 1:9 (1078049229577782121), Mark 4:39 (1078049229577814549) and Luke 2:15-16
+  now return "Pin not found", and Pinterest created new Pins for all three on 2026-09-25 23:42-23:44 UTC
+  (1078049229577844243 Christmas, 1078049229577844260 Scripture, 1078049229577844278 Sunday School). So the
+  `dueEntries` fallback (repeat the last released Pin) makes Pinterest re-create Pins. Per the plan above, revert it
+  to an empty feed (a code change outside the daily task's scope, so not done by the task) and decide whether to
+  keep the re-created Pins. They have no alt text yet.
+- **Calendar** (`web/src/data/pins.json`, 183 entries, `pins-check`: no errors):
 
   | Board | Pins | Dates |
   |---|---|---|
-  | Christmas | 42 | Sept 23 - Dec 19 |
-  | Scripture | 74 | Sept 24 - Dec 20 (all verse art, `plain` template) |
+  | Christmas | 46 | Sept 23 - Dec 19 |
+  | Scripture | 75 | Sept 24 - Dec 20 (all verse art, `plain` template) |
   | Sunday School | 62 | Sept 25 - Nov 13 (one a day Oct 1 - Nov 5, plus the Genesis 1-4 series Oct 2 - 30) |
 
-  Ramp capacity through Dec 20 is ~370; **193 slots are open** (100 of them in the 7-60 day window), first open day
-  Oct 14 (Oct 14 and Oct 16 can only take Christmas or Scripture: Sunday School already has 2). Sunday School has
-  nothing after Nov 13 and Christmas is thin in December by design (front-loaded).
+  Ramp capacity through Dec 20 is ~370; **~188 slots are open**, filled from Oct 19 on by the planner. Sunday
+  School has nothing after Nov 13 and Christmas is thin in December by design (front-loaded).
 - **Daily task log.** 2026-09-24: 5 generated, 5 approved: Christmas Oct 9 (Luke 2:12, angel gives the shepherds
   the sign) and Oct 12 (Micah 5:2, Micah points to Bethlehem); Sunday School **Abraham series** Oct 11 (Gen 12:5),
   Oct 15 (Gen 15:5), Oct 17 (Gen 21:2-3). Next runs: continue Abraham (three visitors Gen 18:2, Isaac and Rebekah,
@@ -29,6 +35,15 @@ As of **2026-09-25** (second `pinterest-daily` run, stopped: browser signed out;
   School, among them Miriam, the spies' grapes, Cana, the widow's mite and the lilies of the field). Christmas
   still warns (43 unused pages for ~90 slots): keep refilling it, up to 20 a run. The next run's slots stay Oct 14-18
   (magi-star, immanuel, annunciation, Psalm 119:105 CS, angels-bethlehem).
+  2026-09-26: **Pin lane** 7 generated, 5 approved: Christmas Oct 14 (Matthew 2:2, wise men follow the star),
+  Oct 15 (Matthew 1:23, Immanuel), Oct 16 (Luke 1:28, Gabriel greets Mary), Oct 18 (Luke 2:13, trumpet angels);
+  Scripture Oct 17 (Psalms 119:105, Classic Serif). Rejected: annunciation (worried Mary, bare walls), angels
+  (two angels in a bare sky). **Collection lane** 6 generated, 5 published (nativity, Toddler): Luke 1:38, 1:63,
+  1:67-68, 2:19, 2:21; rejected one Luke 2:19 (two moons). 13 of 15 generations used. Bank +18 items: 8 Advent
+  prophecies (Isaiah 7:14, 9:3, 11:7, 11:10, 40:1, 40:3, 40:9, 40:11), 2 wise men (Matthew 2:4-5, 2:21), 8 Sunday
+  School (David 1 Samuel 17:17-39, feeding the 5000, Peter rescued, the wind stops, Zacchaeus gives). Verse
+  sheets store Psalms as "Psalms", so pins-check wants "Psalms 119:105" in the title. Next slots start Oct 19
+  (jonah-prays, John 8:12 verse, star-over-house, lilies-birds, noah-builds). Pinterest was signed out: no alt text.
 - **Genesis 1-4 series** (2026-09-24, owner request after the stats showed Genesis 1-4 Pins earn 62% of clicks):
   18 reviewed pages on the Sunday School board every day or two from Oct 2 to Oct 30, in story order: Creation days
   1-7 (opener "Days of Creation Coloring Pages"), "very good", Adam's breath of life, tending the garden, Eve,
@@ -61,7 +76,7 @@ As of **2026-09-25** (second `pinterest-daily` run, stopped: browser signed out;
   **christmas.xml showed as broken on 2026-09-25**: the feed was empty between the Sept 23 and Sept 28 releases (2-day
   window). Fix in `dueEntries`: a board with nothing due repeats its last released Pin (Pinterest already has it and
   creates nothing), so a connected feed is never empty again.
-- **Check on 2026-09-26 (owner cares about this above all):** the repeated items must not be republished. Expect still one
+- **Check on 2026-09-26 (owner cares about this above all). Done: they WERE republished; see the action at the top.** The repeated items must not be republished. Expect still one
   Joshua 1:9 RSS Pin on Scripture (1078049229577782121), one Mark 4:39 on Sunday School (1078049229577814549) and no
   Luke 2:15-16 on Christmas (that Pin was deleted; if Pinterest re-creates it from the repeated item, revert the
   `dueEntries` fallback to an empty feed and tell the owner). Public check, no login: `/resource/PinResource/get/`.
