@@ -50,7 +50,9 @@ if (failed) {
 }
 
 const url = `${ORIGIN}/coloring-pages/${story.id}`;
-const h1 = `${story.name} Coloring Pages`;
+// "Nativity Coloring Pages", as people search it (no leading "The").
+const subject = story.name.replace(/^The /, '');
+const h1 = `${subject} Coloring Pages`;
 const title = pages.length > 1 ? `${h1} (${pages.length} Printable Pages) | Bible Sketch` : `${h1} | Bible Sketch`;
 const storyName = story.name.replace(/^The /, 'the ');
 const description = `${pages.length} printable coloring page${pages.length === 1 ? '' : 's'} of ${storyName} from ${rangeText(story)}, in Bible order, for Sunday school, homeschool and family devotions.`;
@@ -89,7 +91,7 @@ const schemas = [
       <p class="text-center py-16 text-gray-500">These coloring pages are temporarily unavailable. Please try again in a couple of minutes.</p>
     ) : (
       <>
-        <AudienceSections pages={pages} authors={authors} />
+        <AudienceSections pages={pages} authors={authors} subject={subject} />
         <details class="mt-14 bg-white rounded-2xl border border-purple-100 group">
           <summary class="cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden flex items-center justify-between gap-3 px-6 py-4 font-bold text-gray-800">
             <span>Every passage in {storyName}, in Bible order <span class="font-semibold text-gray-400">({groups.length})</span></span>

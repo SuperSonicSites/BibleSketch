@@ -39,7 +39,7 @@ const schemas = [
     isPartOf: { '@type': 'WebSite', '@id': `${ORIGIN}/#website`, url: `${ORIGIN}/`, name: 'Bible Sketch' }, publisher: ORG_REF,
     mainEntity: {
       '@type': 'ItemList', itemListOrder: 'https://schema.org/ItemListOrderAscending', numberOfItems: stories.length,
-      itemListElement: stories.map(({ st }, i) => ({ '@type': 'ListItem', position: i + 1, url: `${url}/${st.id}`, name: `${st.name} Coloring Pages` })),
+      itemListElement: stories.map(({ st }, i) => ({ '@type': 'ListItem', position: i + 1, url: `${url}/${st.id}`, name: `${st.name.replace(/^The /, '')} Coloring Pages` })),
     },
   }),
 ];

@@ -2,14 +2,16 @@
 // Collection pages grouped by audience (docs/seo-plan.md stage 9): toddler, children, teen and adult scene art and
 // verse art each get their own section, in Bible order, so every section reads in one style. A row of buttons
 // jumps to each section; it scrolls sideways on phones instead of wrapping, and stays under the site header.
-// Everything is plain HTML and links: no script, no separate URLs per audience.
+// Everything is plain HTML and links: no script, no separate URLs per audience. The bar sits a few px under the
+// header's bottom edge (61-77 px measured), so no gap shows. Headings carry the subject ("Nativity Coloring Pages
+// for Toddlers") for search.
 import ListingCard from './ListingCard.astro';
 import CardIcons from './CardIcons.astro';
 import { type Sketch } from '../lib/sketch.ts';
 import { byBibleOrder } from '../lib/stories.ts';
 
-interface Props { pages: Sketch[]; authors: Map<string, string>; idPrefix?: string }
-const { pages, authors, idPrefix = 'for' } = Astro.props;
+interface Props { pages: Sketch[]; authors: Map<string, string>; subject: string; idPrefix?: string }
+const { pages, authors, subject, idPrefix = 'for' } = Astro.props;
 
 const GROUPS = [
   { key: 'Toddler', label: 'Toddlers', blurb: 'Big shapes and bold lines for little hands.' },
@@ -24,7 +26,7 @@ const sections = GROUPS.map((g) => ({ ...g, id: `${idPrefix}-${g.label.toLowerCa
 ---
 <CardIcons />
 {sections.length > 1 && (
-  <nav aria-label="Coloring pages by age" class="sticky top-[4.4rem] md:top-[4.8rem] z-40 -mx-4 px-4 py-3 mb-6 bg-[#FFF7ED]/95 backdrop-blur-md border-b border-purple-100">
+  <nav aria-label="Coloring pages by age" class="sticky top-14 md:top-[4.25rem] xl:top-[4.5rem] z-40 -mx-4 px-4 py-3 mb-6 bg-[#FFF7ED]/95 backdrop-blur-md border-b border-purple-100">
     <ul class="flex gap-2 overflow-x-auto whitespace-nowrap [scrollbar-width:none]">
       {sections.map((g) => (
         <li><a href={`#${g.id}`} class="inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-bold bg-white border border-purple-200 text-[#7C3AED] hover:bg-purple-50 transition-colors">
@@ -38,7 +40,7 @@ const sections = GROUPS.map((g) => ({ ...g, id: `${idPrefix}-${g.label.toLowerCa
   {sections.map((g) => (
     <section id={g.id} class="scroll-mt-36">
       <div class="mb-4">
-        <h2 class="font-display text-2xl font-bold text-gray-800">{g.key === 'verse' ? g.label : `For ${g.label}`} <span class="text-base font-semibold text-gray-400">({g.items.length})</span></h2>
+        <h2 class="font-display text-2xl font-bold text-gray-800">{g.key === 'verse' ? `${subject} Verse Art` : `${subject} Coloring Pages for ${g.label}`} <span class="text-base font-semibold text-gray-400">({g.items.length})</span></h2>
         <p class="text-gray-500 text-sm">{g.blurb}</p>
       </div>
       <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
