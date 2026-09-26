@@ -2,12 +2,13 @@
 // Called by the onSketchWritten Cloud Function when a sketch is published, made private, deleted or retagged.
 // Drops, globally, every cached response tagged sketch:<id> (the page, its slug redirects, its 404) and
 // related:<id> (other pages that list the sketch in their related grid). `lists` adds the listing pages a newly
-// published sketch should appear on right away: gallery, home, verse, tag:<id>, profile:<uid>.
+// published sketch should appear on right away: gallery, home, verse, tag:<id>, profile:<uid>, img.
 import type { APIRoute } from 'astro';
 import { env } from 'cloudflare:workers';
 
 const MAX_IDS = 40; // 2 tags per id + up to 20 lists; a purge call takes up to 100 tags
-const LIST = /^(gallery|home|verse|tag:[a-z-]{1,30}|profile:[A-Za-z0-9]{1,128})$/;
+// img: every /img/ response (after changing image headers, e.g. docs/seo-plan.md stage 2).
+const LIST = /^(gallery|home|verse|img|tag:[a-z-]{1,30}|profile:[A-Za-z0-9]{1,128})$/;
 
 // Constant-time compare so the secret can't be guessed byte by byte from response timing.
 async function secretMatches(given: string, expected: string) {

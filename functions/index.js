@@ -394,9 +394,8 @@ exports.generateContent = onCall({
 // 1. SITEMAP (one Firestore scan, each URL in exactly one sub-sitemap)
 // ---------------------------------------------------------
 const SITE = 'https://biblesketch.app';
-// Profiles need this many public sketches to be listed. Profiles with 0 are noindexed (profileRender), so
-// every listed URL stays indexable.
-const MIN_PROFILE_SKETCHES = 3;
+// Only the owner's pages are offered to search engines (docs/seo-plan.md stage 2): community pages can go private
+// or be deleted (404) at any time, so they are noindexed and left out. Profiles are all noindexed too.
 const MAX_SITEMAP_URLS = 50000;
 const keyPart = (s) => s.toLowerCase().replace(/ /g, '-');
 const isoOf = (ts) => (ts && ts.toDate ? ts.toDate().toISOString() : null);
@@ -432,7 +431,7 @@ const readBlogPosts = () => {
 const buildSitemapGroups = async () => {
   const snap = await admin.firestore().collection('sketches').where('isPublic', '==', true)
     .select('userId', 'type', 'promptData', 'tags', 'createdAt', 'imageUrl', 'storagePath', 'thumbnailPath', 'isBookmark').get();
-  const sketches = snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((s) => !s.isBookmark)
+  const sketches = snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((s) => !s.isBookmark && s.userId === MASTER_UID)
     .map((s) => ({ ...s, lastmod: isoOf(s.createdAt) }))
     .sort((a, b) => (b.lastmod || '').localeCompare(a.lastmod || ''));
   const posts = readBlogPosts();
@@ -448,15 +447,6 @@ const buildSitemapGroups = async () => {
   LITURGICAL_TAGS.forEach((t) => {
     const s = sketches.find((x) => Array.isArray(x.tags) && x.tags.includes(t.id));
     if (s) add('tags', `/tags/${t.id}`, s.lastmod);
-  });
-  const byUser = new Map();
-  for (const s of sketches) {
-    if (!s.userId) continue;
-    if (!byUser.has(s.userId)) byUser.set(s.userId, []);
-    byUser.get(s.userId).push(s);
-  }
-  byUser.forEach((list, uid) => {
-    if (list.length >= MIN_PROFILE_SKETCHES) add('profiles', `/profile/${encodeURIComponent(uid)}`, list[0].lastmod);
   });
   sketches.forEach((s) => add(sketchBucket(s), `/coloring-page/${generateSketchSlug(s)}/${encodeURIComponent(s.id)}`, s.lastmod, sitemapImageOf(s)));
   return groups;

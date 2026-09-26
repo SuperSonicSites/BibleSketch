@@ -48,7 +48,10 @@ export const GET: APIRoute = async ({ params, request, cache }) => {
   // Thumbnails never change in place (a new sketch gets a new path). Covers could be replaced in place, so
   // browsers re-check them daily; purge the 'img' tag after replacing one.
   cache.set({ maxAge: 31536000, tags: ['img'] });
-  return new Response(out.body, {
-    headers: { 'Content-Type': 'image/webp', 'Cache-Control': width && !immutable ? 'public, max-age=86400' : IMMUTABLE },
-  });
+  const headers: Record<string, string> = {
+    'Content-Type': 'image/webp', 'Cache-Control': width && !immutable ? 'public, max-age=86400' : IMMUTABLE,
+  };
+  // Community images stay out of Google Images wherever they appear (docs/seo-plan.md stage 2).
+  if (path.startsWith('user_uploads/') && !path.startsWith(`user_uploads/${MASTER_UID}/`)) headers['X-Robots-Tag'] = 'noindex';
+  return new Response(out.body, { headers });
 };

@@ -8,6 +8,7 @@ import SketchActions from '../../components/SketchActions.tsx';
 import OwnerControls from '../../components/OwnerControls.tsx';
 import OwnerPrivate from '../../components/OwnerPrivate.tsx';
 import { getDoc } from '../../lib/firestore.ts';
+import { MASTER_UID } from '../../lib/config.ts';
 import {
   ORIGIN, TAG_LABELS, type Sketch, ageDisplay, canonicalPath, heading, isDocId, jsonLd, loadRelated, previewUrl, seo, thumbUrl,
 } from '../../lib/sketch.ts';
@@ -55,6 +56,10 @@ if (!sketch && Astro.response.status !== 503) {
   Astro.response.headers.set('Cache-Control', 'public, max-age=0');
   Astro.cache.set({ maxAge: 3600, tags });
 }
+// Only the owner's pages are offered to search engines (docs/seo-plan.md stage 2): a community page can go
+// private or be deleted at any time, so it stays public but unlisted.
+const unlisted = Boolean(sketch) && sketch!.userId !== MASTER_UID;
+if (unlisted) Astro.response.headers.set('X-Robots-Tag', 'noindex');
 if (sketch) {
   // related:<id> lets a purge also drop the pages that list a sketch in their related grid.
   Astro.cache.set({ maxAge: 3600, swr: 86400, tags: [...tags, ...(related?.items ?? []).map((r) => `related:${r.id}`)] });
@@ -93,7 +98,7 @@ const island: Sketch | null = sketch && {
 const card = 'flex-1 py-3 rounded-xl border flex items-center justify-center transition-colors gap-2 font-bold text-sm';
 ---
 {sketch && meta ? (
-  <Base title={meta.title} description={meta.description} canonical={url} image={previewUrl(sketch)} schemas={schemas}>
+  <Base title={meta.title} description={meta.description} canonical={url} image={previewUrl(sketch)} schemas={schemas} robots={unlisted ? 'noindex' : undefined}>
     <div class="max-w-7xl mx-auto px-4 py-12">
       <div class="mb-8">
         <a class="inline-flex items-center gap-2 text-gray-500 hover:text-[#7C3AED] font-bold transition-colors" href="/gallery">

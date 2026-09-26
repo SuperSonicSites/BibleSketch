@@ -6,14 +6,18 @@ before the previous one is verified live.
 
 ## Where we are
 
-- Current stage: **Stage 2 (not started)**
-- Last verified live: Stage 1 (2026-09-25, Worker 0ead62c5 + functions:sitemap)
+- Current stage: **Stage 3 (not started)**
+- Last verified live: Stage 2 (2026-09-25, Worker 6ed790c8 + functions:sitemap)
 - Notes:
   - Stage 1: master pages' og:image, JSON-LD, share buttons and image sitemap use
     `/img/w800/<original path>` (800x1071 WebP); community pages use their 400x533 thumbnail; the w800 route
     404s outside the master folder. Sitemap: 463 image entries, 0 Firebase. Firebase URL remains only in the
     island props (`imageUrl`, used by bookmark/share code), as planned. Profile og:image is the account avatar
     (out of scope).
+  - Stage 2: community pages send `X-Robots-Tag: noindex` + meta noindex; community `/img/` images send
+    `X-Robots-Tag: noindex`; all profiles noindex; sitemap = 372 master pages, 0 profiles, 378 images (372
+    previews + 6 blog covers). `/api/purge` now accepts `lists: ["img"]`; purged img + the 85 community pages
+    once. security-check: sitemap step now writes owner sketches with admin access (54/54 pass).
 
 ## Ground rules (every stage)
 
@@ -66,7 +70,7 @@ owner's rule. The page shows a different 400 px file, so Google gets two images 
   og:image loads; `sitemap.xml?type=<bucket>` shows `biblesketch.app/img/` image entries.
 - Print and download still work (they use `storagePath`, not `imageUrl`).
 
-## Stage 2: Hide community pages from Google  [ ]
+## Stage 2: Hide community pages from Google  [x] verified live 2026-09-25
 
 **Why:** keeps unstable, unreviewed pages out of the index so a user making a page private never breaks our
 search results. Every coloring page that earned a Google click in 12 months is a master page (checked).

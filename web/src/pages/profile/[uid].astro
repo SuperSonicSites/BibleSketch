@@ -47,7 +47,8 @@ if (failed) {
   Astro.response.headers.set('Retry-After', '120');
   Astro.response.headers.set('Cache-Control', 'no-store');
 } else {
-  if (all.length === 0) Astro.response.headers.set('X-Robots-Tag', 'noindex');
+  // All profiles are unlisted: collection pages do their job for search (docs/seo-plan.md stage 2).
+  Astro.response.headers.set('X-Robots-Tag', 'noindex');
   Astro.cache.set({ maxAge: 3600, swr: 86400, tags: [`profile:${uid}`, ...items.map((s) => `related:${s.id}`)] });
   Astro.response.headers.set('Cache-Control', 'public, max-age=300');
 }

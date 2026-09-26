@@ -634,6 +634,23 @@ await step('sitemap: each URL once, only indexable pages, escaped XML, cacheable
     }), id);
     await allowed(updateDoc(doc(alice.db, 'sketches', id), { isPublic: true }), `publish ${id}`);
   }
+  // Only the owner's pages are listed (docs/seo-plan.md stage 2): the same two sketches as the owner, written with
+  // admin access since rules only let a user create their own.
+  const MASTER_UID = 'TiAEiMqWxpWqxCLtoI5OgHAvtf33';
+  const str = (v) => ({ stringValue: v });
+  for (const [id, pd, type] of [
+    [`${sketchId}-mcomic`, { book: 'Jonah', chapter: 1, start_verse: 17, age_group: 'Pre-Teen', art_style: 'Comic Book' }, 'scene'],
+    [`${sketchId}-mverse`, { book: 'Psalms', chapter: 23, start_verse: 1, font_style: 'Unknown Font' }, 'verse'],
+  ]) {
+    const promptData = { mapValue: { fields: Object.fromEntries(Object.entries(pd).map(([k, v]) => [k, typeof v === 'number' ? { integerValue: v } : str(v)])) } };
+    const res = await adminPatch(`sketches/${id}`, {
+      userId: str(MASTER_UID), isPublic: { booleanValue: true }, blessCount: { integerValue: 0 }, isBookmark: { booleanValue: false },
+      type: str(type), storagePath: str(`user_uploads/${MASTER_UID}/sketches/${id}.png`), thumbnailPath: str(''),
+      imageUrl: str('https://firebasestorage.googleapis.com/v0/b/x/o/s.png?alt=media&token=t'),
+      createdAt: { timestampValue: new Date().toISOString() }, promptData,
+    });
+    assert.equal(res.status, 200, `admin write ${id}`);
+  }
   const local = (u) => u.replace('https://biblesketch.app', HOSTING);
   const idx = await fetch(`${HOSTING}/sitemap.xml`);
   assert.match(idx.headers.get('cache-control') || '', /public.*s-maxage/);
@@ -651,8 +668,13 @@ await step('sitemap: each URL once, only indexable pages, escaped XML, cacheable
   assert.ok(locs.includes('https://biblesketch.app/bible-verse-coloring'));
   assert.ok(children.some((c) => c.endsWith('type=teen-comic-book')), 'Comic Book bucket');
   assert.ok(children.some((c) => c.endsWith('type=sketches-other')), 'unknown font kept');
-  assert.equal(locs.filter((l) => l.endsWith(`/profile/${alice.uid}`)).length, 1);
-  assert.ok(!locs.some((l) => l.endsWith(`/profile/${bob.uid}`)));
+  assert.ok(!locs.some((l) => l.includes('/profile/')), 'profiles are unlisted');
+  assert.ok(!locs.some((l) => l.includes(`/${sketchId}-comic`) || l.includes(`/${sketchId}-verse`)), 'community sketch listed');
+  assert.ok(locs.some((l) => l.endsWith(`/${sketchId}-mcomic`)), 'owner sketch missing');
+  const images = [];
+  for (const c of children) images.push(...[...(await (await fetch(local(c))).text()).matchAll(/<image:loc>([^<]+)</g)].map((m) => m[1]));
+  assert.ok(!images.some((i) => i.includes('firebasestorage')), 'full-size original in the image sitemap');
+  assert.ok(images.some((i) => i.endsWith(`/img/w800/user_uploads/${MASTER_UID}/sketches/${sketchId}-mcomic.png`)), 'owner preview');
   assert.ok(!locs.includes('https://biblesketch.app/tags/pentecost'), 'empty tag listed');
   for (const bad of ['recent', 'popular', 'constructor']) assert.equal((await fetch(`${HOSTING}/sitemap.xml?type=${bad}`)).status, 404, bad);
 });
