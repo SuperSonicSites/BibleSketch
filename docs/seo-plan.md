@@ -6,8 +6,8 @@ before the previous one is verified live.
 
 ## Where we are
 
-- Current stage: **Stage 4 (not started)**
-- Last verified live: Stage 3 (2026-09-25, Worker 347c38b3)
+- Current stage: **Stage 5 (not started)**
+- Last verified live: Stage 4 (2026-09-25, Worker 41601786)
 - Notes:
   - Stage 1: master pages' og:image, JSON-LD, share buttons and image sitemap use
     `/img/w800/<original path>` (800x1071 WebP); community pages use their 400x533 thumbnail; the w800 route
@@ -33,10 +33,16 @@ before the previous one is verified live.
     refreshed (subtitle, first related link) and now checks the snippet: passes. All 372 live pages show the verse.
   - `pinterest-daily` now runs `page-text-verses.mjs` after publishing and commits `page-text.json` (SKILL.md,
     runbook Run step 7 and scope, CLAUDE.md updated 2026-09-25), so new owner pages get their verse automatically.
+  - Stage 4: tag pages list every page on one URL (Advent 77, Christmas 54; Pagination removed there); unfiltered
+    `/gallery?page=N` is self-canonical with "Page N" in the title (filtered views still point at /gallery);
+    related grid = owner pages only, same book by nearest chapter/verse, max 2 per reference, then same
+    age+style (unordered equality queries, no new index), heading "More <Book> Coloring Pages"; blog embed link
+    text "See the <ref> coloring page". Live: 0 related links to community pages across all 457 pages; all 372
+    owner pages have an internal link (33 only via gallery pages: Stage 9 story pages cover them).
+    check-sketch fixture refreshed for the new related grid.
   - Lesson: purge about 30 s after `wrangler deploy`, not right away; an isolate still on the old version can
     re-cache a page in between (happened once with /tags/ordinary-time; purged again).
-  - Open loose ends: (a) related grids on master pages still link some community pages (~5 of 85 links
-    sampled): Stage 4 makes them master-only. (b) `web/scripts/check-sketch.mjs` fails on "first related link"
+  - Open loose ends: (a) done in Stage 4. (b) `web/scripts/check-sketch.mjs` fails on "first related link"
     because its Sep 22 fixture predates newer pages (fails the same on pre-stage-1 code): refresh the fixture
     in Stage 3. (c) The old Firebase renderers (profileRender, sketchRender, tag renderer) still call community
     pages and profiles indexable; unused in production (the Worker serves those paths), removed in phase 5;
@@ -137,7 +143,7 @@ builds the slots; the words themselves arrive gradually (verse text now, descrip
 - Live: a master page shows the verse and clean meta description; `data-pin-description` unchanged
   (compare before/after); a page without an entry still renders.
 
-## Stage 4: Crawl paths (reach the 41% of pages nothing links to)  [ ]
+## Stage 4: Crawl paths (reach the 41% of pages nothing links to)  [x] verified live 2026-09-25
 
 **Changes**
 - Tag pages: all items on one page (no `?page=2`), lazy images; filters unchanged.

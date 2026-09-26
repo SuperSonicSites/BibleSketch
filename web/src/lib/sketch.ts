@@ -199,14 +199,32 @@ export function relatedQuery(s: Sketch): { filters: [string, string | boolean][]
   };
 }
 
-// 8 related sketches: 9 fetched so dropping the current one still leaves 8. Bookmarks are never public,
-// the filter is a belt-and-braces copy of sketchRender's.
+// 8 related sketches, the owner's only (docs/seo-plan.md stage 4: links go to indexable pages): same book first,
+// nearest chapter and verse, then the same age and style (or verse font). Unordered equality-only queries, so no
+// composite index is needed. Bookmarks are never public; the filter is belt-and-braces.
 export async function loadRelated(s: Sketch) {
+  const p = s.promptData || {};
   const q = relatedQuery(s);
-  if (!q) return null;
-  const docs = (await query('sketches', q.filters, 9)) as Sketch[];
-  const items = docs.filter((d) => d.id !== s.id && !d.isBookmark).slice(0, 8);
-  return items.length ? { heading: q.heading, items } : null;
+  const [sameBook, sameKind] = (await Promise.all([
+    p.book ? query('sketches', [['userId', MASTER_UID], ['isPublic', true], ['promptData.book', p.book]], 60, { ordered: false }) : [],
+    q ? query('sketches', [...q.filters, ['userId', MASTER_UID]], 20, { ordered: false }) : [],
+  ])) as [Sketch[], Sketch[]];
+  const distance = (d: Sketch) =>
+    Math.abs((d.promptData?.chapter ?? 999) - (p.chapter ?? 0)) * 1000 + Math.abs((d.promptData?.start_verse ?? 0) - (p.start_verse ?? 0));
+  const seen = new Set([s.id]);
+  const perRef = new Map<string, number>(); // at most 2 pages of one reference, so the grid moves through the story
+  const items = [...sameBook.sort((a, b) => distance(a) - distance(b)), ...sameKind]
+    .filter((d) => {
+      if (d.isBookmark || seen.has(d.id)) return false;
+      const ref = d.promptData ? reference(d.promptData) : d.id;
+      if ((perRef.get(ref) ?? 0) >= 2) return false;
+      seen.add(d.id);
+      perRef.set(ref, (perRef.get(ref) ?? 0) + 1);
+      return true;
+    })
+    .slice(0, 8);
+  const heading = p.book && sameBook.some((d) => d.id !== s.id) ? `More ${p.book} Coloring Pages` : q?.heading;
+  return items.length && heading ? { heading, items } : null;
 }
 
 // Display names for the authors of a listing: one users/<uid> read per distinct author, in parallel.

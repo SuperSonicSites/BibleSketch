@@ -1,6 +1,6 @@
 // Port check: the Worker's sketch helpers must produce what the live bundle renders today.
 // Fixture = the live pages captured in headless Chrome on 2026-09-22 (title, meta description, canonical, H1,
-// subtitle, related heading and links); subtitle and first related link refreshed 2026-09-25 (docs/seo-plan.md).
+// subtitle, related heading and links); subtitle and related grid refreshed 2026-09-25 (docs/seo-plan.md stages 3-4).
 // Reads production Firestore unauthenticated (read-only).
 // Run: node scripts/check-sketch.mjs   (Node >= 22.18 strips the .ts types)
 import assert from 'node:assert/strict';

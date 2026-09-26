@@ -6,11 +6,10 @@ import Base from '../../layouts/Base.astro';
 import ListingCard from '../../components/ListingCard.astro';
 import CardIcons from '../../components/CardIcons.astro';
 import FilterForm from '../../components/FilterForm.astro';
-import Pagination from '../../components/Pagination.astro';
 import { query } from '../../lib/firestore.ts';
 import { MASTER_UID } from '../../lib/config.ts';
 import { ORIGIN, TAG_LABELS, audience, jsonLd, loadAuthors, type Sketch } from '../../lib/sketch.ts';
-import { SEASONS, applyFilters, filterQuery, isFiltered, paginate, parseFilters } from '../../lib/listing.ts';
+import { SEASONS, applyFilters, isFiltered, parseFilters } from '../../lib/listing.ts';
 
 const tagId = Astro.params.tagId ?? '';
 const label = TAG_LABELS[tagId];
@@ -28,7 +27,9 @@ try {
   failed = true;
 }
 const matches = applyFilters(all, f);
-const { items, page, pages } = paginate(matches, f.page);
+// All pages on one URL (docs/seo-plan.md stage 4): page 2+ used to point its canonical at page 1, hiding 30+
+// pages; ?page= now shows the same full list, so the canonical to the base URL is right.
+const items = matches;
 const authors = await loadAuthors(items);
 
 // Title and copy: the bundle's client rules, with "for young children" instead of "for young childs".
@@ -108,6 +109,5 @@ const schema = jsonLd({
         {items.map((s) => <ListingCard sketch={s} author={s.userId ? authors.get(s.userId) : undefined} />)}
       </div>
     )}
-    <Pagination page={page} pages={pages} href={(n) => path + filterQuery(f, 'popular', n)} />
   </div>
 </Base>

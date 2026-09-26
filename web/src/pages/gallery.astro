@@ -10,7 +10,7 @@ import Pagination from '../components/Pagination.astro';
 import GalleryTabs from '../components/GalleryTabs.tsx';
 import { query } from '../lib/firestore.ts';
 import { ORIGIN, TAG_LABELS, loadAuthors, type Sketch } from '../lib/sketch.ts';
-import { applyFilters, availableFilters, filterQuery, paginate, parseFilters } from '../lib/listing.ts';
+import { applyFilters, availableFilters, filterQuery, isFiltered, paginate, parseFilters } from '../lib/listing.ts';
 
 const f = parseFilters(Astro.url.searchParams, { sort: 'newest', tags: Object.keys(TAG_LABELS) });
 let all: Sketch[] = [];
@@ -35,10 +35,12 @@ if (failed) {
   Astro.cache.set({ maxAge: 3600, swr: 86400, tags: ['gallery', ...items.map((s) => `related:${s.id}`)] });
   Astro.response.headers.set('Cache-Control', 'public, max-age=300');
 }
-const title = 'Bible Coloring Pages Gallery - Free Printable Christian Coloring Sheets | Bible Sketch';
+// Unfiltered page N is its own page (docs/seo-plan.md stage 4); filtered views still point at /gallery.
+const canonical = `${ORIGIN}/gallery${!isFiltered(f) && page > 1 ? filterQuery(f, 'newest', page) : ''}`;
+const title = `Bible Coloring Pages Gallery${page > 1 ? ` - Page ${page}` : ''} - Free Printable Christian Coloring Sheets | Bible Sketch`;
 const description = 'Browse thousands of free printable Bible coloring pages. Discover coloring sheets for every Bible book, age group, and art style. Perfect for Sunday School, VBS, homeschool, and family devotionals.';
 ---
-<Base title={title} description={description} canonical={`${ORIGIN}/gallery`} ogType="website" image={`${ORIGIN}/logo.png`} imageAlt="Bible Sketch Logo" twitterCard="summary">
+<Base title={title} description={description} canonical={canonical} ogType="website" image={`${ORIGIN}/logo.png`} imageAlt="Bible Sketch Logo" twitterCard="summary">
   <div class="max-w-7xl mx-auto px-4 py-12">
     <div class="text-center mb-8">
       <h1 class="font-display text-4xl md:text-5xl font-bold text-[#1F2937] mb-4">Bible Coloring Pages Gallery</h1>

@@ -29,7 +29,7 @@ const island: Sketch = {
     <div class="flex flex-col gap-2 md:gap-2.5">
       <BlessSave client:visible sketch={island} blessCount={sketch.blessCount ?? 0} />
       <a href={canonicalPath(sketch)} class="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-[#7C3AED] text-white font-medium hover:bg-[#6D28D9] transition-colors w-full">
-        <span>View Full Page</span>
+        <span>{ref ? `See the ${ref} coloring page` : 'See this coloring page'}</span>
         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4" aria-hidden="true"><path d="M15 3h6v6"></path><path d="M10 14 21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg>
       </a>
     </div>
