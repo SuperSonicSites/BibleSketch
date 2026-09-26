@@ -60,6 +60,8 @@ before the previous one is verified live.
     assets win over Firebase; hosting-public untouched). /api/purge accepts `pages` and `blog`.
     Not changed (owner call): blog post titles that say "Free Printable" (4 posts; the toddler Christmas post
     ranks), and the "+N Free Prints" chips on packs (prints included with the purchase).
+  - Counts are live, rounded down to 50 so "N+" is always true: /gallery description (from its own query) and
+    the home hero (was `Math.max(total, 500)`, which claimed 500+ with ~460 public pages). Worker ce144e51.
   - Lesson: purge about 30 s after `wrangler deploy`, not right away; an isolate still on the old version can
     re-cache a page in between (happened once with /tags/ordinary-time; purged again).
   - Open loose ends: (a) done in Stage 4. (b) done in Stage 3 (fixture refreshed; passes). (c) The old Firebase renderers (profileRender, sketchRender, tag renderer) still call community

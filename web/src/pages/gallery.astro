@@ -39,7 +39,9 @@ if (failed) {
 // same pages in another order) still point at /gallery.
 const canonical = `${ORIGIN}/gallery${!isFiltered(f) && f.sort === 'newest' && page > 1 ? filterQuery(f, 'newest', page) : ''}`;
 const title = `Bible Coloring Pages Gallery${page > 1 ? ` - Page ${page}` : ''} - Printable Christian Coloring Sheets | Bible Sketch`;
-const description = 'Browse 450+ printable Bible coloring pages. Discover coloring sheets for every Bible book, age group, and art style. Perfect for Sunday School, VBS, homeschool, and family devotionals.';
+// Live count, rounded down to 50 so "N+" is always true; the one query above already holds every public page.
+const total = all.length >= 50 ? `${Math.floor(all.length / 50) * 50}+` : 'our';
+const description = `Browse ${total} printable Bible coloring pages. Discover coloring sheets for every Bible book, age group, and art style. Perfect for Sunday School, VBS, homeschool, and family devotionals.`;
 ---
 <Base title={title} description={description} canonical={canonical} ogType="website" image={`${ORIGIN}/logo.png`} imageAlt="Bible Sketch Logo" twitterCard="summary">
   <div class="max-w-7xl mx-auto px-4 py-12">
