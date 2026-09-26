@@ -101,6 +101,11 @@ before the previous one is verified live.
     Toddler Christmas post links /tags/christmas in its intro. H1 "Proverb 3:5" -> "Proverbs 3:5" (bookDisplay
     keeps "Psalm"); fallback related headings plural ("For Toddlers"). "Young Childs" was already gone (stage 3)
     and titles already said "Toddlers" (the earlier "for Toddler" was a truncated readout).
+  - QA of stages 7-8 (2026-09-25): IndexNow key file correct; a rerun with nothing new submits nothing; all 390
+    submitted URLs return 200 and are indexable; the Worker no longer pings (0 references in the build). Blog scan:
+    no leftover "best" -> "favorite" damage in any of the 6 posts (remaining uses are genuine). Full sweeps rerun
+    after the sketch.ts change: 457 coloring pages and 58 other pages, no issues (only the expected profile
+    avatar); related headings plural. Worker tail: 15 requests ok, no errors.
   - Lesson: purge about 30 s after `wrangler deploy`, not right away; an isolate still on the old version can
     re-cache a page in between (happened once with /tags/ordinary-time; purged again).
   - Open loose ends: (a) done in Stage 4. (b) done in Stage 3 (fixture refreshed; passes). (c) The old Firebase renderers (profileRender, sketchRender, tag renderer) still call community
