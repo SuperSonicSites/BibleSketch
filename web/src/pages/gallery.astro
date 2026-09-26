@@ -35,8 +35,9 @@ if (failed) {
   Astro.cache.set({ maxAge: 3600, swr: 86400, tags: ['gallery', ...items.map((s) => `related:${s.id}`)] });
   Astro.response.headers.set('Cache-Control', 'public, max-age=300');
 }
-// Unfiltered page N is its own page (docs/seo-plan.md stage 4); filtered views still point at /gallery.
-const canonical = `${ORIGIN}/gallery${!isFiltered(f) && page > 1 ? filterQuery(f, 'newest', page) : ''}`;
+// Unfiltered, newest-first page N is its own page (docs/seo-plan.md stage 4); filtered or re-sorted views (the
+// same pages in another order) still point at /gallery.
+const canonical = `${ORIGIN}/gallery${!isFiltered(f) && f.sort === 'newest' && page > 1 ? filterQuery(f, 'newest', page) : ''}`;
 const title = `Bible Coloring Pages Gallery${page > 1 ? ` - Page ${page}` : ''} - Free Printable Christian Coloring Sheets | Bible Sketch`;
 const description = 'Browse thousands of free printable Bible coloring pages. Discover coloring sheets for every Bible book, age group, and art style. Perfect for Sunday School, VBS, homeschool, and family devotionals.';
 ---

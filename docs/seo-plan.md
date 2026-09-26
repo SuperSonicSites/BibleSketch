@@ -7,7 +7,7 @@ before the previous one is verified live.
 ## Where we are
 
 - Current stage: **Stage 5 (not started)**
-- Last verified live: Stage 4 (2026-09-25, Worker 41601786)
+- Last verified live: Stage 4 + QA fix (2026-09-25, Worker 5dc739cc)
 - Notes:
   - Stage 1: master pages' og:image, JSON-LD, share buttons and image sitemap use
     `/img/w800/<original path>` (800x1071 WebP); community pages use their 400x533 thumbnail; the w800 route
@@ -40,6 +40,14 @@ before the previous one is verified live.
     text "See the <ref> coloring page". Live: 0 related links to community pages across all 457 pages; all 372
     owner pages have an internal link (33 only via gallery pages: Stage 9 story pages cover them).
     check-sketch fixture refreshed for the new related grid.
+  - QA of stages 3-4 (2026-09-25): sweep of all 457 live pages: titles, snippets (max 155, no hashtags),
+    unchanged Pinterest text, alt = H1, no old subtitle, unlock not a heading, AI note, verse on all 372 owner
+    pages and on no community page, robots per type, valid JSON-LD, a related grid on every page, 0 links to
+    community pages: no issues. Verse text stays server-side (0 client JS files). Tag pages 300-411 KB HTML but
+    26-30 KB on the wire (brotli); Lighthouse mobile: /tags/advent 98, coloring page 96, /gallery 99, CLS 0.
+    Worker tail: 19/19 ok. Fixed: `/gallery?page=2&sort=popular` was self-canonical (same pages re-sorted); now
+    only newest-first unfiltered pages are self-canonical. Noted for Stage 8: fallback related headings say
+    "For Toddler" / "For Young Child" (singular; 16 pages).
   - Lesson: purge about 30 s after `wrangler deploy`, not right away; an isolate still on the old version can
     re-cache a page in between (happened once with /tags/ordinary-time; purged again).
   - Open loose ends: (a) done in Stage 4. (b) done in Stage 3 (fixture refreshed; passes). (c) The old Firebase renderers (profileRender, sketchRender, tag renderer) still call community
