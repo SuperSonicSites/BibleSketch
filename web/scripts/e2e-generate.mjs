@@ -47,6 +47,9 @@ async function account(name, profile = {}) {
     body: JSON.stringify({ localId: res.localId, emailVerified: true }),
   });
   await put(`users/${res.localId}`, { uid: res.localId, displayName: name, credits: 5, downloadsRemaining: 5, isPremium: false, blessedSketchIds: [], profileComplete: true, photoURL: '', ...profile });
+  // An account that already answered the email question (2026-09-25), so the opt-in banner never covers the
+  // generator's buttons here; e2e-auth.mjs tests the banner itself.
+  await put(`users/${res.localId}/private/profile`, { emailOptIn: false });
   return { uid: res.localId, email };
 }
 
@@ -100,25 +103,18 @@ const signIn = async (who) => {
 const signOut = fresh;
 
 try {
-  await step('pricing: guests are asked to sign up, then go to Zoho with their uid and the return URL', async () => {
+  await step('pricing: guests are asked to sign up; signed-in buyers open the on-site checkout for the plan', async () => {
     await open('/pricing');
     await click('Get Spark Pack');
     await page.waitForSelector('[role=dialog]');
     assert.match(await text(), /Create Account|Sign Up/i);
     await page.keyboard.press('Escape');
     await signIn(maker);
-    await page.setRequestInterception(true);
-    let zoho = '';
-    const onReq = (r) => { if (r.url().includes('zohosecure')) { zoho = r.url(); r.abort(); } else r.continue(); };
-    page.on('request', onReq);
-    await click('Get Torch Pack');
-    await waitFor(() => zoho, 'navigation to Zoho');
-    page.off('request', onReq);
-    await page.setRequestInterception(false);
-    const u = new URL(zoho);
-    assert.equal(u.searchParams.get('cf_cf_firebase_uid'), maker.uid);
-    assert.equal(u.searchParams.get('redirect_url'), `${SITE}/pricing?purchase=torch`);
-    assert.equal(u.searchParams.get('addon_code[0]'), '80credits');
+    // Since 2026-09-25 the button opens /checkout/<plan>; the Zoho page itself is created server-side by
+    // createCheckout (security-check step "createCheckout: ...") and shown in an iframe on that page.
+    await Promise.all([page.waitForNavigation({ waitUntil: 'load' }), click('Get Torch Pack')]);
+    assert.equal(new URL(page.url()).pathname, '/checkout/torch');
+    assert.match(await page.$eval('h1', (h) => h.textContent), /Torch/);
   });
 
   await step('pricing: the return fires Purchase once with the buyer, strips the URL; premium sees Current Plan', async () => {

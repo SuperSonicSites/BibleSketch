@@ -247,8 +247,9 @@ run" first.
    `/sitemap.xml?cb=` 200 with the same index child list as minutes before (19 entries on 2026-09-26: 18 `?type=`
    children plus `/coloring-pages/sitemap.xml`) and `?type=pages` with the same 5 URLs (per-type sketch counts move
    with the daily task's publishes and are informative only); `curl -sI
-   "https://biblesketch.app/api/email?a=unsubscribe&u=x&t=y"` answers 400 before and after (the Worker forwards
-   `/api/email` to `emailAction`, which uses the moved `isDocId` before any Firestore read);
+   "https://biblesketch.app/api/email/unsubscribe?u=__x__&t=y"` answers 400 before and after (the Worker route
+   `api/email/[action].ts` forwards to `emailAction`; the reserved id `__x__` takes the moved `isDocId` branch before
+   any Firestore read, while an unknown id answers 404);
    `firebase functions:log --only emailAction,sitemap -n 20` shows no `ReferenceError`. The other 14 kept functions
    stay on the pre-cleanup image until their next deploy; that is expected, and the emulator run in step 8 (steps
    11-13: the tick and the links) is their gate.
